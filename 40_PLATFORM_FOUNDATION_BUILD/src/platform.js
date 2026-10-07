@@ -1,3 +1,4 @@
+import {boundInboundJob,hasInboundDecisionEvidence,activeInboundCycle} from './inboundJobEvidence.js';
 import {assertReviewIdentity,assertUndecidedEvent,assertOpenReview,assertRejectedReview,commitReviewEvent,commitReviewException,reviewAuditView} from './reviewEvidence.js';
 import {sourceFingerprint,processingFingerprint,assertProcessingEvidence} from './processingEvidence.js';
 import {normalizeClassificationResult} from './aiGateway.js';
@@ -8,6 +9,7 @@ import {normalizeInboundInput, inboundFingerprint, ingestScope} from './inboundR
 import {WritebackWorker, newWritebackCommand, writebackScope} from './writeback.js';
 import crypto from 'node:crypto'; import {appError} from './errors.js'; import {inspectFile} from './fileSafety.js'; import {matchMatter} from './matcher.js';
 class SupersededInbound extends Error {}
+class InvalidInboundEvidence extends Error {}
 export class Platform {
   constructor({store,objectStorage,aiGateway,proclaim,graph=null}){this.store=store;this.objectStorage=objectStorage;this.aiGateway=aiGateway;this.proclaim=proclaim;this.graph=graph;this.writebackWorker=new WritebackWorker({store,proclaim});}
   #trace(){return `trc_${crypto.randomUUID()}`;}
@@ -64,14 +66,14 @@ export class Platform {
       if(error instanceof SupersededInbound||!this.#currentInboundClaim(job)) return this.#supersededInbound(job);
       // Provider/storage errors may contain document text, credentials or paths.
       const code = 'INBOUND_PROCESSING_FAILED';
-      if(!this.store.failClaimedJob(job,code,{retry:job.attempts<3,delayMs:0})) return this.#supersededInbound(job);
+      if(!this.store.failClaimedJob(job,code,{retry:!(error instanceof InvalidInboundEvidence)&&Number.isSafeInteger(job.attempts)&&job.attempts>=1&&job.attempts<3,delayMs:0})) return this.#supersededInbound(job);
       return {jobId:job.id,status:'FAILED',error:code};
     }
   }
   #currentInboundClaim(job) {
     if(!this.store.isCurrentClaim(job))return false;
     const latest=this.store.getJob(job.id);
-    return latest?.traceId===job.traceId&&JSON.stringify(latest.payload)===JSON.stringify(job.payload);
+    return boundInboundJob(latest,{id:job.payload?.eventId,tenantId:job.tenantId,traceId:job.traceId})&&latest.traceId===job.traceId&&JSON.stringify(latest.payload)===JSON.stringify(job.payload);
   }
   #supersededInbound(job) {
     const eventId=job.payload?.eventId;
@@ -79,7 +81,8 @@ export class Platform {
   }
   #assertInbound(job,event) {
     if(!this.#currentInboundClaim(job))throw new SupersededInbound();
-    if(!event||event.id!==job.payload?.eventId||event.tenantId!==job.tenantId||event.traceId!==job.traceId)throw new Error('inbound binding unavailable');
+    if(!boundInboundJob(job,event)||job.attempts<1||job.attempts>3||(event.status==='QUEUED'&&hasInboundDecisionEvidence(event)))throw new InvalidInboundEvidence('inbound binding unavailable');
+    if(event.status==='QUEUED'){let valid=false;try{valid=activeInboundCycle(this.store,job,event);}catch{}if(!valid)throw new InvalidInboundEvidence('inbound cycle unavailable');}
   }
   #finishInbound(job,event,replayed=false) {
     this.#assertInbound(job,event);

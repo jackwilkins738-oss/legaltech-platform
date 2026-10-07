@@ -206,3 +206,12 @@ prior decision evidence and commit with conditional writes. Rejections retain
 notes in decision records while audit views use a fixed reason. Bulk partial
 failures and recorded approvals refresh the UI without claiming verified writes.
 See docs/V53_REVIEW_BOUNDARY_SAFETY.md for historical compatibility and review gates.
+
+## V54 — Inbound recovery evidence and conditional writes
+
+Recovery validates original jobs, complete recovery cycles, owned bindings and
+safe counters/timestamps before retiring expired claims. Scheduling and event
+updates commit conditionally; missing evidence appears as Processing unavailable
+with unknown counts and requires investigation. Workers preserve superseded claims
+and reject invalid evidence before classification. See
+`docs/V54_INBOUND_RECOVERY_BOUNDARY.md` for compatibility and review gates.
