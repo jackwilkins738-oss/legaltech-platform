@@ -137,3 +137,11 @@ successful read-back commits with audit/job completion. The UI explains retired
 work without claiming success. Download inventory and publication guards protect
 unrelated local work. See `docs/V45_WORKER_RECOVERY_SAFETY.md` and
 `TEST_RESULTS_V45.md` for the combined fix, tests and rollback boundaries.
+
+## V46 combined HTTP boundary safety batch
+
+The API rejects malformed UTF-8 and duplicate security headers, handles malformed
+route IDs as client errors, and exposes only privately recorded application error
+envelopes. Connector audit failure reasons share this safe classification. See
+`docs/V46_HTTP_BOUNDARY_SAFETY.md` and `TEST_RESULTS_V46.md` for compatibility,
+regression evidence and delivery requirements.

@@ -2,7 +2,8 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import {appError} from './errors.js';
+import {appError,publicError} from './errors.js';
+import {isUtf8} from 'node:buffer';
 import {decodeInboundBody} from './inboundRequest.js';
 import {requireCapability} from './auth.js';
 
@@ -12,6 +13,24 @@ const STATIC_FILES = new Map([
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
   ['/app.css', ['app.css', 'text/css; charset=utf-8']],
 ]);
+
+function assertSingleSecurityHeaders(req) {
+  const counts=new Map();
+  for(let i=0;i<req.rawHeaders.length;i+=2) {
+    const name=req.rawHeaders[i].toLowerCase();
+    if(!['authorization','idempotency-key'].includes(name)) continue;
+    counts.set(name,(counts.get(name)??0)+1);
+    if(counts.get(name)>1) throw appError('ambiguous security headers',{code:'INVALID_REQUEST'});
+  }
+}
+function routeId(value) {
+  try { return decodeURIComponent(value); }
+  catch { throw appError('invalid route encoding',{code:'INVALID_REQUEST'}); }
+}
+function requestUrl(value) {
+  try { return new URL(value,'http://localhost'); }
+  catch { throw appError('invalid request URL',{code:'INVALID_REQUEST'}); }
+}
 
 function safeTraceId(req) {
   const supplied = req.headers['x-trace-id'];
@@ -59,7 +78,9 @@ async function readJson(req) {
   }
   if (!chunks.length) return {};
   try {
-    const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    const bytes=Buffer.concat(chunks);
+    if(!isUtf8(bytes)) throw appError('invalid json',{code:'INVALID_JSON'});
+    const body = JSON.parse(bytes.toString('utf8'));
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw appError('invalid request', {code: 'INVALID_REQUEST'});
     return body;
   } catch (error) {
@@ -92,14 +113,15 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       platform.store.audit({...entry, objectId: /^(?:sub|del)_[a-f0-9-]{36}$/.test(result?.id) ? result.id : entry.objectId, outcome: 'SUCCESS'});
       return result;
     } catch (error) {
-      platform.store.audit({...entry, outcome: 'FAILED', reason: error.status < 500 ? error.code : 'INTERNAL_ERROR'});
+      platform.store.audit({...entry, outcome: 'FAILED', reason: publicError(error).code});
       throw error;
     }
   }
   return http.createServer(async (req, res) => {
     const traceId = safeTraceId(req);
     try {
-      const url = new URL(req.url, 'http://localhost');
+      assertSingleSecurityHeaders(req);
+      const url = requestUrl(req.url);
       if (req.method === 'GET' && serveStatic(res, uiRoot, url.pathname)) return;
       if (req.method === 'GET' && url.pathname === '/api/v1/health') return send(res, 200, {status: 'ok'}, traceId);
 
@@ -122,7 +144,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       const matterMatch = url.pathname.match(/^\/api\/v1\/matters\/([^/]+)$/);
       if (req.method === 'GET' && matterMatch) {
         requireCapability(session, 'matter:read');
-        const matter = platform.getMatter(session.tenantId, decodeURIComponent(matterMatch[1]));
+        const matter = platform.getMatter(session.tenantId, routeId(matterMatch[1]));
         if (!matter) throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
         return send(res, 200, {matter}, traceId);
       }
@@ -135,7 +157,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       const eventMatch = url.pathname.match(/^\/api\/v1\/inbound-events\/([^/]+)$/);
       if (req.method === 'GET' && eventMatch) {
         requireCapability(session, 'inbound:read');
-        const event = platform.getEvent(session.tenantId, decodeURIComponent(eventMatch[1]));
+        const event = platform.getEvent(session.tenantId, routeId(eventMatch[1]));
         if (!event) throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
         return send(res, 200, {event}, traceId);
       }
@@ -153,7 +175,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session,'dev:workers');requireCapability(session,'inbound:read');
         const body=await readJson(req);assertBodyTenant(body,session);
         if (Object.keys(body).some(key=>key!=='tenantId')) throw appError('invalid recovery request',{code:'INVALID_REQUEST'});
-        const result=platform.requestInboundRecovery({tenantId:session.tenantId,eventId:decodeURIComponent(retryInbound[1]),actorId:session.actorId,idempotencyKey:idempotencyKey(req)});
+        const result=platform.requestInboundRecovery({tenantId:session.tenantId,eventId:routeId(retryInbound[1]),actorId:session.actorId,idempotencyKey:idempotencyKey(req)});
         return send(res,202,result,traceId);
       }
 
@@ -162,7 +184,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'integration:manage');
         requireCapability(session, 'inbound:read');
         const body = await readJson(req); assertBodyTenant(body, session);
-        const result = platform.requestWritebackReconciliation({tenantId: session.tenantId, eventId: decodeURIComponent(reconcileWriteback[1]), actorId: session.actorId, idempotencyKey: idempotencyKey(req)});
+        const result = platform.requestWritebackReconciliation({tenantId: session.tenantId, eventId: routeId(reconcileWriteback[1]), actorId: session.actorId, idempotencyKey: idempotencyKey(req)});
         return send(res, 202, result, traceId);
       }
 
@@ -177,7 +199,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         const body = await readJson(req);
         assertBodyTenant(body, session);
         if (Object.keys(body).some(key=>!['tenantId','resolution','matterId','notes'].includes(key))) throw appError('invalid review request',{code:'INVALID_REQUEST'});
-        const result = platform.resolveException({tenantId: session.tenantId, exceptionId: decodeURIComponent(exceptionMatch[1]), resolution: body.resolution, matterId: body.matterId ?? null, notes: body.notes ?? null, actorId: session.actorId, idempotencyKey: idempotencyKey(req)});
+        const result = platform.resolveException({tenantId: session.tenantId, exceptionId: routeId(exceptionMatch[1]), resolution: body.resolution, matterId: body.matterId ?? null, notes: body.notes ?? null, actorId: session.actorId, idempotencyKey: idempotencyKey(req)});
         return send(res, 200, result, traceId);
       }
 
@@ -208,7 +230,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       const graphRenew=url.pathname.match(/^\/api\/v1\/integrations\/graph\/subscriptions\/([^/]+)\/renew$/);
       if (integrations && req.method === 'POST' && graphRenew) {
         requireCapability(session, 'integration:manage');
-        const id=decodeURIComponent(graphRenew[1]);
+        const id=routeId(graphRenew[1]);
         const body=await readJson(req); assertBodyTenant(body,session);
         const subscription=await integrationMutation(session, traceId, 'GRAPH_SUBSCRIPTION_RENEW', id, () => integrations.graph.renewSubscription(id));
         return send(res, 200, {subscription}, traceId);
@@ -227,7 +249,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'integration:manage');
         const body=await readJson(req); assertBodyTenant(body,session);
         if(!body.status) throw appError('status required',{code:'INVALID_REQUEST'});
-        const id=decodeURIComponent(graphLifecycle[1]);
+        const id=routeId(graphLifecycle[1]);
         const subscription=await integrationMutation(session, traceId, 'GRAPH_SUBSCRIPTION_LIFECYCLE', id, () => integrations.graph.lifecycle(id,body.status));
         return send(res,200,{subscription},traceId);
       }
@@ -244,7 +266,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       if (integrations && req.method === 'POST' && graphDeliveryFail) {
         requireCapability(session, 'integration:manage');
         const body=await readJson(req); assertBodyTenant(body,session);
-        const id=decodeURIComponent(graphDeliveryFail[1]);
+        const id=routeId(graphDeliveryFail[1]);
         const delivery=await integrationMutation(session, traceId, 'GRAPH_DELIVERY_FAIL', id, () => integrations.graph.failDelivery(id,body.error ?? 'synthetic failure'));
         return send(res,200,{delivery},traceId);
       }
@@ -253,7 +275,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       if (integrations && req.method === 'POST' && graphDeliveryRetry) {
         requireCapability(session, 'integration:manage');
         const body=await readJson(req); assertBodyTenant(body,session);
-        const id=decodeURIComponent(graphDeliveryRetry[1]);
+        const id=routeId(graphDeliveryRetry[1]);
         const delivery=await integrationMutation(session, traceId, 'GRAPH_DELIVERY_RETRY', id, () => integrations.graph.retryDelivery(id));
         return send(res,200,{delivery},traceId);
       }
@@ -282,9 +304,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
 
       throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
     } catch (error) {
-      const status = Number(error.status) || 500;
-      const code = error.code || 'INTERNAL_ERROR';
-      const message = status >= 500 ? 'internal error' : String(error.message || 'request failed');
+      const {status,code,message}=publicError(error);
       return send(res, status, {code, message, trace_id: traceId}, traceId);
     }
   });
