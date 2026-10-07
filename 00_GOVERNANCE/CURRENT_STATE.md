@@ -170,3 +170,11 @@ The bounded pre-TO foundation build is now an actual runnable API service, not o
 
 ## 2026-10-07 — Connector reliability harness — V37
 `40_PLATFORM_FOUNDATION_BUILD/` now includes synthetic integration reliability tooling for Graph-style notification deduplication, retry/dead-letter state, lifecycle attention, reconciliation checkpoints and operator recovery controls. This remains integration-test/evidence tooling under D-018; it does not add legal workflow scope or claim live Microsoft/Proclaim behaviour is proven.
+
+## 2026-10-07 — Connector safety fixes — V38
+Defect fixes in `40_PLATFORM_FOUNDATION_BUILD/` close cross-tenant integration
+access, enforce mailbox/read scope, validate input and subscription expiry, prevent
+rejected notifications from interfering with deduplication, constrain retry/recovery
+transitions and audit HTTP connector mutations with actor/trace attribution.
+The platform suite passes 51/51 tests. This is synthetic defect remediation under
+D-018; product scope and live Graph/Proclaim evidence gates remain unchanged.

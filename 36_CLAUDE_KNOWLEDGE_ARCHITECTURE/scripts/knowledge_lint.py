@@ -4,7 +4,7 @@ import json, csv, sys
 ROOT=Path(__file__).resolve().parents[2]
 NAV=ROOT/'36_CLAUDE_KNOWLEDGE_ARCHITECTURE'
 errors=[]; warnings=[]
-IGNORE_PARTS={'.git','node_modules','.venv','venv','__pycache__','.pytest_cache','.mypy_cache','.next','dist','coverage'}
+IGNORE_PARTS={'.git','node_modules','.venv','venv','__pycache__','.pytest_cache','.mypy_cache','.next','dist','coverage','.dev-data'}
 
 def need(path,label):
     if not (ROOT/path).exists(): errors.append(f'MISSING {label}: {path}')

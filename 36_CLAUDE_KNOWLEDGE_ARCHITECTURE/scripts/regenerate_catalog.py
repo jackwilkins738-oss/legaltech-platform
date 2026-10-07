@@ -8,7 +8,7 @@ NAV = ROOT / '36_CLAUDE_KNOWLEDGE_ARCHITECTURE'
 CATALOG = NAV / 'FILE_CATALOG.csv'
 SELF = '36_CLAUDE_KNOWLEDGE_ARCHITECTURE/FILE_CATALOG.csv'
 FIELDS = ['path','domain','status','authority','type','bytes']
-IGNORE_PARTS = {'.git','node_modules','.venv','venv','__pycache__','.pytest_cache','.mypy_cache','.next','dist','coverage'}
+IGNORE_PARTS = {'.git','node_modules','.venv','venv','__pycache__','.pytest_cache','.mypy_cache','.next','dist','coverage','.dev-data'}
 
 DOMAIN_BY_ROOT = {
     '.claude': 'claude_config', '.github': 'github_governance',
