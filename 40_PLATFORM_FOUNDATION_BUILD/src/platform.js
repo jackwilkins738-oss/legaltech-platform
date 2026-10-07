@@ -1,3 +1,4 @@
+import {inboundEventView, requestInboundRecovery} from './inboundRecovery.js';
 import {normalizeInboundInput, inboundFingerprint, ingestScope} from './inboundRequest.js';
 import {WritebackWorker, newWritebackCommand, writebackScope} from './writeback.js';
 import crypto from 'node:crypto'; import {appError} from './errors.js'; import {inspectFile} from './fileSafety.js'; import {matchMatter} from './matcher.js';
@@ -54,6 +55,7 @@ export class Platform {
       const result = await this.#processInbound(job);
       return {jobId:job.id,status:'DONE',result};
     } catch {
+      if (this.store.getJob(job.id)?.status==='CANCELLED') return {jobId:job.id,status:'SUPERSEDED',eventId:job.payload.eventId};
       // Provider/storage errors may contain document text, credentials or paths.
       const code = 'INBOUND_PROCESSING_FAILED';
       this.store.failJob(job.id,code,{retry:job.attempts<3,delayMs:0});
@@ -61,6 +63,8 @@ export class Platform {
     }
   }
   #finishInbound(job,event,replayed=false) {
+    const active=this.store.getJob(job.id);
+    if (active?.status!=='RUNNING'||active.attempts!==job.attempts) return {eventId:event.id,status:event.status,superseded:true};
     this.store.completeJob(job.id);
     return {eventId:event.id,status:event.status,match:event.match,
       classification:event.classification,exceptionId:event.processing?.exceptionId||null,replayed};
@@ -84,6 +88,8 @@ export class Platform {
       // A competing job may have processed/approved the event while AI was running.
       const current = this.store.getEvent(job.tenantId,event.id);
       if (!current) throw new Error('event unavailable');
+      const active=this.store.getJob(job.id);
+      if (active?.status!=='RUNNING'||active.attempts!==job.attempts) return {eventId:current.id,status:current.status,superseded:true};
       if (current.status !== 'QUEUED') {
         if (!processedStates.includes(current.status)) throw new Error('invalid inbound state');
         return this.#finishInbound(job,current,true);
@@ -99,7 +105,7 @@ export class Platform {
       }
       current.match=match;current.classification=ai;
       current.status=needsReview?'REVIEW_REQUIRED':'READY_FOR_APPROVAL';
-      current.processing={state:'COMPLETED',exceptionId};
+      current.processing={...current.processing,state:'COMPLETED',exceptionId};
       this.store.updateEvent(current);
       this.store.audit({tenantId:job.tenantId,traceId:current.traceId,action:'INBOUND_PROCESSED',objectId:current.id,
         matterId:match.matterId||null,outcome:needsReview?'REVIEW':'READY',reason:exceptionId||'policy_ready'});
@@ -175,8 +181,9 @@ export class Platform {
   }
   async processWritebackNext(options) { return this.writebackWorker.processNext(options); }
   requestWritebackReconciliation(input) { return this.writebackWorker.requestReconciliation(input); }
-  getEvent(tenantId,eventId){return this.store.getEvent(tenantId,eventId);}
-  listEvents(tenantId,limit=50){return this.store.listEvents(tenantId,limit);}
+  requestInboundRecovery(input){return requestInboundRecovery(this.store,input);}
+  getEvent(tenantId,eventId){return inboundEventView(this.store,this.store.getEvent(tenantId,eventId));}
+  listEvents(tenantId,limit=50){return this.store.listEvents(tenantId,limit).map(event=>inboundEventView(this.store,event));}
   listMatters(tenantId,limit=100){return this.store.listMatters(tenantId,limit);}
   audits(tenantId){return this.store.listAudits(tenantId);}
 }

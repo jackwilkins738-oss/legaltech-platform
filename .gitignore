@@ -49,3 +49,6 @@ __pycache__/
 # Archives / exports generated locally
 *.zip
 *.tar.gz
+
+# Downloaded versioned patch installers are distribution artifacts, not source
+/APPLY_*_V[0-9]*.ps1

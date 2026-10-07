@@ -148,6 +148,15 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         return send(res, 202, result, result.traceId || traceId);
       }
 
+      const retryInbound=url.pathname.match(/^\/api\/v1\/inbound-events\/([^/]+)\/retry-processing$/);
+      if (devWorkers&&req.method==='POST'&&retryInbound) {
+        requireCapability(session,'dev:workers');requireCapability(session,'inbound:read');
+        const body=await readJson(req);assertBodyTenant(body,session);
+        if (Object.keys(body).some(key=>key!=='tenantId')) throw appError('invalid recovery request',{code:'INVALID_REQUEST'});
+        const result=platform.requestInboundRecovery({tenantId:session.tenantId,eventId:decodeURIComponent(retryInbound[1]),actorId:session.actorId,idempotencyKey:idempotencyKey(req)});
+        return send(res,202,result,traceId);
+      }
+
       const reconcileWriteback = url.pathname.match(/^\/api\/v1\/inbound-events\/([^/]+)\/reconcile-writeback$/);
       if (req.method === 'POST' && reconcileWriteback) {
         requireCapability(session, 'integration:manage');
