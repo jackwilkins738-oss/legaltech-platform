@@ -122,3 +122,9 @@ Review retries now bind the decision, target, notes and original actor. Changed
 requests conflict; approval notes persist and cached replay verifies owned
 resources. Historical requests fail closed when their original input cannot be
 proved. See `docs/V43_REVIEW_REQUEST_SAFETY.md` and `TEST_RESULTS_V43.md`.
+
+## V44 writeback recovery safety
+
+Repeated verification requests now reuse an active read-only job without resetting
+its read budget or stacking jobs. Cached recovery results verify owned job/command
+bindings. See `docs/V44_WRITEBACK_RECOVERY_SAFETY.md` and `TEST_RESULTS_V44.md`.
