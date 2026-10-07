@@ -176,32 +176,47 @@ export class WritebackWorker {
     return this.#wait(job, command, command.reconciliationAttempts < this.maxReads);
   }
   requestReconciliation({tenantId, eventId, actorId, idempotencyKey}) {
-    if (!idempotencyKey) throw appError('idempotency key required', {code: 'IDEMPOTENCY_REQUIRED'});
+    if (!validId(idempotencyKey)||/[\x00-\x1f\x7f]/.test(idempotencyKey)) throw appError('idempotency key required', {code: 'IDEMPOTENCY_REQUIRED'});
+    if (!validId(actorId)||/[\x00-\x1f\x7f]/.test(actorId)) throw appError('actor required', {code:'ACTOR_REQUIRED'});
     return this.store.transaction(() => {
       const event = this.store.getEvent(tenantId, eventId);
       if (!event) throw unavailable();
+      const command = this.store.getIdempotent(writebackScope(tenantId, event.writeback?.commandKey));
+      if (!command || command.tenantId !== tenantId || command.eventId !== eventId || command.key !== event.writeback?.commandKey || command.matterId !== event.approvedMatterId || !this.store.getMatter(tenantId, command.matterId)) throw conflict();
+      const bound=job=>job&&job.tenantId===tenantId&&job.type==='PROCLAIM_WRITEBACK'&&job.payload?.eventId===eventId&&job.payload?.matterId===command.matterId&&job.payload?.approvalKey===command.key;
       const scope = requestScope(tenantId, idempotencyKey);
       const previous = this.store.getIdempotent(scope);
       if (previous) {
         if (previous.eventId !== eventId) throw conflict();
-        return {...previous, replayed: true};
+        if (previous.readOnly!==true||!['QUEUED','COMPLETED'].includes(previous.status)) throw unavailable();
+        if (previous.jobId===null) {
+          if (previous.status!=='COMPLETED'||command.state!=='RECONCILED') throw unavailable();
+        } else if (previous.status!=='QUEUED'||!validId(previous.jobId)||!bound(this.store.getJob(previous.jobId))) throw unavailable();
+        return {eventId,jobId:previous.jobId,status:previous.status,readOnly:true,replayed:true};
       }
-      const command = this.store.getIdempotent(writebackScope(tenantId, event.writeback?.commandKey));
-      if (!command || command.tenantId !== tenantId || command.eventId !== eventId || command.matterId !== event.approvedMatterId || !this.store.getMatter(tenantId, command.matterId)) throw conflict();
       if (!['ATTEMPTING', 'SUCCEEDED', 'OUTCOME_UNKNOWN', 'RECONCILING', 'RECONCILED'].includes(command.state)) throw conflict();
       if (command.state === 'ATTEMPTING') {
         command.state = 'OUTCOME_UNKNOWN'; command.uncertain = true; command.errorCode = 'EXTERNAL_WRITE_OUTCOME_UNKNOWN';
         this.#persist(command);
       }
       let job = this.store.getJob(command.jobId);
-      if (job && (job.tenantId !== tenantId || job.payload.eventId !== eventId || job.payload.approvalKey !== command.key)) throw conflict();
+      if (job && !bound(job)) throw conflict();
       if (command.state === 'RECONCILED') job = null;
-      else if (!job || job.status !== 'QUEUED') {
-        command.reconciliationAttempts = 0;
-        command.recoveryCount += 1;
-        job = this.store.enqueue({tenantId, type: 'PROCLAIM_WRITEBACK', payload: {eventId, matterId: command.matterId, approvalKey: command.key, reconcileOnly: true}, traceId: command.traceId});
-        command.jobId = job.id;
-        this.#persist(command);
+      else {
+        // A running original write may need one concurrent read-only probe.
+        // Once a read-only probe is queued/running, fresh operator keys reuse it.
+        const activeRead=this.store.listEventJobs(tenantId,eventId,'PROCLAIM_WRITEBACK')
+          .find(candidate=>bound(candidate)&&candidate.payload.reconcileOnly===true&&['QUEUED','RUNNING'].includes(candidate.status));
+        if (activeRead) {
+          job=activeRead;
+          if (command.jobId!==job.id) {command.jobId=job.id;this.#persist(command);}
+        } else if (!job || job.status !== 'QUEUED') {
+          command.reconciliationAttempts = 0;
+          command.recoveryCount += 1;
+          job = this.store.enqueue({tenantId, type: 'PROCLAIM_WRITEBACK', payload: {eventId, matterId: command.matterId, approvalKey: command.key, reconcileOnly: true}, traceId: command.traceId});
+          command.jobId = job.id;
+          this.#persist(command);
+        }
       }
       if (job) this.store.makeWritebackJobReadOnly(tenantId, job.id);
       const result = {eventId, jobId: job?.id || null, status: command.state === 'RECONCILED' ? 'COMPLETED' : 'QUEUED', readOnly: true, replayed: false};

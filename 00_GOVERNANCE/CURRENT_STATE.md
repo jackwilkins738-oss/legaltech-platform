@@ -219,3 +219,11 @@ review flow. Requests are validated and fingerprinted, notes persist atomically,
 and cached decisions are checked against owned event/matter/job records. Historical
 requests fail closed when unverifiable. Platform suite: 170/170 tests. Production
 access, real connector proof, human security review and D-018 gates remain intact.
+
+## 2026-10-07 — Writeback recovery scheduling safety — V44
+
+A reproduced running-probe scheduling defect is fixed: fresh verification keys
+reuse active read-only work without resetting its read budget or stacking jobs.
+Cached recovery results verify owned command/job bindings. Platform: 183/183 tests.
+No live integration, production access or new legal workflow scope is introduced;
+human security review, connector evidence and D-018 gates remain unchanged.
