@@ -313,3 +313,13 @@ original event/exception snapshots. Historical rejection replay remains conserva
 Platform: 763/763, including 84 new cases. No schema reset, live connector, new legal
 scope or changed human decision threshold. D-018, integration evidence gates and
 human security review remain unchanged.
+
+## 2026-10-07 — Combined inbound recovery boundary batch — V54
+
+Reproduced missing/contradictory job history, malformed counters/timestamps,
+unsafe claim retirement and stale recovery commits are fixed within the existing
+synthetic inbound path. Recovery requires owned typed evidence and conditional
+writes; incomplete evidence is shown as unavailable without repairing history.
+Platform: 851/851, including 88 new cases. No schema reset, live connector, new legal
+scope or changed human decision threshold. D-018, integration evidence gates and
+human security review remain unchanged.
