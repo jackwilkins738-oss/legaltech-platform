@@ -188,3 +188,12 @@ retired claims cannot commit or requeue replacement work. Matching verifies curr
 owned matter references at completion, and `npm run demo` uses a supported source.
 See `docs/V51_INBOUND_EVIDENCE_SAFETY.md` and `TEST_RESULTS_V51.md` for historical
 compatibility, provider admission limits and the required security review.
+
+
+## V52 — Authentication/request snapshot safety
+
+The existing synthetic auth boundary now validates owned typed identity fields and
+exact capability arrays. Static session records and OIDC mapper configuration are
+private; request sessions are immutable snapshots before body reads. Malformed
+provider sessions return 401 before retrieval; missing exact permissions return 404.
+See docs/V52_AUTH_BOUNDARY_SAFETY.md for compatibility, limits and review gates.

@@ -5,7 +5,7 @@ import path from 'node:path';
 import {appError,publicError} from './errors.js';
 import {isUtf8} from 'node:buffer';
 import {decodeInboundBody} from './inboundRequest.js';
-import {requireCapability} from './auth.js';
+import {requireCapability,normalizeSession} from './auth.js';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const STATIC_FILES = new Map([
@@ -125,7 +125,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       if (req.method === 'GET' && serveStatic(res, uiRoot, url.pathname)) return;
       if (req.method === 'GET' && url.pathname === '/api/v1/health') return send(res, 200, {status: 'ok'}, traceId);
 
-      const session = await authProvider.authenticate(req.headers);
+      const session = normalizeSession(await authProvider.authenticate(req.headers));
       if (integrations && (url.pathname === '/api/v1/integrations' || url.pathname.startsWith('/api/v1/integrations/'))) {
         requireCapability(session, req.method === 'GET' ? 'integration:read' : 'integration:manage');
         // A shared harness is bound to one tenant. Never trust capability possession alone.
