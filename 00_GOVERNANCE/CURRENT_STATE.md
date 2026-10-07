@@ -187,3 +187,11 @@ commits approval and audit atomically, scopes HTTP worker selection to the tenan
 and makes selected-event UI success contingent on read-back evidence. Operator
 recovery is read-only. The platform suite passes 89/89 synthetic tests. This is
 D-018 defect remediation; real Graph/Proclaim and product evidence gates remain.
+
+## 2026-10-07 — Durable inbound safety — V40
+Reproduced acceptance/processing failures in `40_PLATFORM_FOUNDATION_BUILD/` could
+leave partial events, duplicate review exceptions and raw internal worker errors.
+V40 makes database acceptance and processing/audit/job completion atomic, preserves
+human decisions against late jobs, validates classifier shape and requires genuine
+selected-event processing proof in the scenario UI. Platform suite: 111/111 synthetic
+tests. D-018 scope and real integration/customer evidence gates remain unchanged.
