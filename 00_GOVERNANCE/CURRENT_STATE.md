@@ -347,3 +347,13 @@ and human security review remain unchanged.
 V56 Windows feedback identified 12 fixture cleanup failures from deleting a temporary
 folder before SQLite close. The shared fixture now closes its stores first; all
 assertions and publication gates remain. Native Windows rerun is pending.
+
+## 2026-10-07 — Combined validation/registry evidence boundary batch — V57
+
+Reproduced mutable Proclaim harness authority, sparse/forged history proofs and
+exposed registry state are fixed in the existing read-only synthetic validation path.
+Owned typed snapshots precede I/O; conditional registry writes and read-back prevent
+stale or unverified acknowledgements from claiming persisted validation evidence.
+Platform: 1110/1110, including 86 new cases. No Proclaim writes, live credentials,
+customer access, data migration or new legal scope. D-018, integration evidence gates
+and human security review remain unchanged. Requires corrected V56 on main.
