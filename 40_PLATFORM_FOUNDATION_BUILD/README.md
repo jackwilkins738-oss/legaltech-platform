@@ -100,3 +100,10 @@ V40 makes inbound acceptance and processing audit/queue changes atomic, prevents
 retry/late-worker duplicate review and decision overwrites, and replaces raw worker
 errors with a safe code. Scenario UI success requires selected-event processing
 proof. See `docs/V40_INBOUND_SAFETY.md` and `TEST_RESULTS_V40.md` for upgrade limits.
+
+## V41 inbound request safety
+
+V41 binds ingest replay to the original normalized payload, isolates tenant/key
+scopes, verifies cached resource ownership and rejects malformed uploads before
+acceptance. Unverifiable historical attachment requests fail closed. See
+`docs/V41_INBOUND_REQUEST_SAFETY.md` and `TEST_RESULTS_V41.md` for compatibility limits.
