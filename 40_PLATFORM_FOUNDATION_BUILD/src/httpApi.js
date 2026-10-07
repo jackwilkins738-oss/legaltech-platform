@@ -190,6 +190,34 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         return send(res,200,integrations.graph.setDelta(body.mailboxId,body.deltaToken),traceId);
       }
 
+      const graphLifecycle=url.pathname.match(/^\/api\/v1\/integrations\/graph\/subscriptions\/([^/]+)\/lifecycle$/);
+      if (integrations && req.method === 'POST' && graphLifecycle) {
+        requireCapability(session, 'integration:manage');
+        const body=await readJson(req); assertBodyTenant(body,session);
+        if(!body.status) throw appError('status required',{code:'INVALID_REQUEST'});
+        return send(res,200,{subscription:integrations.graph.lifecycle(decodeURIComponent(graphLifecycle[1]),body.status)},traceId);
+      }
+
+      if (integrations && req.method === 'POST' && url.pathname === '/api/v1/integrations/graph/webhooks/simulate') {
+        requireCapability(session, 'integration:manage');
+        const body=await readJson(req); assertBodyTenant(body,session);
+        if(!body.subscriptionId) throw appError('subscriptionId required',{code:'INVALID_REQUEST'});
+        return send(res,202,{delivery:integrations.graph.receiveNotification({subscriptionId:body.subscriptionId,notificationId:body.notificationId||null,resourceId:body.resourceId||'synthetic-resource',changeType:body.changeType||'updated',clientStateValid:body.clientStateValid!==false})},traceId);
+      }
+
+      const graphDeliveryFail=url.pathname.match(/^\/api\/v1\/integrations\/graph\/deliveries\/([^/]+)\/fail$/);
+      if (integrations && req.method === 'POST' && graphDeliveryFail) {
+        requireCapability(session, 'integration:manage');
+        const body=await readJson(req); assertBodyTenant(body,session);
+        return send(res,200,{delivery:integrations.graph.failDelivery(decodeURIComponent(graphDeliveryFail[1]),body.error||'synthetic failure')},traceId);
+      }
+
+      const graphDeliveryRetry=url.pathname.match(/^\/api\/v1\/integrations\/graph\/deliveries\/([^/]+)\/retry$/);
+      if (integrations && req.method === 'POST' && graphDeliveryRetry) {
+        requireCapability(session, 'integration:manage');
+        return send(res,200,{delivery:integrations.graph.retryDelivery(decodeURIComponent(graphDeliveryRetry[1]))},traceId);
+      }
+
       if (integrations && req.method === 'POST' && url.pathname === '/api/v1/integrations/proclaim/validate') {
         requireCapability(session, 'integration:manage');
         const body=await readJson(req); assertBodyTenant(body,session);

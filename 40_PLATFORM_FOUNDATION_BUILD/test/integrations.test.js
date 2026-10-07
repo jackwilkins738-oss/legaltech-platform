@@ -30,6 +30,16 @@ test('Graph harness models subscription renewal and delta checkpoint without liv
   graph.setDelta('ops@example.invalid','delta_1');const snap=graph.snapshot();assert.equal(snap.subscriptions.length,1);assert.equal(snap.deltaCheckpoints.length,1);
 });
 
+test('Graph reliability harness deduplicates notifications and exposes retry/dead-letter state',()=>{
+  const registry=new IntegrationRegistry();const graph=new MockGraphHarness({registry,tenantId:'tenant-a',maxDeliveryAttempts:2});graph.configure({mailboxes:['ops@example.invalid']});
+  const sub=graph.createMailboxSubscription('ops@example.invalid');
+  const first=graph.receiveNotification({subscriptionId:sub.id,notificationId:'n-1',resourceId:'message-1'});assert.equal(first.status,'ACCEPTED');assert.equal(first.duplicate,false);
+  const duplicate=graph.receiveNotification({subscriptionId:sub.id,notificationId:'n-1',resourceId:'message-1'});assert.equal(duplicate.duplicate,true);assert.equal(duplicate.duplicateCount,1);
+  const retry=graph.failDelivery(first.id,'boom');assert.equal(retry.status,'RETRY_SCHEDULED');
+  const dead=graph.failDelivery(first.id,'boom again');assert.equal(dead.status,'DEAD_LETTER');assert.equal(graph.healthCheck().state,'DEGRADED');
+  const recovered=graph.retryDelivery(first.id);assert.equal(recovered.status,'ACCEPTED');
+});
+
 test('Proclaim validation keeps live environment checks blocked',async()=>{
   const registry=new IntegrationRegistry();const harness=new ProclaimValidationHarness({registry,adapter:new MockProclaimAdapter(),tenantId:'tenant-a'});harness.configure();
   const r=await harness.runValidation({externalMatterId:'P-1'});assert.equal(r.status,'AMBER');assert.equal(r.fail,0);assert.equal(r.blocked,2);assert.ok(r.checks.some(x=>x.name==='LIVE_API_VERSION'&&x.status==='BLOCKED'));
@@ -45,12 +55,13 @@ test('integration API is tenant-capability scoped and supports synthetic lifecyc
   try{
     assert.equal((await fetch(`${base}/api/v1/integrations`,{headers:h('limited')})).status,404);
     const list=await (await fetch(`${base}/api/v1/integrations`,{headers:h('admin')})).json();assert.equal(list.items.length,2);
-    const created=await fetch(`${base}/api/v1/integrations/graph/subscriptions`,{method:'POST',headers:h('admin'),body:JSON.stringify({mailboxId:'ops@example.invalid'})});assert.equal(created.status,201);
+    const created=await fetch(`${base}/api/v1/integrations/graph/subscriptions`,{method:'POST',headers:h('admin'),body:JSON.stringify({mailboxId:'ops@example.invalid'})});assert.equal(created.status,201);const createdBody=await created.json();
+    const webhook=await fetch(`${base}/api/v1/integrations/graph/webhooks/simulate`,{method:'POST',headers:h('admin'),body:JSON.stringify({subscriptionId:createdBody.subscription.id,notificationId:'api-n1'})});assert.equal(webhook.status,202);
     const valid=await (await fetch(`${base}/api/v1/integrations/proclaim/validate`,{method:'POST',headers:h('admin'),body:'{}'})).json();assert.equal(valid.result.status,'AMBER');
   } finally {await new Promise(r=>server.close(r));store.close();fs.rmSync(dir,{recursive:true,force:true});}
 });
 
-test('v36 integration control plane is present in the Aurora UI',()=>{
+test('v37 integration reliability control plane is present in the Aurora UI',()=>{
   const html=fs.readFileSync(new URL('../ui/index.html',import.meta.url),'utf8');const js=fs.readFileSync(new URL('../ui/app.js',import.meta.url),'utf8');
-  assert.match(html,/V36/);assert.match(html,/Integrations/);assert.match(html,/INTEGRATION READY/);assert.match(js,/Integration readiness/);assert.match(js,/Synthetic Graph subscription/);assert.match(js,/Proclaim validation/);assert.match(js,/HARD BOUNDARY/);
+  assert.match(html,/V37/);assert.match(html,/Integrations/);assert.match(html,/RELIABILITY HARNESS/);assert.match(js,/Integration readiness/);assert.match(js,/Synthetic Graph subscription/);assert.match(js,/Proclaim validation/);assert.match(js,/HARD BOUNDARY/);assert.match(js,/Webhook reliability/);assert.match(js,/Simulate webhook/);
 });

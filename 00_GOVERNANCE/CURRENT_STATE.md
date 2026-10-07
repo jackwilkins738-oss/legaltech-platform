@@ -166,3 +166,7 @@ The bounded pre-TO foundation build is now an actual runnable API service, not o
 
 ## 2026-10-07 — Integration readiness control plane — V36
 `40_PLATFORM_FOUNDATION_BUILD/` now adds a tenant-scoped synthetic integration control plane. It models Microsoft Graph reader/write/send capability separation, mailbox allow-list metadata, subscription renewal/lifecycle and delta checkpoints; adds a Proclaim capability/validation harness with explicit BLOCKED live checks; and adds a production-shaped OIDC claims mapper that accepts only already-verified server-side claims. The Aurora UI includes an Integrations workspace for connector health and validation. Current platform suite: 32/32 passing. No real customer credentials, Graph mailbox, Proclaim endpoint or client data are used; real integration behaviour remains access/evidence-dependent and D-018 remains intact.
+
+
+## 2026-10-07 — Connector reliability harness — V37
+`40_PLATFORM_FOUNDATION_BUILD/` now includes synthetic integration reliability tooling for Graph-style notification deduplication, retry/dead-letter state, lifecycle attention, reconciliation checkpoints and operator recovery controls. This remains integration-test/evidence tooling under D-018; it does not add legal workflow scope or claim live Microsoft/Proclaim behaviour is proven.
