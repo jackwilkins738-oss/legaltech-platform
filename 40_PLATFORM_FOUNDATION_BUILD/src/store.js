@@ -2,6 +2,31 @@ import crypto from 'node:crypto'; import {DatabaseSync} from 'node:sqlite';
 const json=x=>JSON.stringify(x); const parse=x=>x?JSON.parse(x):null;
 export class PlatformStore {
   constructor(filename=':memory:',seed={}){this.db=new DatabaseSync(filename);this.#migrate();this.#seed(seed);}
+  transaction(run) {
+    const name = `sp_${crypto.randomUUID().replaceAll('-', '')}`;
+    this.db.exec(`SAVEPOINT ${name}`);
+    try {
+      const result = run();
+      if (result && typeof result.then === 'function') throw new Error('store transactions must be synchronous');
+      this.db.exec(`RELEASE SAVEPOINT ${name}`);
+      return result;
+    } catch (error) {
+      this.db.exec(`ROLLBACK TO SAVEPOINT ${name}`);
+      this.db.exec(`RELEASE SAVEPOINT ${name}`);
+      throw error;
+    }
+  }
+  recoverExpiredWritebackJobs({leaseMs = 300000, tenantId = null, eventId = null} = {}) {
+    if (!Number.isFinite(leaseMs) || leaseMs < 1000) throw new Error('invalid worker lease');
+    const now = new Date().toISOString();
+    const before = new Date(Date.now() - leaseMs).toISOString();
+    const query = "UPDATE jobs SET status='QUEUED',available_at=?,updated_at=? WHERE type='PROCLAIM_WRITEBACK' AND status='RUNNING' AND updated_at<=?";
+    const args = [now, now, before];
+    let filters = '';
+    if (tenantId !== null) { filters += ' AND tenant_id=?'; args.push(tenantId); }
+    if (eventId !== null) { filters += " AND json_extract(payload_json,'$.eventId')=?"; args.push(eventId); }
+    return Number(this.db.prepare(query + filters).run(...args).changes);
+  }
   close(){this.db.close();} uid(p){return `${p}_${crypto.randomUUID()}`;}
   #migrate(){this.db.exec(`
     PRAGMA foreign_keys=ON;
@@ -35,7 +60,24 @@ export class PlatformStore {
   listExceptions(t,status){const q=status?'SELECT data_json FROM exceptions WHERE tenant_id=? AND status=? ORDER BY rowid':'SELECT data_json FROM exceptions WHERE tenant_id=? ORDER BY rowid';const rs=status?this.db.prepare(q).all(t,status):this.db.prepare(q).all(t);return rs.map(r=>parse(r.data_json));}
   enqueue({tenantId,type,payload,traceId,availableAt=new Date().toISOString()}){const id=this.uid('job'),now=new Date().toISOString();this.db.prepare("INSERT INTO jobs(id,tenant_id,type,status,attempts,available_at,payload_json,trace_id,created_at,updated_at) VALUES(?,?,?,'QUEUED',0,?,?,?,?,?)").run(id,tenantId,type,availableAt,json(payload),traceId,now,now);return this.getJob(id);}
   getJob(id){const r=this.db.prepare('SELECT * FROM jobs WHERE id=?').get(id);return r?{id:r.id,tenantId:r.tenant_id,type:r.type,status:r.status,attempts:Number(r.attempts),availableAt:r.available_at,payload:parse(r.payload_json),lastError:r.last_error,traceId:r.trace_id}:null;}
-  claimNext(type=null){const now=new Date().toISOString();const r=type?this.db.prepare("SELECT id FROM jobs WHERE status='QUEUED' AND type=? AND available_at<=? ORDER BY created_at LIMIT 1").get(type,now):this.db.prepare("SELECT id FROM jobs WHERE status='QUEUED' AND available_at<=? ORDER BY created_at LIMIT 1").get(now);if(!r)return null;const c=this.db.prepare("UPDATE jobs SET status='RUNNING',attempts=attempts+1,updated_at=? WHERE id=? AND status='QUEUED'").run(now,r.id);return Number(c.changes)===1?this.getJob(r.id):null;}
+  claimNext(type = null, tenantId = null, {eventId = null} = {}) {
+    const now = new Date().toISOString();
+    let query = "SELECT id FROM jobs WHERE status='QUEUED' AND available_at<=?";
+    const args = [now];
+    if (type !== null) { query += ' AND type=?'; args.push(type); }
+    if (tenantId !== null) { query += ' AND tenant_id=?'; args.push(tenantId); }
+    if (eventId !== null) { query += " AND json_extract(payload_json,'$.eventId')=?"; args.push(eventId); }
+    const row = this.db.prepare(query + ' ORDER BY created_at, rowid LIMIT 1').get(...args);
+    if (!row) return null;
+    const claimed = this.db.prepare("UPDATE jobs SET status='RUNNING',attempts=attempts+1,updated_at=? WHERE id=? AND status='QUEUED'").run(now, row.id);
+    return Number(claimed.changes) === 1 ? this.getJob(row.id) : null;
+  }
+  makeWritebackJobReadOnly(tenantId, jobId) {
+    const job = this.getJob(jobId);
+    if (!job || job.tenantId !== tenantId || job.type !== 'PROCLAIM_WRITEBACK') throw new Error('writeback job unavailable');
+    const payload = {...job.payload, reconcileOnly: true};
+    this.db.prepare("UPDATE jobs SET payload_json=? WHERE id=? AND tenant_id=? AND type='PROCLAIM_WRITEBACK' AND status IN ('QUEUED','RUNNING')").run(json(payload), jobId, tenantId);
+  }
   completeJob(id){this.db.prepare("UPDATE jobs SET status='DONE',updated_at=? WHERE id=?").run(new Date().toISOString(),id);return this.getJob(id);}
   failJob(id,error,{retry=true,delayMs=0}={}){const state=retry?'QUEUED':'DEAD';this.db.prepare('UPDATE jobs SET status=?,available_at=?,last_error=?,updated_at=? WHERE id=?').run(state,new Date(Date.now()+delayMs).toISOString(),String(error),new Date().toISOString(),id);return this.getJob(id);}
   getIdempotent(scope){const r=this.db.prepare('SELECT data_json FROM idempotency WHERE scope=?').get(scope);return parse(r?.data_json);}

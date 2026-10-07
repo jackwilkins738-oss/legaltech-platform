@@ -164,6 +164,15 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         return send(res, 202, result, result.traceId || traceId);
       }
 
+      const reconcileWriteback = url.pathname.match(/^\/api\/v1\/inbound-events\/([^/]+)\/reconcile-writeback$/);
+      if (req.method === 'POST' && reconcileWriteback) {
+        requireCapability(session, 'integration:manage');
+        requireCapability(session, 'inbound:read');
+        const body = await readJson(req); assertBodyTenant(body, session);
+        const result = platform.requestWritebackReconciliation({tenantId: session.tenantId, eventId: decodeURIComponent(reconcileWriteback[1]), actorId: session.actorId, idempotencyKey: idempotencyKey(req)});
+        return send(res, 202, result, traceId);
+      }
+
       if (req.method === 'GET' && url.pathname === '/api/v1/exceptions') {
         requireCapability(session, 'exception:read');
         return send(res, 200, {items: platform.listExceptions(session.tenantId), next_cursor: null}, traceId);
@@ -265,9 +274,14 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
 
       if (devWorkers && req.method === 'POST' && url.pathname === '/api/v1/dev/workers/drain-one') {
         requireCapability(session, 'dev:workers');
+        requireCapability(session, 'inbound:read');
         const body = await readJson(req);
-        const result = body.worker === 'inbound' ? await platform.processNext()
-          : body.worker === 'writeback' ? await platform.processWritebackNext()
+        assertBodyTenant(body, session);
+        if (body.eventId != null && (typeof body.eventId !== 'string' || !body.eventId || body.eventId.length > 200)) throw appError('invalid eventId', {code:'INVALID_REQUEST'});
+        if (body.eventId != null && !platform.getEvent(session.tenantId, body.eventId)) throw appError('resource unavailable', {status:404,code:'NOT_FOUND'});
+        const workerContext = {tenantId: session.tenantId, eventId: body.eventId ?? null};
+        const result = body.worker === 'inbound' ? await platform.processNext(workerContext)
+          : body.worker === 'writeback' ? await platform.processWritebackNext(workerContext)
           : (() => { throw appError('unknown worker', {code: 'INVALID_WORKER'}); })();
         return send(res, 200, {result}, traceId);
       }
