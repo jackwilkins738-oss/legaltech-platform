@@ -224,3 +224,12 @@ public property edits. Clock failure leaves connector state unchanged; one valid
 time observation drives each operation and snapshot. Typed configuration/notification
 inputs reject inherited records and accessors without evaluating them. See
 `docs/V55_GRAPH_BOUNDARY_SAFETY.md` for compatibility, limits and review gates.
+
+## V56 — Storage sidecar and basic file-check evidence
+
+Object reads/deduplication validate both stored bytes and their owned metadata
+sidecar. The root is fixed; descriptor reads are bounded and check observed file
+and directory identity changes. Invalid metadata/input types fail before creation,
+and basic inspection quarantines malformed filenames, byte inputs and size budgets.
+No incomplete evidence is silently repaired. See
+`docs/V56_STORAGE_EVIDENCE_BOUNDARY.md` for compatibility and investigation limits.
