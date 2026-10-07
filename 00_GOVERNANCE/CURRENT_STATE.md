@@ -211,3 +211,11 @@ audited tenant-bound recovery with preserved lifetime attempts, retired-worker g
 and UI recovery controls. Shared Git inventory excludes ignored local files without
 deleting them. Platform: 157/157; inventory: 6/6 synthetic tests. Optional updater
 commit/push is scoped and cannot merge. D-018 and live/customer evidence gates remain.
+
+## 2026-10-07 — Review request safety — V43
+
+A reproduced changed-notes replay defect is fixed in the existing synthetic human
+review flow. Requests are validated and fingerprinted, notes persist atomically,
+and cached decisions are checked against owned event/matter/job records. Historical
+requests fail closed when unverifiable. Platform suite: 170/170 tests. Production
+access, real connector proof, human security review and D-018 gates remain intact.

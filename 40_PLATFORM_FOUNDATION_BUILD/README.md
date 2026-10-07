@@ -115,3 +115,10 @@ workers cannot overwrite replacement work; approval/writeback remain separate.
 Catalog/lint respect Git ignores, including downloaded installers. The updater's
 optional CommitAndPush mode prepares the feature branch without merging it. See
 `docs/V42_RECOVERY_AND_REPOSITORY_SAFETY.md` and `TEST_RESULTS_V42.md` for limitations.
+
+## V43 review request safety
+
+Review retries now bind the decision, target, notes and original actor. Changed
+requests conflict; approval notes persist and cached replay verifies owned
+resources. Historical requests fail closed when their original input cannot be
+proved. See `docs/V43_REVIEW_REQUEST_SAFETY.md` and `TEST_RESULTS_V43.md`.
