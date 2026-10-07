@@ -63,6 +63,12 @@ function auditView(){const items=filteredAudit();return `<div class="command-her
 
 
 function integrationStatusPill(status){const cls=['HEALTHY','READY_FOR_LIVE_VALIDATION','ACTIVE','ACCEPTED'].includes(status)?'complete':['DEGRADED','VALIDATION_FAILED','DEAD_LETTER','REJECTED_CLIENT_STATE','REMOVED','AUTHORIZATION_REQUIRED'].includes(status)?'rejected':'review';return `<span class="status ${cls}">${esc(status||'UNKNOWN')}</span>`}
+function proclaimValidationNotice(result){
+  if(result?.superseded){notice('Validation superseded. Showing current connector evidence.',true);return}
+  if(result?.status==='RED'){notice('Synthetic read validation failed. See connector evidence.',true);return}
+  if(result?.persisted!==true||result?.status!=='AMBER'||result?.mode!=='MOCK'){notice('Validation evidence is unavailable. Refresh connector state.',true);return}
+  notice('Synthetic read check recorded. Write and live evidence remain unverified.');
+}
 function integrationsView(){
   const graphConn=state.integrations.items?.find(x=>x.kind==='MICROSOFT_GRAPH');
   const proclaimConn=state.integrations.items?.find(x=>x.kind==='PROCLAIM');
@@ -78,7 +84,7 @@ function integrationsView(){
       <div class="panel-subhead"><strong>Subscription lifecycle</strong><button class="secondary" id="createGraphSub">＋ Synthetic subscription</button></div>
       ${subs.length?`<table class="table"><thead><tr><th>Mailbox</th><th>Folder</th><th>Status</th><th>Expires</th><th></th></tr></thead><tbody>${subs.map(x=>`<tr><td>${esc(x.mailboxId)}</td><td>${esc(x.folder)}</td><td>${integrationStatusPill(x.status)}</td><td>${esc(fmtTime(x.expiration))}</td><td>${['ACTIVE','MISSED','EXPIRED'].includes(x.status)?`<button class="ghost" data-renew-sub="${esc(x.id)}">Renew</button>`:`<span class="muted">${x.status==='REMOVED'?'Create replacement':'Scope / authorization required'}</span>`}</td></tr>`).join('')}</tbody></table>`:`<div class="empty compact"><p>No synthetic subscriptions created yet.</p></div>`}
       <div class="panel-subhead"><strong>Delta reconciliation checkpoints</strong><button class="secondary" id="setDelta">Set synthetic checkpoint</button></div>
-      ${deltas.length?`<div class="chip-list">${deltas.map(x=>`<span><b>${esc(x.mailboxId)}</b> ${esc(x.token)}</span>`).join('')}</div>`:`<p class="muted">No checkpoints recorded.</p>`}
+      ${deltas.length?`<div class="chip-list">${deltas.map(x=>`<span><b>${esc(x.mailboxId)}</b> ${esc(x.scopeStatus||'IN_SCOPE')} · Checkpoint recorded</span>`).join('')}</div>`:`<p class="muted">No checkpoints recorded.</p>`}
       <div class="panel-subhead"><strong>Webhook reliability</strong><button class="secondary" id="simulateWebhook" ${activeSubs.length?'':'disabled'}>Simulate webhook</button></div>
       ${deliveries.length?`<table class="table"><thead><tr><th>Mailbox</th><th>Status</th><th>Attempts</th><th>Duplicates</th><th></th></tr></thead><tbody>${deliveries.slice(0,8).map(x=>`<tr><td>${esc(x.mailboxId)}</td><td>${integrationStatusPill(x.status)}</td><td>${esc(x.attempts)} / ${esc(x.totalAttempts??x.attempts)} total</td><td>${esc(x.duplicateCount||0)}</td><td>${x.status==='ACCEPTED'?`<button class="ghost" data-fail-delivery="${esc(x.id)}">Fail once</button>`:['RETRY_SCHEDULED','DEAD_LETTER'].includes(x.status)?`<button class="ghost" data-retry-delivery="${esc(x.id)}">${x.status==='DEAD_LETTER'?'Recover':'Retry'}</button>`:''}</td></tr>`).join('')}</tbody></table>`:`<p class="muted">No synthetic webhook deliveries recorded.</p>`}
     </div>
@@ -100,7 +106,7 @@ if(el('#simulateWebhook'))el('#simulateWebhook').onclick=async()=>{try{const sub
 document.querySelectorAll('[data-fail-delivery]').forEach(b=>b.onclick=async()=>{try{await api(`/api/v1/integrations/graph/deliveries/${encodeURIComponent(b.dataset.failDelivery)}/fail`,{method:'POST',body:{error:'operator-injected synthetic failure'}});notice('Synthetic delivery moved into retry/dead-letter handling.');await refresh()}catch(e){notice(e.message,true)}});
 document.querySelectorAll('[data-retry-delivery]').forEach(b=>b.onclick=async()=>{try{await api(`/api/v1/integrations/graph/deliveries/${encodeURIComponent(b.dataset.retryDelivery)}/retry`,{method:'POST'});notice('Synthetic delivery re-queued successfully.');await refresh()}catch(e){notice(e.message,true)}});
 document.querySelectorAll('[data-renew-sub]').forEach(b=>b.onclick=async()=>{try{await api(`/api/v1/integrations/graph/subscriptions/${encodeURIComponent(b.dataset.renewSub)}/renew`,{method:'POST'});notice('Synthetic subscription renewed.');await refresh()}catch(e){notice(e.message,true)}});
-if(el('#runProclaimValidation'))el('#runProclaimValidation').onclick=async()=>{try{await api('/api/v1/integrations/proclaim/validate',{method:'POST',body:{externalMatterId:'PROCLAIM-DEMO-1'}});notice('Synthetic Proclaim validation complete.');await refresh()}catch(e){notice(e.message,true)}};
+if(el('#runProclaimValidation'))el('#runProclaimValidation').onclick=async()=>{try{const data=await api('/api/v1/integrations/proclaim/validate',{method:'POST',body:{externalMatterId:'PROCLAIM-DEMO-1'}});proclaimValidationNotice(data.result);await refresh()}catch(e){notice(e.message,true)}};
 if(el('#closeNotifications'))el('#closeNotifications').onclick=()=>{state.notificationsOpen=false;render()};document.querySelectorAll('[data-notification]').forEach((b,i)=>b.onclick=()=>{const n=notifications()[i];state.notificationsOpen=false;if(n?.target)state.view=n.target;render();if(n?.id)setTimeout(()=>document.getElementById(`ex-${n.id}`)?.scrollIntoView({behavior:'smooth'}),0)})}
 async function bulkRejectSelected(){const ids=[...selectedExceptions].filter(id=>state.exceptions.some(ex=>ex.id===id));if(!ids.length)return;try{for(const id of ids){await api(`/api/v1/exceptions/${encodeURIComponent(id)}/resolve`,{method:'POST',idempotency:`ui-bulk-reject-${id}`,body:{resolution:'REJECT',matterId:null,notes:'Synthetic bulk triage rejection'}})}selectedExceptions.clear();notice(`${ids.length} synthetic exceptions rejected. No writebacks created.`);await refresh()}catch(e){notice(e.message,true)}}
 function writebackNotice(worker, eventId) {

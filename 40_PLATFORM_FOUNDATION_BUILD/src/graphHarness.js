@@ -7,7 +7,7 @@ const unavailable = () => appError('resource unavailable', {status: 404, code: '
 const conflict = () => appError('integration state does not permit this action', {status: 409, code: 'INVALID_INTEGRATION_STATE'});
 
 function text(value, max = 512) {
-  if (typeof value !== 'string' || !value.trim() || value.length > max) throw invalid();
+  if (typeof value !== 'string' || !value.trim() || value.length > max || /[\x00-\x1f\x7f]/.test(value)) throw invalid();
   return value;
 }
 
@@ -22,11 +22,12 @@ export class MockGraphHarness {
     this.deliveryFingerprints = new Map();
   }
   #timestamp() { return new Date(this.now()).toISOString(); }
-  #requireMailbox(mailboxId) {
-    text(mailboxId);
-    const config = this.registry.get(this.tenantId, 'MICROSOFT_GRAPH');
-    if (!config?.capabilities.includes('MAIL_READ') || !config.metadata.mailboxes.includes(mailboxId)) throw unavailable();
+  #approvedMailbox(mailboxId) {
+    const config=this.registry.get(this.tenantId,'MICROSOFT_GRAPH');
+    return config?.mode==='MOCK'&&Array.isArray(config.capabilities)&&config.capabilities.includes('MAIL_READ')&&Array.isArray(config.metadata?.mailboxes)&&config.metadata.mailboxes.includes(mailboxId);
   }
+  #requireMailbox(mailboxId) {text(mailboxId);if(!this.#approvedMailbox(mailboxId))throw unavailable();}
+  #checkpoint(mailboxId) {return {mailboxId,checkpointPresent:true,scopeStatus:this.#approvedMailbox(mailboxId)?'IN_SCOPE':'OUT_OF_SCOPE'};}
   #subscription(id, {active = false} = {}) {
     text(id);
     const item = this.subscriptions.get(id);
@@ -77,7 +78,7 @@ export class MockGraphHarness {
     this.#requireMailbox(mailboxId);
     text(token, 2048);
     this.delta.set(mailboxId, token);
-    return {mailboxId, deltaCheckpoint: token, updatedAt: this.#timestamp()};
+    return {...this.#checkpoint(mailboxId),updatedAt:this.#timestamp()};
   }
   receiveNotification({subscriptionId, notificationId = null, resourceId = 'synthetic-resource', changeType = 'updated', clientStateValid = true} = {}) {
     const sub = this.#subscription(subscriptionId, {active: true});
@@ -125,8 +126,7 @@ export class MockGraphHarness {
     return clone(item);
   }
   #visibleSubscription(item) {
-    const config = this.registry.get(this.tenantId, 'MICROSOFT_GRAPH');
-    const status = !config?.capabilities.includes('MAIL_READ') || !config.metadata.mailboxes.includes(item.mailboxId) ? 'OUT_OF_SCOPE'
+    const status = !this.#approvedMailbox(item.mailboxId) ? 'OUT_OF_SCOPE'
       : item.status === 'ACTIVE' && Date.parse(item.expiration) <= this.now() ? 'EXPIRED' : item.status;
     return {...clone(item), status};
   }
@@ -137,9 +137,10 @@ export class MockGraphHarness {
     const retry = deliveries.filter(x => x.status === 'RETRY_SCHEDULED').length;
     const rejected = deliveries.filter(x => x.status === 'REJECTED_CLIENT_STATE').length;
     const lifecycle = all.filter(x => x.status !== 'ACTIVE').length;
-    return {state: dead || retry || lifecycle ? 'DEGRADED' : 'HEALTHY', mode: 'MOCK', subscriptions: all.filter(x => x.status === 'ACTIVE').length, totalSubscriptions: all.length, deltaCheckpoints: this.delta.size, deliveries: deliveries.length, retryScheduled: retry, deadLetters: dead, rejected, lifecycleAttention: lifecycle, lastCheck: this.#timestamp()};
+    const checkpointAttention=[...this.delta.keys()].filter(mailbox=>!this.#approvedMailbox(mailbox)).length;
+    return {state: dead || retry || lifecycle || checkpointAttention ? 'DEGRADED' : 'HEALTHY', mode: 'MOCK', subscriptions: all.filter(x => x.status === 'ACTIVE').length, totalSubscriptions: all.length, deltaCheckpoints: this.delta.size, deliveries: deliveries.length, retryScheduled: retry, deadLetters: dead, rejected, lifecycleAttention: lifecycle, checkpointAttention, lastCheck: this.#timestamp()};
   }
   snapshot() {
-    return {subscriptions: [...this.subscriptions.values()].map(x => this.#visibleSubscription(x)), deltaCheckpoints: [...this.delta.entries()].map(([mailboxId, token]) => ({mailboxId, token})), deliveries: [...this.deliveries.values()].map(clone).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)), health: this.healthCheck()};
+    return {subscriptions: [...this.subscriptions.values()].map(x => this.#visibleSubscription(x)), deltaCheckpoints: [...this.delta.keys()].map(mailboxId=>this.#checkpoint(mailboxId)), deliveries: [...this.deliveries.values()].map(clone).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)), health: this.healthCheck()};
   }
 }

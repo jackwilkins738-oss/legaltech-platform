@@ -264,3 +264,11 @@ validates immutable approval proof before external I/O. Tuple scopes and conserv
 historical replay preserve existing data; no automatic repair or new legal scope.
 Platform: 352/352, including 59 new tests. D-018, production evidence gates and
 human security review remain unchanged.
+
+## 2026-10-07 — Combined connector evidence safety batch — V49
+
+Reproduced provider error/token exposure, false validation evidence, stale result
+replacement and mutable registry records are fixed together. Read-only synthetic
+validation now distinguishes PASS/NOT_TESTED/BLOCKED and does not claim live
+readiness. Platform: 409/409, including 57 new cases. No schema reset, live calls,
+new legal scope or production access; D-018 and human security review remain.
