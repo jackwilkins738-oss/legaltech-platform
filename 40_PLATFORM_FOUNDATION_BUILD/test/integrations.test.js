@@ -36,7 +36,7 @@ test('Graph reliability harness deduplicates notifications and exposes retry/dea
   const first=graph.receiveNotification({subscriptionId:sub.id,notificationId:'n-1',resourceId:'message-1'});assert.equal(first.status,'ACCEPTED');assert.equal(first.duplicate,false);
   const duplicate=graph.receiveNotification({subscriptionId:sub.id,notificationId:'n-1',resourceId:'message-1'});assert.equal(duplicate.duplicate,true);assert.equal(duplicate.duplicateCount,1);
   const retry=graph.failDelivery(first.id,'boom');assert.equal(retry.status,'RETRY_SCHEDULED');
-  const dead=graph.failDelivery(first.id,'boom again');assert.equal(dead.status,'DEAD_LETTER');assert.equal(graph.healthCheck().state,'DEGRADED');
+  graph.retryDelivery(first.id);const dead=graph.failDelivery(first.id,'boom again');assert.equal(dead.status,'DEAD_LETTER');assert.equal(graph.healthCheck().state,'DEGRADED');
   const recovered=graph.retryDelivery(first.id);assert.equal(recovered.status,'ACCEPTED');
 });
 
@@ -61,7 +61,7 @@ test('integration API is tenant-capability scoped and supports synthetic lifecyc
   } finally {await new Promise(r=>server.close(r));store.close();fs.rmSync(dir,{recursive:true,force:true});}
 });
 
-test('v37 integration reliability control plane is present in the Aurora UI',()=>{
+test('v39 integration reliability control plane is present in the Aurora UI',()=>{
   const html=fs.readFileSync(new URL('../ui/index.html',import.meta.url),'utf8');const js=fs.readFileSync(new URL('../ui/app.js',import.meta.url),'utf8');
-  assert.match(html,/V37/);assert.match(html,/Integrations/);assert.match(html,/RELIABILITY HARNESS/);assert.match(js,/Integration readiness/);assert.match(js,/Synthetic Graph subscription/);assert.match(js,/Proclaim validation/);assert.match(js,/HARD BOUNDARY/);assert.match(js,/Webhook reliability/);assert.match(js,/Simulate webhook/);
+  assert.match(html,/V39/);assert.match(html,/Integrations/);assert.match(html,/RELIABILITY HARNESS/);assert.match(js,/Integration readiness/);assert.match(js,/Synthetic Graph subscription/);assert.match(js,/Proclaim validation/);assert.match(js,/HARD BOUNDARY/);assert.match(js,/Webhook reliability/);assert.match(js,/Simulate webhook/);
 });

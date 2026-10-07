@@ -80,3 +80,16 @@ V35 is a full presentation-layer rebuild rather than an incremental CSS patch. T
 
 ## V36 integration readiness
 The local synthetic app now includes an Integrations control plane for Microsoft Graph lifecycle modelling, Proclaim validation readiness and production-shaped OIDC claims mapping. Live customer access remains blocked until authorised.
+
+## V38 connector safety fixes
+Tenant and mailbox scope are enforced throughout the synthetic control plane.
+Rejected notifications no longer interfere with deduplication; expiry and recovery
+transitions are checked; operator actions have actor/trace audit records. See
+`docs/V38_CONNECTOR_SAFETY.md` for changed behavior, recovery and limits.
+
+## V39 durable writeback safety
+Write intent and receipt persist before external I/O/read-back. Unknown outcomes
+retry verification only, and approval replay cannot queue the same event again.
+The operator UI reports success only after selected-event read-back proof and
+provides read-only Verify outcome recovery. See `docs/V39_WRITEBACK_SAFETY.md`
+for failure behavior, the recovery API, conservative upgrades and rollback limits.

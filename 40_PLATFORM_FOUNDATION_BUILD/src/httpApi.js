@@ -58,8 +58,11 @@ async function readJson(req) {
   }
   if (!chunks.length) return {};
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  } catch {
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw appError('invalid request', {code: 'INVALID_REQUEST'});
+    return body;
+  } catch (error) {
+    if (error.code === 'INVALID_REQUEST') throw error;
     throw appError('invalid json', {status: 400, code: 'INVALID_JSON'});
   }
 }
@@ -96,6 +99,19 @@ function inboundFromBody(body) {
 }
 
 export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null}) {
+  async function integrationMutation(session, traceId, action, objectId, run) {
+    const entry = {tenantId: session.tenantId, actorId: session.actorId, traceId, action, objectId: /^(?:sub|del)_[a-f0-9-]{36}$/.test(objectId) ? objectId : ['MICROSOFT_GRAPH', 'PROCLAIM'].includes(objectId) ? objectId : 'MICROSOFT_GRAPH'};
+    // Fail closed before changing connector state if the audit store is unavailable.
+    platform.store.audit({...entry, outcome: 'ATTEMPT'});
+    try {
+      const result = await run();
+      platform.store.audit({...entry, objectId: /^(?:sub|del)_[a-f0-9-]{36}$/.test(result?.id) ? result.id : entry.objectId, outcome: 'SUCCESS'});
+      return result;
+    } catch (error) {
+      platform.store.audit({...entry, outcome: 'FAILED', reason: error.status < 500 ? error.code : 'INTERNAL_ERROR'});
+      throw error;
+    }
+  }
   return http.createServer(async (req, res) => {
     const traceId = safeTraceId(req);
     try {
@@ -104,6 +120,15 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       if (req.method === 'GET' && url.pathname === '/api/v1/health') return send(res, 200, {status: 'ok'}, traceId);
 
       const session = await authProvider.authenticate(req.headers);
+      if (integrations && (url.pathname === '/api/v1/integrations' || url.pathname.startsWith('/api/v1/integrations/'))) {
+        requireCapability(session, req.method === 'GET' ? 'integration:read' : 'integration:manage');
+        // A shared harness is bound to one tenant. Never trust capability possession alone.
+        const connector = url.pathname.startsWith('/api/v1/integrations/proclaim') ? integrations.proclaim : integrations.graph;
+        const kind = connector === integrations.proclaim ? 'PROCLAIM' : 'MICROSOFT_GRAPH';
+        if (connector?.tenantId !== session.tenantId || !integrations.registry.get(session.tenantId, kind)) {
+          throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
+        }
+      }
 
       if (req.method === 'GET' && url.pathname === '/api/v1/matters') {
         requireCapability(session, 'matter:read');
@@ -139,6 +164,15 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         return send(res, 202, result, result.traceId || traceId);
       }
 
+      const reconcileWriteback = url.pathname.match(/^\/api\/v1\/inbound-events\/([^/]+)\/reconcile-writeback$/);
+      if (req.method === 'POST' && reconcileWriteback) {
+        requireCapability(session, 'integration:manage');
+        requireCapability(session, 'inbound:read');
+        const body = await readJson(req); assertBodyTenant(body, session);
+        const result = platform.requestWritebackReconciliation({tenantId: session.tenantId, eventId: decodeURIComponent(reconcileWriteback[1]), actorId: session.actorId, idempotencyKey: idempotencyKey(req)});
+        return send(res, 202, result, traceId);
+      }
+
       if (req.method === 'GET' && url.pathname === '/api/v1/exceptions') {
         requireCapability(session, 'exception:read');
         return send(res, 200, {items: platform.listExceptions(session.tenantId), next_cursor: null}, traceId);
@@ -160,7 +194,8 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
 
       if (integrations && req.method === 'GET' && url.pathname === '/api/v1/integrations') {
         requireCapability(session, 'integration:read');
-        return send(res, 200, integrations.summary(session.tenantId), traceId);
+        const summary = integrations.summary(session.tenantId);
+        return send(res, 200, summary, traceId);
       }
 
       if (integrations && req.method === 'GET' && url.pathname === '/api/v1/integrations/graph') {
@@ -172,14 +207,16 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'integration:manage');
         const body = await readJson(req); assertBodyTenant(body, session);
         if (!body.mailboxId || typeof body.mailboxId !== 'string') throw appError('mailboxId required',{code:'INVALID_REQUEST'});
-        const subscription=integrations.graph.createMailboxSubscription(body.mailboxId, body.folder || 'Inbox');
+        const subscription=await integrationMutation(session, traceId, 'GRAPH_SUBSCRIPTION_CREATE', 'MICROSOFT_GRAPH', () => integrations.graph.createMailboxSubscription(body.mailboxId, body.folder ?? 'Inbox'));
         return send(res, 201, {subscription}, traceId);
       }
 
       const graphRenew=url.pathname.match(/^\/api\/v1\/integrations\/graph\/subscriptions\/([^/]+)\/renew$/);
       if (integrations && req.method === 'POST' && graphRenew) {
         requireCapability(session, 'integration:manage');
-        const subscription=integrations.graph.renewSubscription(decodeURIComponent(graphRenew[1]));
+        const id=decodeURIComponent(graphRenew[1]);
+        const body=await readJson(req); assertBodyTenant(body,session);
+        const subscription=await integrationMutation(session, traceId, 'GRAPH_SUBSCRIPTION_RENEW', id, () => integrations.graph.renewSubscription(id));
         return send(res, 200, {subscription}, traceId);
       }
 
@@ -187,7 +224,8 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'integration:manage');
         const body=await readJson(req); assertBodyTenant(body,session);
         if(!body.mailboxId||!body.deltaToken) throw appError('mailboxId and deltaToken required',{code:'INVALID_REQUEST'});
-        return send(res,200,integrations.graph.setDelta(body.mailboxId,body.deltaToken),traceId);
+        const checkpoint=await integrationMutation(session, traceId, 'GRAPH_DELTA_CHECKPOINT_SET', 'MICROSOFT_GRAPH', () => integrations.graph.setDelta(body.mailboxId,body.deltaToken));
+        return send(res,200,checkpoint,traceId);
       }
 
       const graphLifecycle=url.pathname.match(/^\/api\/v1\/integrations\/graph\/subscriptions\/([^/]+)\/lifecycle$/);
@@ -195,41 +233,55 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'integration:manage');
         const body=await readJson(req); assertBodyTenant(body,session);
         if(!body.status) throw appError('status required',{code:'INVALID_REQUEST'});
-        return send(res,200,{subscription:integrations.graph.lifecycle(decodeURIComponent(graphLifecycle[1]),body.status)},traceId);
+        const id=decodeURIComponent(graphLifecycle[1]);
+        const subscription=await integrationMutation(session, traceId, 'GRAPH_SUBSCRIPTION_LIFECYCLE', id, () => integrations.graph.lifecycle(id,body.status));
+        return send(res,200,{subscription},traceId);
       }
 
       if (integrations && req.method === 'POST' && url.pathname === '/api/v1/integrations/graph/webhooks/simulate') {
         requireCapability(session, 'integration:manage');
         const body=await readJson(req); assertBodyTenant(body,session);
         if(!body.subscriptionId) throw appError('subscriptionId required',{code:'INVALID_REQUEST'});
-        return send(res,202,{delivery:integrations.graph.receiveNotification({subscriptionId:body.subscriptionId,notificationId:body.notificationId||null,resourceId:body.resourceId||'synthetic-resource',changeType:body.changeType||'updated',clientStateValid:body.clientStateValid!==false})},traceId);
+        const delivery=await integrationMutation(session, traceId, 'GRAPH_WEBHOOK_SIMULATE', 'MICROSOFT_GRAPH', () => integrations.graph.receiveNotification({subscriptionId:body.subscriptionId,notificationId:body.notificationId ?? null,resourceId:body.resourceId ?? 'synthetic-resource',changeType:body.changeType ?? 'updated',clientStateValid:body.clientStateValid === undefined ? true : body.clientStateValid}));
+        return send(res,202,{delivery},traceId);
       }
 
       const graphDeliveryFail=url.pathname.match(/^\/api\/v1\/integrations\/graph\/deliveries\/([^/]+)\/fail$/);
       if (integrations && req.method === 'POST' && graphDeliveryFail) {
         requireCapability(session, 'integration:manage');
         const body=await readJson(req); assertBodyTenant(body,session);
-        return send(res,200,{delivery:integrations.graph.failDelivery(decodeURIComponent(graphDeliveryFail[1]),body.error||'synthetic failure')},traceId);
+        const id=decodeURIComponent(graphDeliveryFail[1]);
+        const delivery=await integrationMutation(session, traceId, 'GRAPH_DELIVERY_FAIL', id, () => integrations.graph.failDelivery(id,body.error ?? 'synthetic failure'));
+        return send(res,200,{delivery},traceId);
       }
 
       const graphDeliveryRetry=url.pathname.match(/^\/api\/v1\/integrations\/graph\/deliveries\/([^/]+)\/retry$/);
       if (integrations && req.method === 'POST' && graphDeliveryRetry) {
         requireCapability(session, 'integration:manage');
-        return send(res,200,{delivery:integrations.graph.retryDelivery(decodeURIComponent(graphDeliveryRetry[1]))},traceId);
+        const body=await readJson(req); assertBodyTenant(body,session);
+        const id=decodeURIComponent(graphDeliveryRetry[1]);
+        const delivery=await integrationMutation(session, traceId, 'GRAPH_DELIVERY_RETRY', id, () => integrations.graph.retryDelivery(id));
+        return send(res,200,{delivery},traceId);
       }
 
       if (integrations && req.method === 'POST' && url.pathname === '/api/v1/integrations/proclaim/validate') {
         requireCapability(session, 'integration:manage');
         const body=await readJson(req); assertBodyTenant(body,session);
-        const result=await integrations.proclaim.runValidation({externalMatterId:body.externalMatterId||'PROCLAIM-DEMO-1'});
+        if (body.externalMatterId != null && (typeof body.externalMatterId !== 'string' || !body.externalMatterId.trim() || body.externalMatterId.length > 512)) throw appError('invalid request', {code:'INVALID_REQUEST'});
+        const result=await integrationMutation(session, traceId, 'PROCLAIM_VALIDATION_RUN', 'PROCLAIM', () => integrations.proclaim.runValidation({externalMatterId:body.externalMatterId ?? 'PROCLAIM-DEMO-1'}));
         return send(res,200,{result},traceId);
       }
 
       if (devWorkers && req.method === 'POST' && url.pathname === '/api/v1/dev/workers/drain-one') {
         requireCapability(session, 'dev:workers');
+        requireCapability(session, 'inbound:read');
         const body = await readJson(req);
-        const result = body.worker === 'inbound' ? await platform.processNext()
-          : body.worker === 'writeback' ? await platform.processWritebackNext()
+        assertBodyTenant(body, session);
+        if (body.eventId != null && (typeof body.eventId !== 'string' || !body.eventId || body.eventId.length > 200)) throw appError('invalid eventId', {code:'INVALID_REQUEST'});
+        if (body.eventId != null && !platform.getEvent(session.tenantId, body.eventId)) throw appError('resource unavailable', {status:404,code:'NOT_FOUND'});
+        const workerContext = {tenantId: session.tenantId, eventId: body.eventId ?? null};
+        const result = body.worker === 'inbound' ? await platform.processNext(workerContext)
+          : body.worker === 'writeback' ? await platform.processWritebackNext(workerContext)
           : (() => { throw appError('unknown worker', {code: 'INVALID_WORKER'}); })();
         return send(res, 200, {result}, traceId);
       }
