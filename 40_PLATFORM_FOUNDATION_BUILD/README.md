@@ -169,3 +169,13 @@ write/live checks. Revision/generation fences protect newer results; registry
 records are isolated and validated before mutation. Checkpoint tokens remain out
 of API/UI responses. See `docs/V49_CONNECTOR_EVIDENCE_SAFETY.md` and
 `TEST_RESULTS_V49.md` for compatibility and evidence limits.
+
+## V50 combined writeback boundary safety batch
+
+Reconciliation retries bind the requesting operator and the original approval.
+Missing durable command evidence cannot erase recorded write history or authorize
+another send; legacy completion needs fresh bound read-back. Worker commits
+recheck approval/job/receipt bindings and preserve changed evidence. Typed counters,
+bounded budgets and normalized adapter evidence fail closed. See
+`docs/V50_WRITEBACK_BOUNDARY_SAFETY.md` and `TEST_RESULTS_V50.md` for compatibility
+and the required security review.
