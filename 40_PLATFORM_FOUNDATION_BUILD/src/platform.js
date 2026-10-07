@@ -1,3 +1,4 @@
+import {assertReviewIdentity,assertUndecidedEvent,assertOpenReview,assertRejectedReview,commitReviewEvent,commitReviewException,reviewAuditView} from './reviewEvidence.js';
 import {sourceFingerprint,processingFingerprint,assertProcessingEvidence} from './processingEvidence.js';
 import {normalizeClassificationResult} from './aiGateway.js';
 import {normalizeApprovalRequest,approvalScope,approvalFingerprint,replayApproval} from './approvalRequest.js';
@@ -154,6 +155,7 @@ export class Platform {
       if (!ex) throw appError('exception unavailable', {status:404,code:'NOT_FOUND'});
       const event = this.store.getEvent(tenantId,ex.eventId);
       if (!event) throw appError('event unavailable', {status:404,code:'NOT_FOUND'});
+      assertReviewIdentity({tenantId,exceptionId,event,exception:ex});
       const scope=reviewScope(tenantId,idempotencyKey);
       const previous=this.store.getIdempotent(scope)||this.store.getIdempotent(`${tenantId}:exception-resolve:${idempotencyKey}`);
       if (previous) {
@@ -182,23 +184,26 @@ export class Platform {
           const approval=this.approve({tenantId,eventId:event.id,matterId:ex.matterId,exceptionId,actorId,idempotencyKey:approvalKey});
           if(approval.jobId!==job.id)throw unavailable();
           out={...out,matterId:ex.matterId,jobId:job.id};
-        } else if (event.status!=='REJECTED'||event.rejectionNotes!==notes) throw unavailable();
+        } else assertRejectedReview(this.store,{tenantId,event,exception:ex,notes});
         this.store.setIdempotent(scope,{...out,requestFingerprint:fingerprint});
         return {...out,replayed:true};
       }
       if (ex.status !== 'OPEN' || event.status !== 'REVIEW_REQUIRED') throw appError('review decision already recorded', {status:409,code:'INVALID_REVIEW_STATE'});
+      assertUndecidedEvent(event);
+      assertOpenReview(this.store,{tenantId,event,exception:ex});
+      const originalEvent=structuredClone(event),originalException=structuredClone(ex);
       if (resolution === 'APPROVE') {
-        ex.notes=notes;this.store.updateException(ex);
+        ex.notes=notes;commitReviewException(this.store,ex,originalException);
         const result = this.approve({tenantId,eventId:event.id,matterId,exceptionId,actorId,idempotencyKey:`resolve:${idempotencyKey}`});
         const out = {exceptionId,eventId:event.id,resolution:'APPROVE',status:'RESOLVED',matterId:result.matterId,jobId:result.jobId,replayed:false};
         this.store.setIdempotent(scope,{...out,requestFingerprint:fingerprint});
         return out;
       }
       ex.status='RESOLVED';ex.resolution='REJECTED';ex.resolvedBy=actorId;ex.notes=notes;
-      this.store.updateException(ex);
-      event.status='REJECTED';event.rejectedBy=actorId;event.rejectionNotes=notes;
-      this.store.updateEvent(event);
-      this.store.audit({tenantId,traceId:event.traceId,action:'INBOUND_REJECTED',objectId:event.id,actorId,outcome:'SUCCESS',reason:notes||'human_rejection'});
+      commitReviewException(this.store,ex,originalException);
+      event.status='REJECTED';event.rejectedBy=actorId;event.rejectedExceptionId=ex.id;event.rejectionNotes=notes;
+      commitReviewEvent(this.store,event,originalEvent);
+      this.store.audit({tenantId,traceId:event.traceId,action:'INBOUND_REJECTED',objectId:event.id,actorId,outcome:'SUCCESS',reason:'human_rejection'});
       const out = {exceptionId,eventId:event.id,resolution:'REJECT',status:'RESOLVED',replayed:false};
       this.store.setIdempotent(scope,{...out,requestFingerprint:fingerprint});
       return out;
@@ -216,6 +221,9 @@ export class Platform {
         return replayApproval(this.store,{tenantId,event,request,previous});
       }
       if (!['READY_FOR_APPROVAL','REVIEW_REQUIRED'].includes(event.status)) throw appError('event cannot be approved again', {status:409,code:'INVALID_REVIEW_STATE'});
+      if(event.id!==eventId||event.tenantId!==tenantId)throw appError('event unavailable',{status:404,code:'NOT_FOUND'});
+      assertUndecidedEvent(event);
+      const originalEvent=structuredClone(event);
       if(this.store.getIdempotent(writebackScope(tenantId,idempotencyKey)))throw appError('idempotency key conflicts with prior decision',{status:409,code:'IDEMPOTENCY_CONFLICT'});
       const resolvedMatterId = matterId ?? event.match?.matterId;
       const matter = this.store.getMatter(tenantId,resolvedMatterId);
@@ -226,16 +234,18 @@ export class Platform {
       if (exceptionId) {
         const ex = this.store.getException(tenantId,exceptionId);
         if (!ex || ex.eventId !== eventId) throw appError('exception unavailable', {status:404,code:'NOT_FOUND'});
-        if(ex.status!=='OPEN'||event.status!=='REVIEW_REQUIRED'||(event.processing?.exceptionId&&event.processing.exceptionId!==ex.id))throw appError('review decision already recorded',{status:409,code:'INVALID_REVIEW_STATE'});
+        assertReviewIdentity({tenantId,exceptionId,event,exception:ex});
+        assertOpenReview(this.store,{tenantId,event,exception:ex});
+        const originalException=structuredClone(ex);
         ex.status='RESOLVED';ex.resolution='APPROVED';ex.matterId=resolvedMatterId;ex.resolvedBy=actorId;
-        this.store.updateException(ex);
+        commitReviewException(this.store,ex,originalException);
       }
       event.status='APPROVED';event.approvedMatterId=resolvedMatterId;event.approvedBy=actorId;event.approvedExceptionId=exceptionId;
       const job = this.store.enqueue({tenantId,type:'PROCLAIM_WRITEBACK',payload:{eventId,matterId:resolvedMatterId,approvalKey:idempotencyKey},traceId:event.traceId});
       const command = newWritebackCommand({tenantId,event,matter,key:idempotencyKey,jobId:job.id});
       this.store.setIdempotent(writebackScope(tenantId,idempotencyKey),command);
       event.writeback = {state:'PENDING',commandKey:idempotencyKey,verified:false,writeAttempts:0,reconciliationAttempts:0,totalReadAttempts:0,recoveryCount:0};
-      this.store.updateEvent(event);
+      commitReviewEvent(this.store,event,originalEvent);
       const result = {eventId,jobId:job.id,status:'APPROVED',matterId:resolvedMatterId,replayed:false};
       this.store.setIdempotent(scope,{...result,requestFingerprint:approvalFingerprint(resolvedMatterId,exceptionId,actorId)});
       this.store.audit({tenantId,traceId:event.traceId,action:'INBOUND_APPROVED',objectId:eventId,matterId:resolvedMatterId,actorId,outcome:'SUCCESS'});
@@ -248,5 +258,5 @@ export class Platform {
   getEvent(tenantId,eventId){return inboundEventView(this.store,this.store.getEvent(tenantId,eventId));}
   listEvents(tenantId,limit=50){return this.store.listEvents(tenantId,limit).map(event=>inboundEventView(this.store,event));}
   listMatters(tenantId,limit=100){return this.store.listMatters(tenantId,limit);}
-  audits(tenantId){return this.store.listAudits(tenantId);}
+  audits(tenantId){return this.store.listAudits(tenantId).map(reviewAuditView);}
 }

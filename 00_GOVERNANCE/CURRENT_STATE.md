@@ -302,3 +302,14 @@ precede retrieval and mutation; OIDC signature verification remains upstream.
 Platform: 679/679, including 81 new cases. No production SSO, live credentials,
 new legal scope or data migration is introduced. D-018, integration evidence gates
 and human security review remain unchanged.
+
+
+## 2026-10-07 — Combined review boundary safety batch — V53
+
+Reproduced wrong-exception rejection, prior decision overwrite, audit-note duplication
+and partial UI failure defects are fixed within the existing human review path.
+Decisions validate owned record bindings and conditionally persist against the
+original event/exception snapshots. Historical rejection replay remains conservative.
+Platform: 763/763, including 84 new cases. No schema reset, live connector, new legal
+scope or changed human decision threshold. D-018, integration evidence gates and
+human security review remain unchanged.

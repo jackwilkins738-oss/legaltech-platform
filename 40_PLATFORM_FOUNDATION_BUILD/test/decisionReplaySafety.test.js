@@ -84,7 +84,7 @@ test('legacy recovery with no attributable request proof fails closed',async t=>
   const x=fixture(t),a=await x.fail();x.recover(a);const scope=JSON.stringify(['inbound-recovery','ta','recovery-key']),cached=x.store.getIdempotent(scope);delete cached.requestFingerprint;delete cached.actorId;x.store.setIdempotent(scope,cached);
   assert.throws(()=>x.recover(a),code('IDEMPOTENCY_UNVERIFIABLE'));assert.equal(x.store.listEventJobs('ta',a.eventId).length,2);
 });
-for(const method of ['enqueue','setIdempotent','updateEvent','audit']) test(`approval ${method} failure rolls back authorization and queue`,async t=>{
+for(const method of ['enqueue','setIdempotent','updateReviewEvent','audit']) test(`approval ${method} failure rolls back authorization and queue`,async t=>{
   const x=fixture(t),a=await x.prepare(),before=x.store.getEvent('ta',a.eventId),original=x.store[method].bind(x.store);
   x.store[method]=()=>{throw Error('synthetic persistence failure');};assert.throws(()=>x.approve(a));x.store[method]=original;
   assert.deepEqual(x.store.getEvent('ta',a.eventId),before);assert.equal(x.store.listEventJobs('ta',a.eventId,'PROCLAIM_WRITEBACK').length,0);assert.equal(x.store.getIdempotent(writebackScope('ta','decision-key')),null);assert.equal(x.store.getIdempotent(tuple('ta','decision-key')),null);

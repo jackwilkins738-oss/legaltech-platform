@@ -197,3 +197,12 @@ exact capability arrays. Static session records and OIDC mapper configuration ar
 private; request sessions are immutable snapshots before body reads. Malformed
 provider sessions return 401 before retrieval; missing exact permissions return 404.
 See docs/V52_AUTH_BOUNDARY_SAFETY.md for compatibility, limits and review gates.
+
+
+## V53 — Review decision/audit safety
+
+Review decisions validate the owned event/exception binding, refuse contradictory
+prior decision evidence and commit with conditional writes. Rejections retain
+notes in decision records while audit views use a fixed reason. Bulk partial
+failures and recorded approvals refresh the UI without claiming verified writes.
+See docs/V53_REVIEW_BOUNDARY_SAFETY.md for historical compatibility and review gates.

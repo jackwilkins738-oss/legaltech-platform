@@ -19,7 +19,7 @@ async function api(path,{method='GET',body,idempotency}={}){
 function notice(message,error=false){const n=el('#notice');n.textContent=message;n.className=`notice${error?' error':''}`;setTimeout(()=>n.classList.add('hidden'),3600)}
 async function pingHealth(){try{const {r,ms}=await rawFetch('/api/v1/health');state.health.online=r.ok;state.health.latency=ms}catch{state.health.online=false}updateSystemStrip()}
 function updateSystemStrip(){const online=state.health.online;const apiState=el('#apiState');if(apiState){apiState.textContent=online?'ONLINE':'OFFLINE';apiState.className=online?'online':'offline'}if(el('#apiLatency'))el('#apiLatency').textContent=state.health.latency?`${state.health.latency} ms`:'—';if(el('#lastSync'))el('#lastSync').textContent=fmtClock(state.health.lastSync);if(el('#sideHealth'))el('#sideHealth').textContent=online?'API online':'API offline';if(el('#sideLatency'))el('#sideLatency').textContent=state.health.latency?`${state.health.latency} ms`:'— ms';const d=el('#sideHealthDot');if(d)d.className=`health-dot ${online?'ok':'bad'}`}
-async function refresh(){try{await pingHealth();const [matters,events,exceptions,audit,integrations,graph]=await Promise.all([api('/api/v1/matters'),api('/api/v1/inbound-events?limit=100'),api('/api/v1/exceptions'),api('/api/v1/audit'),api('/api/v1/integrations'),api('/api/v1/integrations/graph')]);Object.assign(state,{matters:matters.items,events:events.items,exceptions:exceptions.items,audit:audit.items,integrations,graph});state.health.lastSync=new Date().toISOString();updateSystemStrip();render()}catch(e){state.health.online=false;updateSystemStrip();notice(e.message,true)}}
+async function refresh(){try{await pingHealth();const [matters,events,exceptions,audit,integrations,graph]=await Promise.all([api('/api/v1/matters'),api('/api/v1/inbound-events?limit=100'),api('/api/v1/exceptions'),api('/api/v1/audit'),api('/api/v1/integrations'),api('/api/v1/integrations/graph')]);Object.assign(state,{matters:matters.items,events:events.items,exceptions:exceptions.items,audit:audit.items,integrations,graph});const openExceptionIds=new Set(state.exceptions.map(ex=>ex.id));for(const id of selectedExceptions)if(!openExceptionIds.has(id))selectedExceptions.delete(id);state.health.lastSync=new Date().toISOString();updateSystemStrip();render()}catch(e){state.health.online=false;updateSystemStrip();notice(e.message,true)}}
 
 function metric(label,value,note='',accent=false){return `<div class="metric"><label>${esc(label)}</label><strong class="${accent?'metric-accent':''}">${esc(value)}</strong><small>${esc(note)}</small></div>`}
 function empty(){return el('#emptyTemplate').innerHTML}
@@ -108,7 +108,19 @@ document.querySelectorAll('[data-retry-delivery]').forEach(b=>b.onclick=async()=
 document.querySelectorAll('[data-renew-sub]').forEach(b=>b.onclick=async()=>{try{await api(`/api/v1/integrations/graph/subscriptions/${encodeURIComponent(b.dataset.renewSub)}/renew`,{method:'POST'});notice('Synthetic subscription renewed.');await refresh()}catch(e){notice(e.message,true)}});
 if(el('#runProclaimValidation'))el('#runProclaimValidation').onclick=async()=>{try{const data=await api('/api/v1/integrations/proclaim/validate',{method:'POST',body:{externalMatterId:'PROCLAIM-DEMO-1'}});proclaimValidationNotice(data.result);await refresh()}catch(e){notice(e.message,true)}};
 if(el('#closeNotifications'))el('#closeNotifications').onclick=()=>{state.notificationsOpen=false;render()};document.querySelectorAll('[data-notification]').forEach((b,i)=>b.onclick=()=>{const n=notifications()[i];state.notificationsOpen=false;if(n?.target)state.view=n.target;render();if(n?.id)setTimeout(()=>document.getElementById(`ex-${n.id}`)?.scrollIntoView({behavior:'smooth'}),0)})}
-async function bulkRejectSelected(){const ids=[...selectedExceptions].filter(id=>state.exceptions.some(ex=>ex.id===id));if(!ids.length)return;try{for(const id of ids){await api(`/api/v1/exceptions/${encodeURIComponent(id)}/resolve`,{method:'POST',idempotency:`ui-bulk-reject-${id}`,body:{resolution:'REJECT',matterId:null,notes:'Synthetic bulk triage rejection'}})}selectedExceptions.clear();notice(`${ids.length} synthetic exceptions rejected. No writebacks created.`);await refresh()}catch(e){notice(e.message,true)}}
+async function bulkRejectSelected(){
+  const ids=[...selectedExceptions].filter(id=>state.exceptions.some(ex=>ex.id===id));
+  if(!ids.length)return;
+  let rejected=0;
+  try{
+    for(const id of ids){
+      await api(`/api/v1/exceptions/${encodeURIComponent(id)}/resolve`,{method:'POST',idempotency:`ui-bulk-reject-${id}`,body:{resolution:'REJECT',matterId:null,notes:'Synthetic bulk triage rejection'}});
+      selectedExceptions.delete(id);rejected++;
+    }
+    notice(`${rejected} synthetic exceptions rejected. No writebacks created.`);
+  }catch(e){notice(`${rejected} confirmed rejected; remaining decisions are unconfirmed. ${e.message}`,true);}
+  finally{await refresh();}
+}
 function writebackNotice(worker, eventId) {
   if (worker?.eventId===eventId&&worker?.status==='SUPERSEDED') {notice('Verification moved to newer work. Check the latest inbound outcome before further action.',true);return;}
   if (worker?.eventId === eventId && worker?.result?.verified === true) { notice('Approved. Mock Proclaim writeback reconciled.'); return; }
@@ -117,14 +129,16 @@ function writebackNotice(worker, eventId) {
 async function resolveException(id,resolution){
   const matterId=document.querySelector(`[data-matter-for="${CSS.escape(id)}"]`)?.value||null,notes=document.querySelector(`[data-notes-for="${CSS.escape(id)}"]`)?.value||null;
   if(resolution==='APPROVE'&&!matterId){notice('Select a matter before approval.',true);return}
+  let recorded=false;
   try{
     const resolved=await api(`/api/v1/exceptions/${encodeURIComponent(id)}/resolve`,{method:'POST',idempotency:`ui-${resolution.toLowerCase()}-${id}`,body:{resolution,matterId,notes}});
+    recorded=true;
     if(resolution==='APPROVE'){
       const data=await api('/api/v1/dev/workers/drain-one',{method:'POST',body:{worker:'writeback',eventId:resolved.eventId}});
       writebackNotice(data.result,resolved.eventId);
     }else notice('Rejected. No writeback created.');
-    await refresh();
-  }catch(e){notice(e.message,true)}
+  }catch(e){notice(recorded&&resolution==='APPROVE'?`Approval recorded; writeback remains unverified. ${e.message}`:e.message,true)}
+  finally{await refresh();}
 }
 async function reconcileWriteback(eventId){
   try{

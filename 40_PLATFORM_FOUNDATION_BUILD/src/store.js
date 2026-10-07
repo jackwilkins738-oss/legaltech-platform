@@ -56,6 +56,16 @@ export class PlatformStore {
   listMatters(t,limit=100){return this.db.prepare('SELECT data_json FROM matters WHERE tenant_id=? ORDER BY rowid LIMIT ?').all(t,Math.max(1,Math.min(Number(limit)||100,500))).map(r=>parse(r.data_json));}
   putException(e){this.db.prepare('INSERT INTO exceptions(id,tenant_id,status,event_id,data_json) VALUES(?,?,?,?,?)').run(e.id,e.tenantId,e.status,e.eventId,json(e));}
   updateException(e){this.db.prepare('UPDATE exceptions SET status=?,data_json=? WHERE id=? AND tenant_id=?').run(e.status,json(e),e.id,e.tenantId);}
+  updateReviewEvent(next,original) {
+    if(next.id!==original.id||next.tenantId!==original.tenantId||next.traceId!==original.traceId)return false;
+    return Number(this.db.prepare('UPDATE inbound_events SET status=?,data_json=? WHERE id=? AND tenant_id=? AND status=? AND trace_id=? AND json(data_json)=json(?)')
+      .run(next.status,json(next),original.id,original.tenantId,original.status,original.traceId,json(original)).changes)===1;
+  }
+  updateReviewException(next,original) {
+    if(next.id!==original.id||next.tenantId!==original.tenantId||next.eventId!==original.eventId)return false;
+    return Number(this.db.prepare('UPDATE exceptions SET status=?,data_json=? WHERE id=? AND tenant_id=? AND status=? AND event_id=? AND json(data_json)=json(?)')
+      .run(next.status,json(next),original.id,original.tenantId,original.status,original.eventId,json(original)).changes)===1;
+  }
   getException(t,id){const r=this.db.prepare('SELECT data_json FROM exceptions WHERE tenant_id=? AND id=?').get(t,id);return parse(r?.data_json);}
   listExceptions(t,status){const q=status?'SELECT data_json FROM exceptions WHERE tenant_id=? AND status=? ORDER BY rowid':'SELECT data_json FROM exceptions WHERE tenant_id=? ORDER BY rowid';const rs=status?this.db.prepare(q).all(t,status):this.db.prepare(q).all(t);return rs.map(r=>parse(r.data_json));}
   enqueue({tenantId,type,payload,traceId,availableAt=new Date().toISOString()}){const id=this.uid('job'),now=new Date().toISOString();this.db.prepare("INSERT INTO jobs(id,tenant_id,type,status,attempts,available_at,payload_json,trace_id,created_at,updated_at) VALUES(?,?,?,'QUEUED',0,?,?,?,?,?)").run(id,tenantId,type,availableAt,json(payload),traceId,now,now);return this.getJob(id);}
