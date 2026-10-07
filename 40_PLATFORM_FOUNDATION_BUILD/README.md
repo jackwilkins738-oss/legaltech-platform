@@ -93,3 +93,10 @@ retry verification only, and approval replay cannot queue the same event again.
 The operator UI reports success only after selected-event read-back proof and
 provides read-only Verify outcome recovery. See `docs/V39_WRITEBACK_SAFETY.md`
 for failure behavior, the recovery API, conservative upgrades and rollback limits.
+
+## V40 inbound safety
+
+V40 makes inbound acceptance and processing audit/queue changes atomic, prevents
+retry/late-worker duplicate review and decision overwrites, and replaces raw worker
+errors with a safe code. Scenario UI success requires selected-event processing
+proof. See `docs/V40_INBOUND_SAFETY.md` and `TEST_RESULTS_V40.md` for upgrade limits.

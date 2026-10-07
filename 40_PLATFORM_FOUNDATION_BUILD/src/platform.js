@@ -5,18 +5,72 @@ export class Platform {
   #trace(){return `trc_${crypto.randomUUID()}`;}
   ingest({tenantId,input,idempotencyKey}){
     if(!tenantId)throw appError('tenant required',{status:401,code:'TENANT_REQUIRED'}); if(!idempotencyKey)throw appError('idempotency key required',{code:'IDEMPOTENCY_REQUIRED'});
+    return this.store.transaction(() => {
     const scope=`${tenantId}:ingest:${idempotencyKey}`;const existing=this.store.getIdempotent(scope);if(existing)return {...existing,replayed:true};
     const traceId=this.#trace(),eventId=this.store.uid('evt'),attachments=[];
     for(const a of input.attachments||[]){const bytes=Buffer.isBuffer(a.bytes)?a.bytes:Buffer.from(a.bytes||'');const safety=inspectFile({filename:a.filename,bytes});let objectRef=null;if(safety.verdict==='SAFE_FOR_PARSER')objectRef=this.objectStorage.put({tenantId,bytes,contentType:a.contentType||'application/octet-stream',metadata:{filename:a.filename}}).objectRef;attachments.push({filename:a.filename,safety,objectRef});}
     const event={id:eventId,tenantId,traceId,status:'QUEUED',sourceSystem:input.sourceSystem||'MANUAL',externalEventId:input.externalEventId||null,subject:input.subject||'',body:input.body||'',attachments};this.store.putEvent(event);
     const job=this.store.enqueue({tenantId,type:'PROCESS_INBOUND',payload:{eventId},traceId});const result={eventId,jobId:job.id,traceId,status:'QUEUED',replayed:false};this.store.setIdempotent(scope,result);this.store.audit({tenantId,traceId,action:'INBOUND_ACCEPTED',objectId:eventId,outcome:'SUCCESS'});return result;
+    });
   }
-  async processNext({tenantId=null,eventId=null}={}){const job=this.store.claimNext('PROCESS_INBOUND',tenantId,{eventId});if(!job)return null;try{const out=await this.#processInbound(job);this.store.completeJob(job.id);return {jobId:job.id,status:'DONE',result:out};}catch(e){this.store.failJob(job.id,e,{retry:job.attempts<3,delayMs:0});return {jobId:job.id,status:'FAILED',error:String(e.message||e)};}}
-  async #processInbound(job){const e=this.store.getEvent(job.tenantId,job.payload.eventId);if(!e)throw new Error('event missing');const tenantId=e.tenantId,traceId=e.traceId;
-    const unsafe=e.attachments.filter(a=>a.safety.verdict!=='SAFE_FOR_PARSER');const match=matchMatter({tenantId,subject:e.subject,body:e.body,store:this.store});const ai=await this.aiGateway.classifyInbound({authorizedContext:{subject:e.subject,body:e.body}});
-    const needsReview=unsafe.length>0||match.decision!=='AUTO'||ai.status!=='OK';e.match=match;e.classification=ai;e.status=needsReview?'REVIEW_REQUIRED':'READY_FOR_APPROVAL';this.store.updateEvent(e);
-    let exceptionId=null;if(needsReview){const ex={id:this.store.uid('exc'),tenantId,eventId:e.id,status:'OPEN',type:unsafe.length?'FILE_SAFETY':ai.status!=='OK'?'AI_SAFETY':'MATTER_MATCH',reason:unsafe.length?unsafe.map(x=>x.safety.reason).join(','):ai.status!=='OK'?ai.reason:match.reason,candidates:match.candidates||[]};this.store.putException(ex);exceptionId=ex.id;}
-    this.store.audit({tenantId,traceId,action:'INBOUND_PROCESSED',objectId:e.id,matterId:match.matterId||null,outcome:needsReview?'REVIEW':'READY',reason:exceptionId||'policy_ready'});return {eventId:e.id,status:e.status,match,classification:ai,exceptionId};
+  async processNext({tenantId=null,eventId=null}={}) {
+    const job = this.store.claimNext('PROCESS_INBOUND',tenantId,{eventId});
+    if (!job) return null;
+    try {
+      const result = await this.#processInbound(job);
+      return {jobId:job.id,status:'DONE',result};
+    } catch {
+      // Provider/storage errors may contain document text, credentials or paths.
+      const code = 'INBOUND_PROCESSING_FAILED';
+      this.store.failJob(job.id,code,{retry:job.attempts<3,delayMs:0});
+      return {jobId:job.id,status:'FAILED',error:code};
+    }
+  }
+  #finishInbound(job,event,replayed=false) {
+    this.store.completeJob(job.id);
+    return {eventId:event.id,status:event.status,match:event.match,
+      classification:event.classification,exceptionId:event.processing?.exceptionId||null,replayed};
+  }
+  async #processInbound(job) {
+    const event = this.store.getEvent(job.tenantId,job.payload.eventId);
+    if (!event) throw new Error('event unavailable');
+    const processedStates = ['REVIEW_REQUIRED','READY_FOR_APPROVAL','APPROVED','REJECTED','COMPLETED',
+      'OUTCOME_UNKNOWN','RECONCILING','RECONCILIATION_FAILED','WRITE_FAILED'];
+    if (event.status !== 'QUEUED') {
+      if (!processedStates.includes(event.status)) throw new Error('invalid inbound state');
+      return this.store.transaction(() => this.#finishInbound(job,event,true));
+    }
+    // External classification is outside the synchronous SQLite transaction.
+    const match = matchMatter({tenantId:job.tenantId,subject:event.subject,body:event.body,store:this.store});
+    const ai = await this.aiGateway.classifyInbound({authorizedContext:{subject:event.subject,body:event.body}});
+    if (!ai || typeof ai !== 'object' || Array.isArray(ai) || !['OK','BLOCKED'].includes(ai.status) || typeof ai.classification !== 'string' || !ai.classification.trim() || !Number.isFinite(ai.confidence) || ai.confidence<0 || ai.confidence>1) throw new Error('invalid classification response');
+    const unsafe = event.attachments.filter(a=>a.safety.verdict!=='SAFE_FOR_PARSER');
+    const needsReview = unsafe.length>0 || match.decision!=='AUTO' || ai.status!=='OK';
+    return this.store.transaction(() => {
+      // A competing job may have processed/approved the event while AI was running.
+      const current = this.store.getEvent(job.tenantId,event.id);
+      if (!current) throw new Error('event unavailable');
+      if (current.status !== 'QUEUED') {
+        if (!processedStates.includes(current.status)) throw new Error('invalid inbound state');
+        return this.#finishInbound(job,current,true);
+      }
+      let exceptionId = null;
+      if (needsReview) {
+        const exception = {id:this.store.uid('exc'),tenantId:job.tenantId,eventId:event.id,status:'OPEN',
+          type:unsafe.length?'FILE_SAFETY':ai.status!=='OK'?'AI_SAFETY':'MATTER_MATCH',
+          reason:unsafe.length?unsafe.map(x=>x.safety.reason).join(','):ai.status!=='OK'?ai.reason:match.reason,
+          candidates:match.candidates||[]};
+        this.store.putException(exception);
+        exceptionId = exception.id;
+      }
+      current.match=match;current.classification=ai;
+      current.status=needsReview?'REVIEW_REQUIRED':'READY_FOR_APPROVAL';
+      current.processing={state:'COMPLETED',exceptionId};
+      this.store.updateEvent(current);
+      this.store.audit({tenantId:job.tenantId,traceId:current.traceId,action:'INBOUND_PROCESSED',objectId:current.id,
+        matterId:match.matterId||null,outcome:needsReview?'REVIEW':'READY',reason:exceptionId||'policy_ready'});
+      return this.#finishInbound(job,current);
+    });
   }
   getMatter(tenantId,matterId){return this.store.getMatter(tenantId,matterId);}
   listExceptions(tenantId){return this.store.listExceptions(tenantId,'OPEN');}
