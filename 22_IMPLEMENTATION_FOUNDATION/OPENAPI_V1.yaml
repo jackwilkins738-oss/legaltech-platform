@@ -1,0 +1,171 @@
+openapi: 3.1.0
+info:
+  title: Legal Operations Platform API
+  version: 0.1.0
+  description: Reference API contract. Provisional until TO and first pilot confirm the wedge.
+servers:
+  - url: https://api.example.invalid/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      summary: Service health
+      responses:
+        "200":
+          description: Healthy
+  /matters:
+    get:
+      summary: List permitted matters
+      responses:
+        "200":
+          description: Matter page
+  /matters/{matterId}:
+    get:
+      summary: Get permitted matter
+      parameters:
+        - in: path
+          name: matterId
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Matter
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Matter"}
+        "404":
+          description: Not found or not permitted
+  /inbound-events:
+    get:
+      summary: List permitted inbound events
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 200}
+      responses:
+        "200": {description: Inbound event page}
+    post:
+      summary: Create internal inbound event
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 8}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/InboundEventCreate"}
+      responses:
+        "202": {description: Accepted}
+        "409": {description: Duplicate/idempotency conflict}
+  /inbound-events/{eventId}:
+    get:
+      summary: Get permitted inbound event
+      parameters:
+        - in: path
+          name: eventId
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Inbound event}
+        "404": {description: Not found or not permitted}
+  /audit:
+    get:
+      summary: List permitted audit entries
+      responses:
+        "200": {description: Audit page}
+  /exceptions:
+    get:
+      summary: List permitted exceptions
+      parameters:
+        - in: query
+          name: cursor
+          schema: {type: string}
+        - in: query
+          name: status
+          schema: {type: string}
+      responses:
+        "200":
+          description: Exception page
+  /exceptions/{exceptionId}/resolve:
+    post:
+      summary: Resolve exception
+      parameters:
+        - in: path
+          name: exceptionId
+          required: true
+          schema: {type: string}
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution]
+              properties:
+                resolution: {type: string}
+                notes: {type: string}
+      responses:
+        "200": {description: Resolved}
+  /integrations/proclaim/writebacks:
+    post:
+      summary: Queue approved Proclaim write-back
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [matterId, actionType, payload]
+              properties:
+                matterId: {type: string}
+                actionType:
+                  type: string
+                  enum: [CREATE_HISTORY, FILE_EMAIL, UPLOAD_DOCUMENT, CREATE_TASK, UPDATE_FIELD]
+                payload: {type: object}
+      responses:
+        "202": {description: Queued}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Matter:
+      type: object
+      required: [id, tenantId, externalMappings]
+      properties:
+        id: {type: string}
+        displayReference: {type: string}
+        status: {type: string}
+        stage: {type: string}
+        externalMappings:
+          type: array
+          items:
+            type: object
+            required: [system, externalId]
+            properties:
+              system: {type: string}
+              externalId: {type: string}
+    InboundEventCreate:
+      type: object
+      required: [sourceSystem]
+      properties:
+        sourceSystem: {type: string, enum: [MICROSOFT_GRAPH, MANUAL_UPLOAD]}
+        externalEventId: {type: string}
+        eventType: {type: string}
+        occurredAt: {type: string, format: date-time}
+        metadata: {type: object}

@@ -1,0 +1,377 @@
+{
+  "product_strategy": {
+    "keywords": [
+      "product",
+      "feature",
+      "offer",
+      "wedge",
+      "roadmap",
+      "matter command",
+      "dependency engine"
+    ],
+    "required": [
+      "00_GOVERNANCE/CURRENT_STATE.md",
+      "00_GOVERNANCE/DECISIONS.md",
+      "05_PRODUCT_V1/PRODUCT_PRINCIPLES.md",
+      "33_PRE_TO_FINAL_AUDIT_AND_LOCK/00_PRE_TO_COMMAND_CENTRE.md",
+      "38_DIGITAL_PRE_TO_LOCK/02_STRATEGY_CHANGE_GATE.md"
+    ],
+    "evidence_roots": [
+      "05_PRODUCT_V1",
+      "15_SCALE_STRATEGY",
+      "34_FUTURE_COMPETITOR_THREAT_MAP",
+      "35_PRE_TO_DEEP_AUDIT",
+      "39_POST_TO_EVIDENCE"
+    ],
+    "anchors": [
+      "matter command",
+      "dependency engine",
+      "wedge",
+      "roadmap"
+    ]
+  },
+  "to_observation": {
+    "keywords": [
+      "TO",
+      "time and motion",
+      "observation",
+      "timing",
+      "workflow measurement",
+      "task family",
+      "observer reliability",
+      "process mining",
+      "work sampling",
+      "live capture"
+    ],
+    "required": [
+      "33_PRE_TO_FINAL_AUDIT_AND_LOCK/00_PRE_TO_COMMAND_CENTRE.md",
+      "35_PRE_TO_DEEP_AUDIT/23_ROOT_CAUSE_DECISION_TREE.md",
+      "37_PRE_TO_LAST_MILE_RESEARCH_DESIGN/00_EXECUTIVE_LAST_MILE_AUDIT.md",
+      "37_PRE_TO_LAST_MILE_RESEARCH_DESIGN/18_FINAL_LAST_MILE_GATE.md",
+      "38_DIGITAL_PRE_TO_LOCK/02_STRATEGY_CHANGE_GATE.md",
+      "38_DIGITAL_PRE_TO_LOCK/03_RAW_CLEAN_DERIVED_POLICY.md"
+    ],
+    "evidence_roots": [
+      "16_TO_RESEARCH",
+      "25_TO_DAY0_OPERATING_KIT",
+      "33_PRE_TO_FINAL_AUDIT_AND_LOCK",
+      "35_PRE_TO_DEEP_AUDIT",
+      "37_PRE_TO_LAST_MILE_RESEARCH_DESIGN",
+      "38_DIGITAL_PRE_TO_LOCK",
+      "39_POST_TO_EVIDENCE"
+    ],
+    "anchors": [
+      "time and motion",
+      "task family",
+      "observation study"
+    ]
+  },
+  "proclaim": {
+    "keywords": [
+      "Proclaim",
+      "CaseMatters",
+      "Evo",
+      "Access Legal",
+      "writeback",
+      "Maths Editor"
+    ],
+    "required": [
+      "03_PROCLAIM/PROCLAIM_RESEARCH_MAP.md",
+      "03_PROCLAIM/PROCLAIM_AUGMENTATION_FEASIBILITY.md",
+      "08_INTEGRATIONS/PROCLAIM_CONNECTOR_INTERFACE.md",
+      "35_PRE_TO_DEEP_AUDIT/06_PROCLAIM_IMPLEMENTATION_MATURITY.md"
+    ],
+    "evidence_roots": [
+      "03_PROCLAIM",
+      "08_INTEGRATIONS",
+      "17_PRE_TO_SCOPING",
+      "18_PRE_TO_EXECUTION",
+      "35_PRE_TO_DEEP_AUDIT"
+    ],
+    "anchors": [
+      "proclaim",
+      "casematters",
+      "maths editor"
+    ]
+  },
+  "competition": {
+    "keywords": [
+      "competitor",
+      "competition",
+      "Filevine",
+      "Litify",
+      "EvenUp",
+      "Eve",
+      "Clio",
+      "Harvey",
+      "Legora"
+    ],
+    "required": [
+      "02_MARKET_COMPETITION/20_COMPETITOR_DEEP_DIVE_2026.md",
+      "34_FUTURE_COMPETITOR_THREAT_MAP/00_EXECUTIVE_SUMMARY.md",
+      "34_FUTURE_COMPETITOR_THREAT_MAP/06_BUILD_IMPLICATIONS.md"
+    ],
+    "evidence_roots": [
+      "02_MARKET_COMPETITION",
+      "34_FUTURE_COMPETITOR_THREAT_MAP",
+      "15_SCALE_STRATEGY"
+    ],
+    "anchors": [
+      "filevine",
+      "litify",
+      "evenup",
+      "eveos",
+      "eve",
+      "clio",
+      "harvey",
+      "legora",
+      "competitor"
+    ]
+  },
+  "architecture": {
+    "keywords": [
+      "architecture",
+      "database",
+      "API",
+      "event",
+      "tenant",
+      "schema",
+      "Postgres",
+      "queue"
+    ],
+    "required": [
+      "21_ENGINEERING_OPERATING_SYSTEM/04_ARCHITECTURE_GUARDRAILS.md",
+      "21_ENGINEERING_OPERATING_SYSTEM/05_DOMAIN_BOUNDARIES.md",
+      "22_IMPLEMENTATION_FOUNDATION/IMPLEMENTATION_READINESS_MATRIX.md",
+      "30_PRODUCTION_SHAPE_SCAFFOLD/docs/PRODUCTION_BOUNDARY.md"
+    ],
+    "evidence_roots": [
+      "07_ARCHITECTURE_DATA",
+      "21_ENGINEERING_OPERATING_SYSTEM",
+      "22_IMPLEMENTATION_FOUNDATION",
+      "30_PRODUCTION_SHAPE_SCAFFOLD"
+    ],
+    "anchors": [
+      "architecture",
+      "postgres",
+      "schema",
+      "database"
+    ]
+  },
+  "security_privacy": {
+    "keywords": [
+      "security",
+      "privacy",
+      "DPIA",
+      "GDPR",
+      "tenant isolation",
+      "RLS",
+      "confidentiality",
+      "incident"
+    ],
+    "required": [
+      "09_SECURITY_PRIVACY/SECURITY_MASTER_SPEC.md",
+      "21_ENGINEERING_OPERATING_SYSTEM/11_SECURITY_RELEASE_GATES.md",
+      "23_FINAL_COMPLETENESS/16_DPIA_TEMPLATE.md",
+      "32_SECURITY_REGRESSION_AUTOMATION/01_RELEASE_BLOCKERS.md"
+    ],
+    "evidence_roots": [
+      "09_SECURITY_PRIVACY",
+      "14_COMPLIANCE_PROCUREMENT",
+      "19_GAP_AUDIT_NEW_DOMAINS",
+      "23_FINAL_COMPLETENESS",
+      "32_SECURITY_REGRESSION_AUTOMATION"
+    ],
+    "anchors": [
+      "tenant isolation",
+      "rls",
+      "gdpr",
+      "confidentiality",
+      "security"
+    ]
+  },
+  "ai_evals": {
+    "keywords": [
+      "AI",
+      "LLM",
+      "model",
+      "eval",
+      "RAG",
+      "OCR",
+      "classification",
+      "matter match"
+    ],
+    "required": [
+      "10_AI_AUTOMATION/AI_GOVERNANCE_AND_SAFETY.md",
+      "10_AI_AUTOMATION/AI_EVALUATION_FRAMEWORK.md",
+      "10_AI_AUTOMATION/AI_MATTER_MATCHING_DESIGN.md",
+      "21_ENGINEERING_OPERATING_SYSTEM/22_HUMAN_REVIEW_MATRIX.md"
+    ],
+    "evidence_roots": [
+      "10_AI_AUTOMATION",
+      "18_PRE_TO_EXECUTION",
+      "22_IMPLEMENTATION_FOUNDATION",
+      "24_SCOPING_CLOSURE"
+    ],
+    "anchors": [
+      "evaluation",
+      "matter matching",
+      "rag",
+      "ocr"
+    ]
+  },
+  "integrations": {
+    "keywords": [
+      "Graph",
+      "Microsoft",
+      "Outlook",
+      "integration",
+      "connector",
+      "webhook",
+      "API"
+    ],
+    "required": [
+      "08_INTEGRATIONS/INTEGRATIONS_SCOPE.md",
+      "08_INTEGRATIONS/GRAPH_PERMISSION_ARCHITECTURE.md",
+      "08_INTEGRATIONS/PROCLAIM_CONNECTOR_INTERFACE.md",
+      "21_ENGINEERING_OPERATING_SYSTEM/06_API_EVENT_AND_IDEMPOTENCY_STANDARDS.md",
+      "40_PLATFORM_FOUNDATION_BUILD/docs/V36_INTEGRATION_READINESS.md"
+    ],
+    "evidence_roots": [
+      "08_INTEGRATIONS",
+      "18_PRE_TO_EXECUTION",
+      "27_PRE_TO_TECHNICAL_STARTER",
+      "29_PRE_TO_REFERENCE_IMPLEMENTATION",
+      "40_PLATFORM_FOUNDATION_BUILD"
+    ],
+    "anchors": [
+      "microsoft graph",
+      "outlook",
+      "webhook",
+      "connector"
+    ]
+  },
+  "commercial_sales": {
+    "keywords": [
+      "pricing",
+      "pilot",
+      "sales",
+      "GTM",
+      "buyer",
+      "ROI",
+      "commercial",
+      "contract"
+    ],
+    "required": [
+      "12_COMMERCIAL_GTM/GTM_AND_SALES.md",
+      "12_COMMERCIAL_GTM/PAID_PILOT_STRUCTURE.md",
+      "12_COMMERCIAL_GTM/PRICING_UNIT_ECONOMICS_SCENARIOS.md",
+      "23_FINAL_COMPLETENESS/10_PILOT_STATEMENT_OF_WORK_TEMPLATE.md"
+    ],
+    "evidence_roots": [
+      "04_CUSTOMER_ICP",
+      "12_COMMERCIAL_GTM",
+      "23_FINAL_COMPLETENESS",
+      "26_EXTERNAL_VALIDATION_EXECUTION"
+    ],
+    "anchors": [
+      "pricing",
+      "paid pilot",
+      "roi",
+      "sales"
+    ]
+  },
+  "legal_workflows": {
+    "keywords": [
+      "personal injury",
+      "PI",
+      "clinical negligence",
+      "MedCo",
+      "OIC",
+      "Part 36",
+      "medical records",
+      "rehab"
+    ],
+    "required": [
+      "06_LEGAL_WORKFLOWS/PERSONAL_INJURY_WORKFLOW_MODEL.md",
+      "20_PI_ECONOMICS_AND_ECOSYSTEM/00_PI_ECOSYSTEM_DEEP_DIVE.md",
+      "20_PI_ECONOMICS_AND_ECOSYSTEM/01_CASE_ECONOMICS_LIFECYCLE.md"
+    ],
+    "evidence_roots": [
+      "06_LEGAL_WORKFLOWS",
+      "19_GAP_AUDIT_NEW_DOMAINS",
+      "20_PI_ECONOMICS_AND_ECOSYSTEM"
+    ],
+    "anchors": [
+      "personal injury",
+      "clinical negligence",
+      "medco",
+      "part 36"
+    ]
+  },
+  "engineering_execution": {
+    "keywords": [
+      "build",
+      "code",
+      "implement",
+      "test",
+      "CI",
+      "deploy",
+      "task",
+      "github",
+      "git",
+      "pull request",
+      "branch",
+      "repository"
+    ],
+    "required": [
+      "21_ENGINEERING_OPERATING_SYSTEM/00_ENGINEERING_START_HERE.md",
+      "21_ENGINEERING_OPERATING_SYSTEM/17_DEFINITION_OF_DONE.md",
+      "31_DEV_REPRODUCIBILITY_AND_CONTRACTS/PRE_TO_ENGINEERING_STOP_LINE.md",
+      "40_PLATFORM_FOUNDATION_BUILD/README.md",
+      "GITHUB_SETUP.md"
+    ],
+    "evidence_roots": [
+      "21_ENGINEERING_OPERATING_SYSTEM",
+      "22_IMPLEMENTATION_FOUNDATION",
+      "29_PRE_TO_REFERENCE_IMPLEMENTATION",
+      "30_PRODUCTION_SHAPE_SCAFFOLD",
+      "31_DEV_REPRODUCIBILITY_AND_CONTRACTS",
+      "32_SECURITY_REGRESSION_AUTOMATION",
+      "40_PLATFORM_FOUNDATION_BUILD",
+      "40_PLATFORM_FOUNDATION_BUILD/"
+    ],
+    "anchors": [
+      "implement",
+      "build",
+      "code",
+      "deploy"
+    ]
+  },
+  "company_operations": {
+    "keywords": [
+      "company",
+      "founder",
+      "hiring",
+      "board",
+      "RACI",
+      "operating",
+      "compliance calendar"
+    ],
+    "required": [
+      "00_GOVERNANCE/COMPANY_OPERATING_MODEL.md",
+      "23_FINAL_COMPLETENESS/02_FOUNDER_RACI_AND_WEEKLY_CADENCE.md",
+      "23_FINAL_COMPLETENESS/05_BOARD_AND_MONTHLY_OPERATING_PACK.md"
+    ],
+    "evidence_roots": [
+      "00_GOVERNANCE",
+      "23_FINAL_COMPLETENESS"
+    ],
+    "anchors": [
+      "founder",
+      "board",
+      "hiring",
+      "raci"
+    ]
+  }
+}

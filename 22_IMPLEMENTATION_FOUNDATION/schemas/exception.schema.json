@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Exception",
+  "type": "object",
+  "required": [
+    "exception_id",
+    "tenant_id",
+    "type",
+    "priority",
+    "status",
+    "created_at"
+  ],
+  "properties": {
+    "exception_id": {
+      "type": "string"
+    },
+    "tenant_id": {
+      "type": "string"
+    },
+    "matter_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "MATCH",
+        "CLASSIFICATION",
+        "SECURITY",
+        "DEADLINE",
+        "WRITEBACK",
+        "MISSING_INFO",
+        "WORKFLOW_FAILURE",
+        "RISK"
+      ]
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "OPEN",
+        "ASSIGNED",
+        "RESOLVED",
+        "DISMISSED"
+      ]
+    },
+    "reason_codes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "due_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

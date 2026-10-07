@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test current platform
+        working-directory: 40_PLATFORM_FOUNDATION_BUILD
+        run: npm test
+
+  legacy-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Technical starter
+        working-directory: 27_PRE_TO_TECHNICAL_STARTER
+        run: node --test
+      - name: Reference implementation
+        working-directory: 29_PRE_TO_REFERENCE_IMPLEMENTATION
+        run: node --test
+      - name: Production-shape contracts
+        working-directory: 30_PRODUCTION_SHAPE_SCAFFOLD
+        run: node --test
+      - name: Dev-control contracts
+        working-directory: 31_DEV_REPRODUCIBILITY_AND_CONTRACTS
+        run: node --test
+
+  security-and-knowledge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Security policy tests
+        run: python 32_SECURITY_REGRESSION_AUTOMATION/run_security_policy_tests.py
+      - name: Security regression scan
+        run: python 32_SECURITY_REGRESSION_AUTOMATION/security_regression_scan.py .
+      - name: Claude knowledge lint
+        run: python 36_CLAUDE_KNOWLEDGE_ARCHITECTURE/scripts/knowledge_lint.py

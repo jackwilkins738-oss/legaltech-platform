@@ -1,0 +1,2 @@
+ID,DateTime,Role,MatterType,Trigger,Task,Systems,StepsClicks,HandlingMinutes,WaitingMinutes,FrequencyPerDay,ErrorRework,ApprovalNeeded,WhyHuman,RuleBasedPotential,AIAssistPotential,AIAutomatePotential,Risk1to5,Frustration1to5,Notes
+OBS-001,,,,,,,,,,,,,,,,,,,

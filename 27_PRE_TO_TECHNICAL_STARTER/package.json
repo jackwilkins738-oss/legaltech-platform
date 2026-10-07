@@ -1,0 +1,10 @@
+{
+  "name": "legaltech-pre-to-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "demo": "node src/demo.js"
+  },
+  "engines": {"node": ">=20"}
+}

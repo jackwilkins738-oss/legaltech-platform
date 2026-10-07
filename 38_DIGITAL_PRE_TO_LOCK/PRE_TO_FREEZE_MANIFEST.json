@@ -1,0 +1,52 @@
+{
+  "status": "PRE_TO_DIGITAL_FREEZE",
+  "generated_date": "2026-10-07",
+  "hash_algorithm": "SHA-256",
+  "files": [
+    {
+      "path": "CLAUDE.md",
+      "sha256": "377deb8327817ca726e1b88b83dee9b5537b65e594d15c0b43bf07710448f6c2",
+      "bytes": 4391
+    },
+    {
+      "path": "00_GOVERNANCE/CURRENT_STATE.md",
+      "sha256": "0b5144d681aba0904a2395e83a6c31e8dc9294740f5d35b787bdc7e4d37b1303",
+      "bytes": 10775
+    },
+    {
+      "path": "00_GOVERNANCE/DECISIONS.md",
+      "sha256": "86fb587a9e0a83605cf0c8abfeb85f7c69d7463ae57f0c228e7a1d0f9b40d6bf",
+      "bytes": 3312
+    },
+    {
+      "path": "36_CLAUDE_KNOWLEDGE_ARCHITECTURE/AUTHORITATIVE_FILES.json",
+      "sha256": "5d69c339f2fe8ef69d55014a4af83c3992e15e14c4043e4d77bfef464dfc180a",
+      "bytes": 14715
+    },
+    {
+      "path": "36_CLAUDE_KNOWLEDGE_ARCHITECTURE/DOMAIN_ROUTES.json",
+      "sha256": "297ec7c604189d56f8b912bad829d98d28212288299a964f69c9a2002b7adc7f",
+      "bytes": 8748
+    },
+    {
+      "path": "25_TO_DAY0_OPERATING_KIT/LegalTech_TO_Day0_Execution_Workbook.xlsx",
+      "sha256": "185b8cec9e062cf5edf601587db066058856931ecf32f7a598dccaf7338842fa",
+      "bytes": 98892
+    },
+    {
+      "path": "35_PRE_TO_DEEP_AUDIT/LegalTech_Pre_TO_Deep_Audit_Supplement.xlsx",
+      "sha256": "efa8391b89f8bd223acb12aa2aaaabf2d8c2aecbbc9b4359dc2c06e7b17e9e14",
+      "bytes": 15721
+    },
+    {
+      "path": "37_PRE_TO_LAST_MILE_RESEARCH_DESIGN/LegalTech_TO_Last_Mile_Research_Design.xlsx",
+      "sha256": "5e04ee377a1b56ad07b66bcbe79fdbcd9633db9b8d8e3cd069f2040b0d6f2a75",
+      "bytes": 116405
+    },
+    {
+      "path": ".claude/rules/10-to-evidence.md",
+      "sha256": "f718f89d418222910f4437dd6e87d1acacd4c13138a079c73e19c617ae498d88",
+      "bytes": 1230
+    }
+  ]
+}

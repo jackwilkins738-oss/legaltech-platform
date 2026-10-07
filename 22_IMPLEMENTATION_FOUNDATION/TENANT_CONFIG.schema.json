@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TenantOperationalConfig",
+  "type": "object",
+  "required": [
+    "tenant_id",
+    "risk_policy",
+    "mailboxes",
+    "matter_matching"
+  ],
+  "properties": {
+    "tenant_id": {
+      "type": "string"
+    },
+    "risk_policy": {
+      "type": "object",
+      "required": [
+        "default_action"
+      ],
+      "properties": {
+        "default_action": {
+          "type": "string",
+          "enum": [
+            "REVIEW",
+            "BLOCK"
+          ]
+        },
+        "allow_auto_internal_actions": {
+          "type": "boolean",
+          "default": false
+        },
+        "allow_external_send": {
+          "type": "boolean",
+          "const": false
+        }
+      }
+    },
+    "mailboxes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "mailbox_id",
+          "enabled"
+        ],
+        "properties": {
+          "mailbox_id": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "matter_matching": {
+      "type": "object",
+      "required": [
+        "semantic_only_auto_match",
+        "cross_tenant_match"
+      ],
+      "properties": {
+        "semantic_only_auto_match": {
+          "type": "boolean",
+          "const": false
+        },
+        "cross_tenant_match": {
+          "type": "boolean",
+          "const": false
+        },
+        "auto_threshold": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

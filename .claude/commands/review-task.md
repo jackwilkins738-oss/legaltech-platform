@@ -1,0 +1,2 @@
+# Review Task
+Review current diff against task acceptance criteria, architecture guardrails, security release gates and Definition of Done. List blockers first. Run required tests. Do not approve your own security exception.

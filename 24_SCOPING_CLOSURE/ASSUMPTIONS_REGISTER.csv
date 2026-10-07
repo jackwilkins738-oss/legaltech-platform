@@ -1,0 +1,8 @@
+assumption_id,assumption,confidence,experiment,pass_signal,failure_action,status
+A-001,Inbound operations is high-value,MEDIUM,TO study,Repeated high-volume task family,Reorder wedge,OPEN
+A-002,Proclaim augmentation is safe/possible,LOW-MEDIUM,Authorised integration spike,Critical capabilities GREEN/AMBER,Read-only/Evo/alternate wedge,OPEN
+A-003,Pain repeats across firms,MEDIUM,5-10 interviews,3+ independent repeats,Change ICP,OPEN
+A-004,Graph access is acceptable,LOW,IT/buyer interviews,2+ plausible approvals,Add-in/customer-side approach,OPEN
+A-005,Review burden preserves ROI,UNKNOWN,Eval/pilot,>50% theoretical value realised,Change workflow,OPEN
+A-006,Wrong-client risk can be controlled,MEDIUM,Adversarial eval,No material auto cross-client error,Human confirmation,OPEN
+A-007,Enterprise ACV is plausible,LOW-MEDIUM,Paid-pilot conversations,Buyer accepts ROI/pricing logic,Change pricing/workflow,OPEN

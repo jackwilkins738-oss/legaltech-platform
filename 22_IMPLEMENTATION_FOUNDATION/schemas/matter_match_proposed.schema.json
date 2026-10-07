@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MatterMatchProposed",
+  "type": "object",
+  "required": [
+    "message_id",
+    "candidates",
+    "decision"
+  ],
+  "properties": {
+    "message_id": {
+      "type": "string"
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "matter_id",
+          "score",
+          "signals"
+        ],
+        "properties": {
+          "matter_id": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "signals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "AUTO",
+        "REVIEW",
+        "NO_MATCH",
+        "BLOCK"
+      ]
+    },
+    "policy_version": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

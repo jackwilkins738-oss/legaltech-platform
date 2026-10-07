@@ -1,0 +1,15 @@
+{
+  "name": "legaltech-pre-to-reference-implementation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "start:persistent": "node src/persistentServer.js",
+    "test:persistent": "node --test test/persistence.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

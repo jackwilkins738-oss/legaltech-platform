@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "rules": "Mappings identify known replacement/usage precedence. Unlisted files are not automatically current.",
+  "mappings": [
+    {
+      "old": "17_PRE_TO_SCOPING/LegalTech_Pre_TO_Decision_Workbook.xlsx",
+      "new": "25_TO_DAY0_OPERATING_KIT/LegalTech_TO_Day0_Execution_Workbook.xlsx",
+      "reason": "active TO workbook supersedes pre-TO decision workbook for observation execution"
+    },
+    {
+      "old": "18_PRE_TO_EXECUTION/08_CONDITIONAL_V1_PRD.md",
+      "new": "33_PRE_TO_FINAL_AUDIT_AND_LOCK/00_PRE_TO_COMMAND_CENTRE.md",
+      "reason": "conditional PRD remains reference; pre-TO lock controls interpretation until evidence"
+    },
+    {
+      "old": "27_PRE_TO_TECHNICAL_STARTER/README.md",
+      "new": "29_PRE_TO_REFERENCE_IMPLEMENTATION/IMPLEMENTATION_STATUS.md",
+      "reason": "later runnable reference implementation supersedes starter for implementation state"
+    },
+    {
+      "old": "24_SCOPING_CLOSURE/08_TOMORROW_EVIDENCE_INGESTION_CHECKLIST.md",
+      "new": "33_PRE_TO_FINAL_AUDIT_AND_LOCK/10_POST_TO_HANDOFF.md",
+      "reason": "final audited handoff controls TO evidence ingestion"
+    },
+    {
+      "old": "16_TO_RESEARCH/TASK_LOG_TEMPLATE.md",
+      "new": "25_TO_DAY0_OPERATING_KIT/LegalTech_TO_Day0_Execution_Workbook.xlsx",
+      "reason": "workbook is current operational capture surface"
+    },
+    {
+      "old": "16_TO_RESEARCH/BRANCH_OBSERVATION_PROTOCOL.md",
+      "new": "33_PRE_TO_FINAL_AUDIT_AND_LOCK/02_TO_SAMPLING_PLAN.md",
+      "reason": "final audit refines sampling protocol"
+    },
+    {
+      "old": "17_PRE_TO_SCOPING/03_TO_ANALYSIS_FRAMEWORK.md",
+      "new": "33_PRE_TO_FINAL_AUDIT_AND_LOCK/08_DAY1_ANALYSIS_RULES.md",
+      "reason": "final audit controls Day-1 analysis"
+    }
+  ]
+}

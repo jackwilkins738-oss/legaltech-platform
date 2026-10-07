@@ -1,0 +1,10 @@
+# Replace this with your GitHub username/team after the first push.
+* @jackwilkins738-oss
+
+# Security-sensitive areas should always have an explicit owner/reviewer.
+/09_SECURITY_PRIVACY/ @jackwilkins738-oss
+/32_SECURITY_REGRESSION_AUTOMATION/ @jackwilkins738-oss
+/40_PLATFORM_FOUNDATION_BUILD/src/auth.js @jackwilkins738-oss
+/40_PLATFORM_FOUNDATION_BUILD/src/httpApi.js @jackwilkins738-oss
+/40_PLATFORM_FOUNDATION_BUILD/src/graphHarness.js @jackwilkins738-oss
+/40_PLATFORM_FOUNDATION_BUILD/src/proclaimValidation.js @jackwilkins738-oss

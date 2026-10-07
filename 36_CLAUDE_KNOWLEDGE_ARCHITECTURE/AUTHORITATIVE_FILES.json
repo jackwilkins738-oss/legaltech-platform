@@ -1,0 +1,651 @@
+{
+  "schema_version": 1,
+  "generated_for_phase": "PRE_TO",
+  "files": [
+    {
+      "path": "00_GOVERNANCE/CURRENT_STATE.md",
+      "domain": "governance",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "current phase",
+        "current thesis",
+        "current blockers"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "00_GOVERNANCE/DECISIONS.md",
+      "domain": "governance",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "accepted decisions",
+        "decision history"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "00_GOVERNANCE/OPEN_QUESTIONS.md",
+      "domain": "governance",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "unresolved conflicts",
+        "open questions"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "01_RESEARCH_EVIDENCE/EVIDENCE_STANDARD.md",
+      "domain": "evidence",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "evidence classification"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "01_RESEARCH_EVIDENCE/MASTER_SOURCE_REGISTER.md",
+      "domain": "evidence",
+      "status": "reference",
+      "authority": "high",
+      "use_for": [
+        "source verification"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "03_PROCLAIM/PROCLAIM_RESEARCH_MAP.md",
+      "domain": "proclaim",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "Proclaim routing"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "03_PROCLAIM/PROCLAIM_DEEP_DIVE.md",
+      "domain": "proclaim",
+      "status": "reference",
+      "authority": "high",
+      "use_for": [
+        "Proclaim capabilities"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "03_PROCLAIM/CASEMATTERS_EVO_DEEP_DIVE.md",
+      "domain": "proclaim",
+      "status": "reference",
+      "authority": "high",
+      "use_for": [
+        "Evo displacement"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "03_PROCLAIM/PROCLAIM_AUGMENTATION_FEASIBILITY.md",
+      "domain": "proclaim",
+      "status": "provisional",
+      "authority": "high",
+      "use_for": [
+        "augmentation feasibility"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "05_PRODUCT_V1/PRODUCT_PRINCIPLES.md",
+      "domain": "product",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "product principles"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "05_PRODUCT_V1/WEDGE_HYPOTHESES.md",
+      "domain": "product",
+      "status": "provisional",
+      "authority": "medium",
+      "use_for": [
+        "wedge hypotheses"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "05_PRODUCT_V1/WEDGE_SELECTION_GATE.md",
+      "domain": "product",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "wedge decision gate"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "06_LEGAL_WORKFLOWS/PERSONAL_INJURY_WORKFLOW_MODEL.md",
+      "domain": "legal_workflows",
+      "status": "provisional",
+      "authority": "high",
+      "use_for": [
+        "PI workflow model"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "07_ARCHITECTURE_DATA/TECHNICAL_ARCHITECTURE_TARGET.md",
+      "domain": "architecture",
+      "status": "provisional",
+      "authority": "high",
+      "use_for": [
+        "target architecture"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "08_INTEGRATIONS/GRAPH_PERMISSION_ARCHITECTURE.md",
+      "domain": "integrations",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "Graph permissions"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "08_INTEGRATIONS/PROCLAIM_CONNECTOR_INTERFACE.md",
+      "domain": "integrations",
+      "status": "provisional",
+      "authority": "high",
+      "use_for": [
+        "Proclaim connector contract"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "09_SECURITY_PRIVACY/SECURITY_MASTER_SPEC.md",
+      "domain": "security",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "security baseline"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "09_SECURITY_PRIVACY/THREAT_MODEL_V1.md",
+      "domain": "security",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "threat model"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "10_AI_AUTOMATION/AI_GOVERNANCE_AND_SAFETY.md",
+      "domain": "ai",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "AI governance"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "10_AI_AUTOMATION/AI_EVALUATION_FRAMEWORK.md",
+      "domain": "ai",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "AI evaluation"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "10_AI_AUTOMATION/AI_MATTER_MATCHING_DESIGN.md",
+      "domain": "ai",
+      "status": "provisional",
+      "authority": "high",
+      "use_for": [
+        "matter matching"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "12_COMMERCIAL_GTM/GTM_AND_SALES.md",
+      "domain": "commercial",
+      "status": "provisional",
+      "authority": "high",
+      "use_for": [
+        "sales motion"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "12_COMMERCIAL_GTM/PAID_PILOT_STRUCTURE.md",
+      "domain": "commercial",
+      "status": "provisional",
+      "authority": "high",
+      "use_for": [
+        "pilot structure"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "15_SCALE_STRATEGY/COMPETITIVE_WHITE_SPACE_PRODUCT_THESIS.md",
+      "domain": "strategy",
+      "status": "provisional",
+      "authority": "medium",
+      "use_for": [
+        "white-space thesis"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "20_PI_ECONOMICS_AND_ECOSYSTEM/00_PI_ECOSYSTEM_DEEP_DIVE.md",
+      "domain": "legal_workflows",
+      "status": "reference",
+      "authority": "high",
+      "use_for": [
+        "PI ecosystem"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "20_PI_ECONOMICS_AND_ECOSYSTEM/01_CASE_ECONOMICS_LIFECYCLE.md",
+      "domain": "commercial",
+      "status": "reference",
+      "authority": "high",
+      "use_for": [
+        "PI economics"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "21_ENGINEERING_OPERATING_SYSTEM/00_ENGINEERING_START_HERE.md",
+      "domain": "engineering",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "engineering entrypoint"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "21_ENGINEERING_OPERATING_SYSTEM/04_ARCHITECTURE_GUARDRAILS.md",
+      "domain": "engineering",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "architecture guardrails"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "21_ENGINEERING_OPERATING_SYSTEM/11_SECURITY_RELEASE_GATES.md",
+      "domain": "engineering",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "security release gates"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "21_ENGINEERING_OPERATING_SYSTEM/17_DEFINITION_OF_DONE.md",
+      "domain": "engineering",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "definition of done"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "21_ENGINEERING_OPERATING_SYSTEM/22_HUMAN_REVIEW_MATRIX.md",
+      "domain": "engineering",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "human review boundaries"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "22_IMPLEMENTATION_FOUNDATION/IMPLEMENTATION_READINESS_MATRIX.md",
+      "domain": "engineering",
+      "status": "provisional",
+      "authority": "high",
+      "use_for": [
+        "implementation readiness"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "23_FINAL_COMPLETENESS/35_FINAL_UNKNOWN_AND_DEPENDENCY_REGISTER.md",
+      "domain": "governance",
+      "status": "reference",
+      "authority": "medium",
+      "use_for": [
+        "remaining dependencies"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "23_FINAL_COMPLETENESS/36_WHAT_NOT_TO_BUILD.md",
+      "domain": "product",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "scope exclusions"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "24_SCOPING_CLOSURE/07_FINAL_ASSUMPTIONS_AND_EXPERIMENTS_REGISTER.md",
+      "domain": "evidence",
+      "status": "provisional",
+      "authority": "high",
+      "use_for": [
+        "assumption register"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "25_TO_DAY0_OPERATING_KIT/LegalTech_TO_Day0_Execution_Workbook.xlsx",
+      "domain": "to",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "TO execution workbook"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "26_EXTERNAL_VALIDATION_EXECUTION/09_VALIDATION_GATES.md",
+      "domain": "customer_validation",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "external validation gates"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "29_PRE_TO_REFERENCE_IMPLEMENTATION/IMPLEMENTATION_STATUS.md",
+      "domain": "engineering",
+      "status": "reference",
+      "authority": "medium",
+      "use_for": [
+        "reference implementation state"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "30_PRODUCTION_SHAPE_SCAFFOLD/docs/PRODUCTION_BOUNDARY.md",
+      "domain": "engineering",
+      "status": "provisional",
+      "authority": "high",
+      "use_for": [
+        "production boundary"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "31_DEV_REPRODUCIBILITY_AND_CONTRACTS/PRE_TO_ENGINEERING_STOP_LINE.md",
+      "domain": "engineering",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "pre-TO engineering stop line"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "32_SECURITY_REGRESSION_AUTOMATION/01_RELEASE_BLOCKERS.md",
+      "domain": "security",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "release blockers"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "33_PRE_TO_FINAL_AUDIT_AND_LOCK/00_PRE_TO_COMMAND_CENTRE.md",
+      "domain": "to",
+      "status": "frozen",
+      "authority": "critical",
+      "use_for": [
+        "pre-TO command centre"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "33_PRE_TO_FINAL_AUDIT_AND_LOCK/04_MEASUREMENT_AND_ANNUALISATION_RULES.md",
+      "domain": "to",
+      "status": "frozen",
+      "authority": "critical",
+      "use_for": [
+        "TO measurement rules"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "33_PRE_TO_FINAL_AUDIT_AND_LOCK/09_STOP_RULES_BEFORE_WEDGE_DECISION.md",
+      "domain": "to",
+      "status": "frozen",
+      "authority": "critical",
+      "use_for": [
+        "wedge stop rules"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "34_FUTURE_COMPETITOR_THREAT_MAP/00_EXECUTIVE_SUMMARY.md",
+      "domain": "competition",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "future competition summary"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "34_FUTURE_COMPETITOR_THREAT_MAP/06_BUILD_IMPLICATIONS.md",
+      "domain": "competition",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "competition build implications"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "35_PRE_TO_DEEP_AUDIT/06_PROCLAIM_IMPLEMENTATION_MATURITY.md",
+      "domain": "to",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "Proclaim root-cause diagnosis"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "35_PRE_TO_DEEP_AUDIT/19_POSITIVE_CONTROLS_PROCLAIM.md",
+      "domain": "to",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "positive Proclaim controls"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "35_PRE_TO_DEEP_AUDIT/23_ROOT_CAUSE_DECISION_TREE.md",
+      "domain": "to",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "root-cause diagnosis"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "35_PRE_TO_DEEP_AUDIT/25_FINAL_PRE_TO_GO_NO_GO.md",
+      "domain": "to",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "TO go/no-go"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "36_CLAUDE_KNOWLEDGE_ARCHITECTURE/03_TASK_ROUTER.md",
+      "domain": "knowledge",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "task routing"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "37_PRE_TO_LAST_MILE_RESEARCH_DESIGN/00_EXECUTIVE_LAST_MILE_AUDIT.md",
+      "domain": "evidence",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "TO last-mile design",
+        "measurement integrity",
+        "research methodology"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "37_PRE_TO_LAST_MILE_RESEARCH_DESIGN/18_FINAL_LAST_MILE_GATE.md",
+      "domain": "evidence",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "TO go/no-go",
+        "last-mile blockers"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "38_DIGITAL_PRE_TO_LOCK/00_README.md",
+      "domain": "governance",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "pre-TO digital freeze",
+        "evidence integrity"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "38_DIGITAL_PRE_TO_LOCK/02_STRATEGY_CHANGE_GATE.md",
+      "domain": "evidence",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "TO evidence-to-strategy gate",
+        "prevent premature roadmap changes"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "38_DIGITAL_PRE_TO_LOCK/03_RAW_CLEAN_DERIVED_POLICY.md",
+      "domain": "evidence",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "post-TO evidence lineage"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "38_DIGITAL_PRE_TO_LOCK/04_AI_DATA_BOUNDARY.md",
+      "domain": "security",
+      "status": "current",
+      "authority": "critical",
+      "use_for": [
+        "AI/customer data boundary before authorisation"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "38_DIGITAL_PRE_TO_LOCK/PRE_TO_FREEZE_MANIFEST.json",
+      "domain": "governance",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "verify frozen pre-TO authority files"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/README.md",
+      "domain": "evidence",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "raw TO evidence storage rules"
+      ],
+      "notes": ""
+    },
+    {
+      "path": "40_PLATFORM_FOUNDATION_BUILD/README.md",
+      "domain": "engineering",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "current reusable platform foundation",
+        "synthetic end-to-end implementation state"
+      ],
+      "notes": "Does not override D-018 evidence gate or prove real integrations."
+    },
+    {
+      "path": "40_PLATFORM_FOUNDATION_BUILD/docs/UI_DEV_SURFACE.md",
+      "domain": "engineering",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "synthetic UI boundary",
+        "local review surface"
+      ],
+      "notes": "Local synthetic UI only; not production auth."
+    },
+    {
+      "path": "40_PLATFORM_FOUNDATION_BUILD/docs/V36_INTEGRATION_READINESS.md",
+      "domain": "integrations",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "current synthetic integration readiness",
+        "Graph/Proclaim pre-authorisation build boundary",
+        "OIDC claims mapping shape"
+      ],
+      "notes": "Does not prove live customer integration behaviour."
+    },
+    {
+      "path": "GITHUB_SETUP.md",
+      "domain": "engineering",
+      "status": "current",
+      "authority": "high",
+      "use_for": [
+        "canonical GitHub workflow",
+        "repository setup",
+        "main/PR/CI operating model"
+      ],
+      "notes": "GitHub is the intended canonical source of truth after one-time connection; do not revert to versioned ZIP workflow."
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+---
+paths:
+  - "16_TO_RESEARCH/**"
+  - "17_PRE_TO_SCOPING/**"
+  - "18_PRE_TO_EXECUTION/**"
+  - "24_SCOPING_CLOSURE/**"
+  - "25_TO_DAY0_OPERATING_KIT/**"
+  - "33_PRE_TO_FINAL_AUDIT_AND_LOCK/**"
+  - "35_PRE_TO_DEEP_AUDIT/**"
+  - "37_PRE_TO_LAST_MILE_RESEARCH_DESIGN/**"
+  - "38_DIGITAL_PRE_TO_LOCK/**"
+  - "39_POST_TO_EVIDENCE/**"
+---
+# TO/evidence rules
+- Measured timing, volume/population and economics are separate evidence classes.
+- Analyse at Task Family × Role where possible.
+- Targeted repeats support timing, not prevalence.
+- Diagnose root cause before declaring a software gap.
+- Preserve Proclaim-positive evidence and disconfirming evidence.
+- Do not make a final wedge decision from Day-1 observations alone.
+- RAW observations are immutable evidence, not product decisions.
+- Follow `38_DIGITAL_PRE_TO_LOCK/02_STRATEGY_CHANGE_GATE.md` before modifying product strategy, roadmap, pricing, automation thresholds or build priorities from TO evidence.
+- Preserve the RAW → CLEANED → ANALYSIS → DECISION → PRODUCT CHANGE separation.
+- Never place real client-identifiable/privileged content or production secrets in Claude knowledge or repository fixtures without an explicitly authorised data-processing path.

@@ -1,0 +1,27 @@
+{
+  "forbidden_log_keys": [
+    "email_body",
+    "document_text",
+    "medical_details",
+    "client_name",
+    "dob",
+    "bank_details",
+    "access_token",
+    "refresh_token",
+    "authorization_header"
+  ],
+  "unsafe_env_defaults": {
+    "ALLOW_EXTERNAL_SEND": "true",
+    "DISABLE_AUTH": "true",
+    "DISABLE_RLS": "true",
+    "LOG_RAW_CONTENT": "true",
+    "ALLOW_CROSS_TENANT": "true"
+  },
+  "required_test_concepts": [
+    "cross-tenant",
+    "idempot",
+    "restricted",
+    "adversarial",
+    "writeback"
+  ]
+}

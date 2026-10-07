@@ -1,0 +1,16 @@
+{
+  "name": "legaltech-dev-reproducibility",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "verify:contracts": "node scripts/verify-contracts.mjs",
+    "verify:repo": "node scripts/verify-repo.mjs",
+    "seed:reference": "node scripts/seed-reference.mjs",
+    "reset:reference": "node scripts/reset-reference.mjs",
+    "dev:check": "node scripts/dev-check.mjs",
+    "serve:admin": "node scripts/admin-server.mjs"
+  },
+  "engines": {"node": ">=22"}
+}

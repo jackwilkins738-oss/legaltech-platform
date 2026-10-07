@@ -1,0 +1,14 @@
+{
+  "name": "legaltech-platform-foundation",
+  "version": "0.8.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "demo": "node src/demo.js",
+    "dev": "node src/devServer.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

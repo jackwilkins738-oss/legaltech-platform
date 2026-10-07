@@ -1,0 +1,18 @@
+{
+  "required": [
+    "CLAUDE.md",
+    "21_ENGINEERING_OPERATING_SYSTEM/21_FIRST_50_ENGINEERING_TASKS.md",
+    "22_IMPLEMENTATION_FOUNDATION/OPENAPI_V1.yaml",
+    "22_IMPLEMENTATION_FOUNDATION/FIRST_50_TASKS.json",
+    "29_PRE_TO_REFERENCE_IMPLEMENTATION/package.json",
+    "30_PRODUCTION_SHAPE_SCAFFOLD/db/migrations/001_core.sql",
+    "30_PRODUCTION_SHAPE_SCAFFOLD/db/migrations/004_rls.sql"
+  ],
+  "prohibitedSecretPatterns": [
+    "BEGIN PRIVATE KEY",
+    "sk-live-",
+    "password=",
+    "client_secret="
+  ],
+  "blockedEvidenceTasks": ["ENG-040","ENG-041","ENG-042","ENG-043","ENG-044","ENG-045"]
+}

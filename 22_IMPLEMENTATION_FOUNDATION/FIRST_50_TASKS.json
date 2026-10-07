@@ -1,0 +1,652 @@
+[
+  {
+    "id": "ENG-001",
+    "phase": "Foundation",
+    "title": "Initialize application monorepo and CI skeleton",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-002",
+    "phase": "Foundation",
+    "title": "Create environment/config validation",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-003",
+    "phase": "Foundation",
+    "title": "Implement tenant domain primitives",
+    "status": "NOT_STARTED",
+    "requires_human_review": true,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-004",
+    "phase": "Foundation",
+    "title": "Implement user/role domain primitives",
+    "status": "NOT_STARTED",
+    "requires_human_review": true,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-005",
+    "phase": "Foundation",
+    "title": "Implement audit event envelope",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-006",
+    "phase": "Foundation",
+    "title": "Implement idempotency store/service",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-007",
+    "phase": "Foundation",
+    "title": "Implement structured logging and trace IDs",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-008",
+    "phase": "Foundation",
+    "title": "Implement database migration pipeline",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-009",
+    "phase": "Foundation",
+    "title": "Implement object storage abstraction",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-010",
+    "phase": "Foundation",
+    "title": "Implement queue abstraction",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-011",
+    "phase": "Graph",
+    "title": "Create Graph adapter interface and mock",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-012",
+    "phase": "Graph",
+    "title": "Implement subscription creation/renewal",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-013",
+    "phase": "Graph",
+    "title": "Implement webhook validation endpoint",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-014",
+    "phase": "Graph",
+    "title": "Implement durable notification queueing",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-015",
+    "phase": "Graph",
+    "title": "Implement message fetch",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-016",
+    "phase": "Graph",
+    "title": "Implement attachment fetch",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-017",
+    "phase": "Graph",
+    "title": "Implement delta reconciliation",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-018",
+    "phase": "Graph",
+    "title": "Implement lifecycle event recovery",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-019",
+    "phase": "Graph",
+    "title": "Implement Graph connector health state",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-020",
+    "phase": "Graph",
+    "title": "Implement replay/idempotency tests",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-021",
+    "phase": "Documents",
+    "title": "Implement document hash/version model",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-022",
+    "phase": "Documents",
+    "title": "Implement MIME/content sniffing",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-023",
+    "phase": "Documents",
+    "title": "Implement size/archive policy",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-024",
+    "phase": "Documents",
+    "title": "Implement malware quarantine adapter",
+    "status": "NOT_STARTED",
+    "requires_human_review": true,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-025",
+    "phase": "Documents",
+    "title": "Implement isolated extraction worker",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-026",
+    "phase": "Documents",
+    "title": "Implement provenance metadata",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-027",
+    "phase": "Documents",
+    "title": "Implement duplicate document handling",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-028",
+    "phase": "Documents",
+    "title": "Implement parser failure path",
+    "status": "NOT_STARTED",
+    "requires_human_review": true,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-029",
+    "phase": "Matter Matching and Review",
+    "title": "Implement canonical matter model",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-030",
+    "phase": "Matter Matching and Review",
+    "title": "Implement external mapping model",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-031",
+    "phase": "Matter Matching and Review",
+    "title": "Implement deterministic match signals",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-032",
+    "phase": "Matter Matching and Review",
+    "title": "Implement candidate ranking interface",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-033",
+    "phase": "Matter Matching and Review",
+    "title": "Implement conflict rules",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-034",
+    "phase": "Matter Matching and Review",
+    "title": "Implement match decision policy",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-035",
+    "phase": "Matter Matching and Review",
+    "title": "Implement exception model/queue",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-036",
+    "phase": "Matter Matching and Review",
+    "title": "Implement inbound queue UI",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-037",
+    "phase": "Matter Matching and Review",
+    "title": "Implement review drawer UI",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-038",
+    "phase": "Matter Matching and Review",
+    "title": "Implement matter operations view",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-039",
+    "phase": "Proclaim",
+    "title": "Create Proclaim adapter interface and mock",
+    "status": "NOT_STARTED",
+    "requires_human_review": true,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-040",
+    "phase": "Proclaim",
+    "title": "Implement Proclaim exact matter lookup spike",
+    "status": "NOT_STARTED",
+    "requires_human_review": true,
+    "blocked_by_evidence": true,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-041",
+    "phase": "Proclaim",
+    "title": "Implement history read spike",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": true,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-042",
+    "phase": "Proclaim",
+    "title": "Implement history write + readback spike",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": true,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-043",
+    "phase": "Proclaim",
+    "title": "Implement email/document writeback spike",
+    "status": "NOT_STARTED",
+    "requires_human_review": true,
+    "blocked_by_evidence": true,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-044",
+    "phase": "Proclaim",
+    "title": "Implement writeback reconciliation/idempotency",
+    "status": "NOT_STARTED",
+    "requires_human_review": true,
+    "blocked_by_evidence": true,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-045",
+    "phase": "Proclaim",
+    "title": "Implement connector health/errors",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": true,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-046",
+    "phase": "AI and End-to-End",
+    "title": "Implement AI gateway interface",
+    "status": "NOT_STARTED",
+    "requires_human_review": true,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-047",
+    "phase": "AI and End-to-End",
+    "title": "Implement classification/extraction evaluation harness",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-048",
+    "phase": "AI and End-to-End",
+    "title": "Implement matter-match evaluation harness",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-049",
+    "phase": "AI and End-to-End",
+    "title": "Implement material action audit integration",
+    "status": "NOT_STARTED",
+    "requires_human_review": false,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  },
+  {
+    "id": "ENG-050",
+    "phase": "AI and End-to-End",
+    "title": "Implement full synthetic inbound-to-Proclaim E2E test",
+    "status": "NOT_STARTED",
+    "requires_human_review": true,
+    "blocked_by_evidence": false,
+    "definition_of_done": [
+      "tests pass",
+      "documentation updated",
+      "no new critical security finding"
+    ]
+  }
+]

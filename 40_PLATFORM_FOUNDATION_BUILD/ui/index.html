@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>LegalTech Aurora Command</title>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <!-- V35 Aurora visual baseline retained; V36 adds integration readiness. -->
+  <div class="ambient-grid"></div>
+  <div class="aurora aurora-a"></div>
+  <div class="aurora aurora-b"></div>
+  <div class="scanline"></div>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="mark"><span>L</span><i></i></div>
+        <div class="brand-copy"><strong>LegalTech</strong><span>Command Layer</span></div>
+        <em>V36</em>
+      </div>
+
+      <div class="tenant-chip">
+        <span class="pulse-dot"></span>
+        <div><small>SECURE WORKSPACE</small><strong>tenant-demo</strong></div>
+        <span class="tenant-lock">◈</span>
+      </div>
+
+      <div class="nav-label">OPERATIONS</div>
+      <nav id="nav">
+        <button data-view="work" class="active"><span class="nav-index">01</span><div><b>Command</b><small>Priority operations</small></div><kbd>1</kbd></button>
+        <button data-view="inbound"><span class="nav-index">02</span><div><b>Inbound</b><small>Event intelligence</small></div><kbd>2</kbd></button>
+        <button data-view="exceptions"><span class="nav-index">03</span><div><b>Exception Review</b><small>Human control plane</small></div><kbd>3</kbd></button>
+        <button data-view="matters"><span class="nav-index">04</span><div><b>Matters</b><small>Progression graph</small></div><kbd>4</kbd></button>
+        <button data-view="audit"><span class="nav-index">05</span><div><b>Audit</b><small>Immutable trace</small></div><kbd>5</kbd></button>
+        <button data-view="integrations"><span class="nav-index">06</span><div><b>Integrations</b><small>Connector control plane</small></div><kbd>6</kbd></button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="system-mini">
+          <span id="sideHealthDot" class="health-dot"></span>
+          <div><strong id="sideHealth">API checking</strong><small id="sideLatency">— ms</small></div>
+          <span class="signal-bars"><i></i><i></i><i></i></span>
+        </div>
+        <button class="command-hint" id="openCommandBtn"><span>⌘</span> Command palette <kbd>/</kbd></button>
+        <div class="environment"><span class="shield">◇</span><div><strong>Synthetic environment</strong><small>No real client data</small></div></div>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div class="top-title">
+          <p class="eyebrow"><span></span> MATTER PROGRESSION OPERATING SYSTEM</p>
+          <h1 id="viewTitle">Command</h1>
+        </div>
+
+        <div class="system-strip">
+          <div class="sys-cell"><span class="label">CORE API</span><strong id="apiState">CHECK</strong></div>
+          <div class="sys-cell"><span class="label">LATENCY / ROUNDTRIP</span><strong id="apiLatency">—</strong></div>
+          <div class="sys-cell"><span class="label">LAST SYNC</span><strong id="lastSync">—</strong></div>
+        </div>
+
+        <div class="top-actions">
+          <div class="global-search"><span>⌕</span><input id="globalSearch" autocomplete="off" placeholder="Search matters, events, refs, traces…" aria-label="Global search" /><kbd>/</kbd></div>
+          <button class="icon-btn notification-btn" id="notificationBtn" title="Attention feed (A)"><span>◎</span><b id="notificationCount">0</b></button>
+          <button class="icon-btn" id="refreshBtn" title="Refresh (R)">↻</button>
+          <select id="scenarioSelect" aria-label="Synthetic scenario">
+            <option value="unclear">Unclear matter</option>
+            <option value="conflict">Conflicting references</option>
+            <option value="ai-safety">AI safety block</option>
+            <option value="unsafe-file">Unsafe attachment</option>
+          </select>
+          <button class="primary" id="demoBtn"><span>＋</span> Generate scenario</button>
+        </div>
+      </header>
+
+      <div class="context-rail">
+        <div><span class="rail-dot"></span><strong>AURORA / CONTROL FABRIC · INTEGRATION READY</strong></div>
+        <div class="rail-tags"><span>HUMAN-GATED</span><span>TENANT-SCOPED</span><span>AUDIT-ON</span></div>
+      </div>
+
+      <section id="notice" class="notice hidden"></section>
+      <section id="content" class="content"></section>
+    </main>
+  </div>
+
+  <div id="notificationHost"></div>
+
+  <div id="commandPalette" class="palette-backdrop hidden" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="palette">
+      <div class="palette-head"><div><span>COMMAND FABRIC</span><small>Keyboard-first navigation</small></div><div class="palette-status"><i></i> READY</div></div>
+      <div class="palette-input-wrap"><span>›</span><input id="commandInput" autocomplete="off" placeholder="Type a command…" /></div>
+      <div id="commandResults" class="command-results"></div>
+      <div class="palette-foot"><span>↑↓ navigate</span><span>Enter run</span><span>Esc close</span></div>
+    </div>
+  </div>
+
+  <template id="emptyTemplate"><div class="empty"><div class="empty-icon">◇</div><h3>System clear</h3><p>No synthetic items currently require attention.</p></div></template>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

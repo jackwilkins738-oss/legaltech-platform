@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EventEnvelope",
+  "type": "object",
+  "required": [
+    "event_id",
+    "tenant_id",
+    "event_type",
+    "event_version",
+    "occurred_at",
+    "received_at",
+    "source_system",
+    "trace_id"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "tenant_id": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string"
+    },
+    "event_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_system": {
+      "type": "string"
+    },
+    "source_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "correlation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "causation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "actor_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "actor_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "matter_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "trace_id": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

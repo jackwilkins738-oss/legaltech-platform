@@ -1,0 +1,14 @@
+{
+  "name": "legaltech-production-shape-scaffold",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check:sql": "node test/sql-contract.test.js",
+    "check:security": "node test/security-contract.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

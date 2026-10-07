@@ -1,0 +1,7 @@
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
+import {PlatformStore} from './store.js';import {LocalObjectStorage} from './objectStorage.js';import {DeterministicAIGateway} from './aiGateway.js';import {MockProclaimAdapter} from './adapters.js';import {Platform} from './platform.js';
+const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'legaltech-demo-'));
+const seed={matters:[{id:'mat_1',tenantId:'tenant-a',externalId:'P-1001',externalRefs:['CLM-70001']}]};
+const store=new PlatformStore(path.join(tmp,'db.sqlite'),seed);const p=new Platform({store,objectStorage:new LocalObjectStorage(path.join(tmp,'objects')),aiGateway:new DeterministicAIGateway(),proclaim:new MockProclaimAdapter()});
+const accepted=p.ingest({tenantId:'tenant-a',idempotencyKey:'demo-ingest',input:{sourceSystem:'SYNTHETIC_GRAPH',externalEventId:'msg-1',subject:'CLM-70001 medical update',body:'Medical records received.',attachments:[{filename:'records.pdf',contentType:'application/pdf',bytes:Buffer.from('%PDF synthetic')}]}});
+console.log('accepted',accepted);console.log('processed',await p.processNext());const event=p.getEvent('tenant-a',accepted.eventId);const approved=p.approve({tenantId:'tenant-a',eventId:event.id,idempotencyKey:'demo-approval'});console.log('approved',approved);console.log('writeback',await p.processWritebackNext());console.log('event',p.getEvent('tenant-a',event.id));console.log('audit count',p.audits('tenant-a').length);store.close();fs.rmSync(tmp,{recursive:true,force:true});

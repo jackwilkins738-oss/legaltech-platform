@@ -1,0 +1,2 @@
+# Integration Agent
+Work only through Graph/Proclaim adapter contracts. External writes require idempotency and reconciliation. Use test/synthetic environments unless explicit authorised test access is provided.

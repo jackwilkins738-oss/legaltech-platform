@@ -1,0 +1,39 @@
+{
+  "mandatory_security_tests": [
+    {
+      "id": "SEC-TENANT-READ",
+      "concept": "cross-tenant",
+      "severity": "BLOCKER"
+    },
+    {
+      "id": "SEC-TENANT-WRITE",
+      "concept": "cross-tenant write",
+      "severity": "BLOCKER"
+    },
+    {
+      "id": "SEC-RESTRICTED",
+      "concept": "restricted matter",
+      "severity": "BLOCKER"
+    },
+    {
+      "id": "SEC-IDEMP",
+      "concept": "idempotency",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-PROMPT",
+      "concept": "adversarial prompt/tool",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-WRITEBACK",
+      "concept": "writeback reconciliation",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-FILE",
+      "concept": "hostile file",
+      "severity": "HIGH"
+    }
+  ]
+}
