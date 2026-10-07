@@ -215,3 +215,12 @@ updates commit conditionally; missing evidence appears as Processing unavailable
 with unknown counts and requires investigation. Workers preserve superseded claims
 and reject invalid evidence before classification. See
 `docs/V54_INBOUND_RECOVERY_BOUNDARY.md` for compatibility and review gates.
+
+## V55 — Synthetic Graph authority and clock safety
+
+The harness keeps subscriptions, deliveries and opaque checkpoints private. Its
+bound tenant/retry budget and captured dependencies cannot be redirected through
+public property edits. Clock failure leaves connector state unchanged; one validated
+time observation drives each operation and snapshot. Typed configuration/notification
+inputs reject inherited records and accessors without evaluating them. See
+`docs/V55_GRAPH_BOUNDARY_SAFETY.md` for compatibility, limits and review gates.

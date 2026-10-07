@@ -67,7 +67,7 @@ test('successful registry updates advance revision while preserving the connecti
 test('Graph checkpoint tokens remain internal across mutation results and snapshots',()=>{
   const registry=new IntegrationRegistry(),graph=new MockGraphHarness({registry,tenantId:'ta'});graph.configure({mailboxes:['approved@example.invalid']});
   const r=graph.setDelta('approved@example.invalid','private-checkpoint-token');assert.equal(JSON.stringify(r).includes('private-checkpoint-token'),false);assert.equal(JSON.stringify(graph.snapshot()).includes('private-checkpoint-token'),false);
-  assert.equal(graph.delta.get('approved@example.invalid'),'private-checkpoint-token');assert.equal(graph.snapshot().deltaCheckpoints[0].checkpointPresent,true);
+  assert.equal(graph.delta,undefined);assert.equal(graph.snapshot().deltaCheckpoints[0].checkpointPresent,true);
 });
 test('Graph checkpoint-only scope revocation is visibly degraded',()=>{
   const registry=new IntegrationRegistry(),graph=new MockGraphHarness({registry,tenantId:'ta'});graph.configure({mailboxes:['approved@example.invalid']});graph.setDelta('approved@example.invalid','private-checkpoint-token');graph.configure({reader:false,mailboxes:['approved@example.invalid']});
@@ -79,7 +79,7 @@ test('malformed mailbox configuration fails closed rather than crashing snapshot
 });
 for(const value of ['bad\0value','bad\nvalue']) test('Graph opaque input control characters are rejected before state mutation',()=>{
   const registry=new IntegrationRegistry(),graph=new MockGraphHarness({registry,tenantId:'ta'});graph.configure({mailboxes:['approved@example.invalid']});
-  assert.throws(()=>graph.setDelta('approved@example.invalid',value),invalid);assert.equal(graph.delta.size,0);
+  assert.throws(()=>graph.setDelta('approved@example.invalid',value),invalid);assert.equal(graph.snapshot().deltaCheckpoints.length,0);
 });
 test('configuration alone cannot claim healthy validated Proclaim evidence',()=>{
   const x=fixture();assert.equal(x.registry.get('ta','PROCLAIM').health.state,'UNVERIFIED');

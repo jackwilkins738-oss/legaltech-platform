@@ -323,3 +323,13 @@ writes; incomplete evidence is shown as unavailable without repairing history.
 Platform: 851/851, including 88 new cases. No schema reset, live connector, new legal
 scope or changed human decision threshold. D-018, integration evidence gates and
 human security review remain unchanged.
+
+## 2026-10-07 — Combined synthetic Graph boundary batch — V55
+
+Reproduced mutable harness authority/state, partial clock-failure mutations and
+inconsistent expiry snapshots are fixed in the existing synthetic Graph harness.
+Tenant and retry settings are immutable, internal records/checkpoints are private,
+and each operation validates one time observation before changing state.
+Platform: 931/931, including 80 new cases. No live Graph semantics, credentials,
+customer mailbox permissions, new legal scope or schema migration are introduced.
+D-018, integration evidence gates and human security review remain unchanged.
