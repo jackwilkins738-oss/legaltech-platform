@@ -153,3 +153,11 @@ corruption and blocked filename aliases fail closed; inbound processing verifies
 attachment availability before classification and completion. Existing retry and
 quarantine flows remain in use. See `docs/V47_ATTACHMENT_STORAGE_SAFETY.md` and
 `TEST_RESULTS_V47.md` for evidence, byte limits and recovery boundaries.
+
+## V48 combined decision and recovery safety batch
+
+Approval and recovery retries bind the original actor and owned durable proof.
+Review exceptions cannot be bypassed, first approval checks attachment availability,
+and writeback dispatch checks approved actor/classification/trace. See
+`docs/V48_DECISION_RECOVERY_SAFETY.md` and `TEST_RESULTS_V48.md` for historical
+compatibility, rollback and delivery requirements.

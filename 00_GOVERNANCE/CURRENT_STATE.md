@@ -255,3 +255,12 @@ attachment bytes before classification and completion; unavailable evidence cann
 become approvable. Platform: 293/293, including 47 new tests. Existing retry/review
 flows remain; no automatic data repair, production access or new legal scope.
 D-018 and human security review requirements remain unchanged.
+
+## 2026-10-07 — Combined decision/recovery safety batch — V48
+
+Reproduced approval cache/actor trust, unresolved exception bypass, post-processing
+attachment loss and recovery attribution defects are fixed together. Writeback
+validates immutable approval proof before external I/O. Tuple scopes and conservative
+historical replay preserve existing data; no automatic repair or new legal scope.
+Platform: 352/352, including 59 new tests. D-018, production evidence gates and
+human security review remain unchanged.

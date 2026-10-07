@@ -43,7 +43,9 @@ export class WritebackWorker {
       }
       this.#persist(command,null,job);
     }
-    if (command.tenantId !== job.tenantId || command.eventId !== event.id || command.matterId !== matter.id || command.externalMatterId !== matter.externalId || command.key !== approvalKey || (event.writeback?.commandKey && event.writeback.commandKey !== approvalKey)) throw conflict();
+    if (command.tenantId !== job.tenantId || command.eventId !== event.id || command.matterId !== matter.id || command.externalMatterId !== matter.externalId || command.key !== approvalKey || (event.writeback?.commandKey && event.writeback.commandKey !== approvalKey)||
+        command.actorId!==event.approvedBy||!validId(event.approvedBy)||/[\x00-\x1f\x7f]/.test(event.approvedBy)||command.traceId!==event.traceId||job.traceId!==event.traceId||
+        command.classification!==(event.classification?.classification||'UNKNOWN')) throw conflict();
     return command;
   }
   #record(command,audit=null) {

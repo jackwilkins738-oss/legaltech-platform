@@ -1,3 +1,4 @@
+import {normalizeApprovalRequest,approvalScope,approvalFingerprint,replayApproval} from './approvalRequest.js';
 import {normalizeReviewRequest, reviewScope, reviewFingerprint} from './reviewRequest.js';
 import {inboundEventView, requestInboundRecovery} from './inboundRecovery.js';
 import {normalizeInboundInput, inboundFingerprint, ingestScope} from './inboundRequest.js';
@@ -160,6 +161,10 @@ export class Platform {
           const job=this.store.getJob(previous.jobId);
           if (previous.matterId!==ex.matterId||event.approvedMatterId!==ex.matterId||!this.store.getMatter(tenantId,ex.matterId)||
               !job||job.tenantId!==tenantId||job.type!=='PROCLAIM_WRITEBACK'||job.payload?.eventId!==event.id||job.payload?.matterId!==ex.matterId||job.payload?.approvalKey!==event.writeback?.commandKey) throw unavailable();
+          const approvalKey=`resolve:${idempotencyKey}`;
+          if(event.writeback?.commandKey!==approvalKey||(!this.store.getIdempotent(approvalScope(tenantId,approvalKey))&&!this.store.getIdempotent(`${tenantId}:approve:${approvalKey}`)))throw unavailable();
+          const approval=this.approve({tenantId,eventId:event.id,matterId:ex.matterId,exceptionId,actorId,idempotencyKey:approvalKey});
+          if(approval.jobId!==job.id)throw unavailable();
           out={...out,matterId:ex.matterId,jobId:job.id};
         } else if (event.status!=='REJECTED'||event.rejectionNotes!==notes) throw unavailable();
         this.store.setIdempotent(scope,{...out,requestFingerprint:fingerprint});
@@ -184,35 +189,38 @@ export class Platform {
     });
   }
   approve({tenantId,eventId,matterId=null,exceptionId=null,actorId='synthetic-reviewer',idempotencyKey}) {
-    if (!idempotencyKey) throw appError('idempotency key required', {code:'IDEMPOTENCY_REQUIRED'});
+    const request=normalizeApprovalRequest({matterId,exceptionId,actorId,idempotencyKey});
+    ({matterId,exceptionId}=request);
     return this.store.transaction(() => {
       const event = this.store.getEvent(tenantId,eventId);
       if (!event) throw appError('event unavailable', {status:404,code:'NOT_FOUND'});
-      const scope = `${tenantId}:approve:${idempotencyKey}`;
-      const previous = this.store.getIdempotent(scope);
+      const scope=approvalScope(tenantId,idempotencyKey);
+      const previous=this.store.getIdempotent(scope)||this.store.getIdempotent(`${tenantId}:approve:${idempotencyKey}`);
       if (previous) {
-        if (previous.eventId !== eventId || (matterId && previous.matterId !== matterId)) throw appError('idempotency key conflicts with prior decision', {status:409,code:'IDEMPOTENCY_CONFLICT'});
-        return {...previous,replayed:true};
+        return replayApproval(this.store,{tenantId,event,request,previous});
       }
       if (!['READY_FOR_APPROVAL','REVIEW_REQUIRED'].includes(event.status)) throw appError('event cannot be approved again', {status:409,code:'INVALID_REVIEW_STATE'});
-      const resolvedMatterId = matterId || event.match?.matterId;
+      if(this.store.getIdempotent(writebackScope(tenantId,idempotencyKey)))throw appError('idempotency key conflicts with prior decision',{status:409,code:'IDEMPOTENCY_CONFLICT'});
+      const resolvedMatterId = matterId ?? event.match?.matterId;
       const matter = this.store.getMatter(tenantId,resolvedMatterId);
       if (!resolvedMatterId || !matter) throw appError('matter unavailable', {status:404,code:'NOT_FOUND'});
+      if(event.status==='REVIEW_REQUIRED'&&exceptionId===null)throw appError('open exception decision required',{status:409,code:'INVALID_REVIEW_STATE'});
+      try {this.#verifyAttachments(event);}catch {throw appError('attachment evidence unavailable',{status:409,code:'ATTACHMENT_UNAVAILABLE'});}
       if (exceptionId) {
         const ex = this.store.getException(tenantId,exceptionId);
         if (!ex || ex.eventId !== eventId) throw appError('exception unavailable', {status:404,code:'NOT_FOUND'});
-        if (ex.status !== 'OPEN') throw appError('review decision already recorded', {status:409,code:'INVALID_REVIEW_STATE'});
+        if(ex.status!=='OPEN'||event.status!=='REVIEW_REQUIRED'||(event.processing?.exceptionId&&event.processing.exceptionId!==ex.id))throw appError('review decision already recorded',{status:409,code:'INVALID_REVIEW_STATE'});
         ex.status='RESOLVED';ex.resolution='APPROVED';ex.matterId=resolvedMatterId;ex.resolvedBy=actorId;
         this.store.updateException(ex);
       }
-      event.status='APPROVED';event.approvedMatterId=resolvedMatterId;event.approvedBy=actorId;
+      event.status='APPROVED';event.approvedMatterId=resolvedMatterId;event.approvedBy=actorId;event.approvedExceptionId=exceptionId;
       const job = this.store.enqueue({tenantId,type:'PROCLAIM_WRITEBACK',payload:{eventId,matterId:resolvedMatterId,approvalKey:idempotencyKey},traceId:event.traceId});
       const command = newWritebackCommand({tenantId,event,matter,key:idempotencyKey,jobId:job.id});
       this.store.setIdempotent(writebackScope(tenantId,idempotencyKey),command);
       event.writeback = {state:'PENDING',commandKey:idempotencyKey,verified:false,writeAttempts:0,reconciliationAttempts:0,totalReadAttempts:0,recoveryCount:0};
       this.store.updateEvent(event);
       const result = {eventId,jobId:job.id,status:'APPROVED',matterId:resolvedMatterId,replayed:false};
-      this.store.setIdempotent(scope,result);
+      this.store.setIdempotent(scope,{...result,requestFingerprint:approvalFingerprint(resolvedMatterId,exceptionId,actorId)});
       this.store.audit({tenantId,traceId:event.traceId,action:'INBOUND_APPROVED',objectId:eventId,matterId:resolvedMatterId,actorId,outcome:'SUCCESS'});
       return result;
     });
