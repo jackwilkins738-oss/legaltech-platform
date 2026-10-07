@@ -70,6 +70,16 @@ export class Platform {
     return {eventId:event.id,status:event.status,match:event.match,
       classification:event.classification,exceptionId:event.processing?.exceptionId||null,replayed};
   }
+  #verifyAttachments(event) {
+    if(!Array.isArray(event.attachments))throw new Error('attachment state unavailable');
+    for(const attachment of event.attachments) {
+      if(!attachment||!['SAFE_FOR_PARSER','QUARANTINE'].includes(attachment.safety?.verdict))throw new Error('attachment state unavailable');
+      if(attachment.safety.verdict==='QUARANTINE')continue;
+      // The durable safety label is insufficient if the owned object is unavailable.
+      const bytes=this.objectStorage.get({tenantId:event.tenantId,objectRef:attachment.objectRef});
+      if(!Buffer.isBuffer(bytes)||inspectFile({filename:attachment.filename,bytes}).verdict!=='SAFE_FOR_PARSER')throw new Error('attachment unavailable');
+    }
+  }
   async #processInbound(job) {
     const event = this.store.getEvent(job.tenantId,job.payload.eventId);
     if (!event) throw new Error('event unavailable');
@@ -79,6 +89,7 @@ export class Platform {
       if (!processedStates.includes(event.status)) throw new Error('invalid inbound state');
       return this.store.transaction(() => this.#finishInbound(job,event,true));
     }
+    this.#verifyAttachments(event);
     // External classification is outside the synchronous SQLite transaction.
     const match = matchMatter({tenantId:job.tenantId,subject:event.subject,body:event.body,store:this.store});
     const ai = await this.aiGateway.classifyInbound({authorizedContext:{subject:event.subject,body:event.body}});
@@ -95,6 +106,8 @@ export class Platform {
         if (!processedStates.includes(current.status)) throw new Error('invalid inbound state');
         return this.#finishInbound(job,current,true);
       }
+      // Classification can outlive changes to the object files; check again before commit.
+      this.#verifyAttachments(current);
       let exceptionId = null;
       if (needsReview) {
         const exception = {id:this.store.uid('exc'),tenantId:job.tenantId,eventId:event.id,status:'OPEN',
