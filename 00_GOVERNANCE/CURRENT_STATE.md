@@ -238,3 +238,11 @@ publication guards preserve unrelated local work. Platform: 207/207 tests;
 repository inventory: 9/9.
 No schema reset, live connector or legal workflow expansion is introduced;
 human security review and D-018/evidence gates remain unchanged.
+
+## 2026-10-07 — Combined HTTP boundary safety batch — V46
+
+Reproduced invalid-byte ingestion, ambiguous security headers, malformed route
+classification and unexpected exception metadata exposure are fixed together.
+Private immutable application-error envelopes also protect integration audit
+failure reasons. Platform: 246/246, including 39 boundary tests. No production
+access or legal workflow expansion; D-018 and human security review remain.

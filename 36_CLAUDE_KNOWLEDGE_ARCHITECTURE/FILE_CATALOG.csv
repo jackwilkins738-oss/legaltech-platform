@@ -25,7 +25,7 @@ path,domain,status,authority,type,bytes
 .gitignore,governance,current,high,file,649
 00_GOVERNANCE/COMPANY_OPERATING_MODEL.md,governance,reference,medium,md,1703
 00_GOVERNANCE/CONSOLIDATION_NOTES.md,governance,reference,medium,md,1106
-00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,20512
+00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,20965
 00_GOVERNANCE/DECISION_GATES.md,governance,reference,medium,md,1121
 00_GOVERNANCE/DECISIONS.md,governance,reference,high,md,3857
 00_GOVERNANCE/FILE_PRIORITY_BUILD_ORDER.md,governance,reference,medium,md,1298
@@ -573,9 +573,10 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/docs/V43_REVIEW_REQUEST_SAFETY.md,platform_build,current,medium,md,3219
 40_PLATFORM_FOUNDATION_BUILD/docs/V44_WRITEBACK_RECOVERY_SAFETY.md,platform_build,current,medium,md,3092
 40_PLATFORM_FOUNDATION_BUILD/docs/V45_WORKER_RECOVERY_SAFETY.md,platform_build,current,medium,md,6172
+40_PLATFORM_FOUNDATION_BUILD/docs/V46_HTTP_BOUNDARY_SAFETY.md,platform_build,current,medium,md,3412
 40_PLATFORM_FOUNDATION_BUILD/package.json,engineering,current,high,json,261
 40_PLATFORM_FOUNDATION_BUILD/QUICKSTART_WINDOWS.md,engineering,current,high,md,837
-40_PLATFORM_FOUNDATION_BUILD/README.md,engineering,current,high,md,7433
+40_PLATFORM_FOUNDATION_BUILD/README.md,engineering,current,high,md,7848
 40_PLATFORM_FOUNDATION_BUILD/RESET_LOCAL_APP.bat,engineering,current,high,bat,113
 40_PLATFORM_FOUNDATION_BUILD/RUN_LOCAL_APP.bat,engineering,current,high,bat,238
 40_PLATFORM_FOUNDATION_BUILD/src/adapters.js,engineering,current,high,js,1678
@@ -583,10 +584,10 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/auth.js,engineering,current,high,js,2322
 40_PLATFORM_FOUNDATION_BUILD/src/demo.js,engineering,current,high,js,1518
 40_PLATFORM_FOUNDATION_BUILD/src/devServer.js,engineering,current,high,js,3424
-40_PLATFORM_FOUNDATION_BUILD/src/errors.js,engineering,current,high,js,131
+40_PLATFORM_FOUNDATION_BUILD/src/errors.js,engineering,current,high,js,714
 40_PLATFORM_FOUNDATION_BUILD/src/fileSafety.js,engineering,current,high,js,653
 40_PLATFORM_FOUNDATION_BUILD/src/graphHarness.js,platform_build,current,medium,js,8410
-40_PLATFORM_FOUNDATION_BUILD/src/httpApi.js,engineering,current,high,js,16710
+40_PLATFORM_FOUNDATION_BUILD/src/httpApi.js,engineering,current,high,js,17303
 40_PLATFORM_FOUNDATION_BUILD/src/inboundRecovery.js,platform_build,current,medium,js,3638
 40_PLATFORM_FOUNDATION_BUILD/src/inboundRequest.js,platform_build,current,medium,js,3453
 40_PLATFORM_FOUNDATION_BUILD/src/integrationRegistry.js,platform_build,current,medium,js,1158
@@ -599,6 +600,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/writeback.js,platform_build,current,medium,js,18389
 40_PLATFORM_FOUNDATION_BUILD/test/api.test.js,engineering,current,high,js,15101
 40_PLATFORM_FOUNDATION_BUILD/test/connectorSafety.test.js,platform_build,current,medium,js,14171
+40_PLATFORM_FOUNDATION_BUILD/test/httpBoundarySafety.test.js,platform_build,current,medium,js,10856
 40_PLATFORM_FOUNDATION_BUILD/test/inboundRecovery.test.js,platform_build,current,medium,js,11726
 40_PLATFORM_FOUNDATION_BUILD/test/inboundRequest.test.js,platform_build,current,medium,js,12000
 40_PLATFORM_FOUNDATION_BUILD/test/inboundSafety.test.js,platform_build,current,medium,js,9262
@@ -628,6 +630,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V43.md,platform_build,current,medium,md,1306
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V44.md,platform_build,current,medium,md,1442
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V45.md,platform_build,current,medium,md,2059
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V46.md,platform_build,current,medium,md,1242
 40_PLATFORM_FOUNDATION_BUILD/ui/app.css,engineering,current,high,css,36744
 40_PLATFORM_FOUNDATION_BUILD/ui/app.js,engineering,current,high,js,50512
 40_PLATFORM_FOUNDATION_BUILD/ui/index.html,engineering,current,high,html,5469
