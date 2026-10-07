@@ -176,7 +176,8 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'exception:resolve');
         const body = await readJson(req);
         assertBodyTenant(body, session);
-        const result = platform.resolveException({tenantId: session.tenantId, exceptionId: decodeURIComponent(exceptionMatch[1]), resolution: body.resolution, matterId: body.matterId || null, notes: body.notes || null, actorId: session.actorId, idempotencyKey: idempotencyKey(req)});
+        if (Object.keys(body).some(key=>!['tenantId','resolution','matterId','notes'].includes(key))) throw appError('invalid review request',{code:'INVALID_REQUEST'});
+        const result = platform.resolveException({tenantId: session.tenantId, exceptionId: decodeURIComponent(exceptionMatch[1]), resolution: body.resolution, matterId: body.matterId ?? null, notes: body.notes ?? null, actorId: session.actorId, idempotencyKey: idempotencyKey(req)});
         return send(res, 200, result, traceId);
       }
 
