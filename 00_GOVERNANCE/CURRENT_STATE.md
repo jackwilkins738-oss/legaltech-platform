@@ -178,3 +178,12 @@ rejected notifications from interfering with deduplication, constrain retry/reco
 transitions and audit HTTP connector mutations with actor/trace attribution.
 The platform suite passes 51/51 tests. This is synthetic defect remediation under
 D-018; product scope and live Graph/Proclaim evidence gates remain unchanged.
+
+## 2026-10-07 — Durable writeback safety — V39
+A reproduced writeback defect in `40_PLATFORM_FOUNDATION_BUILD/` permitted another
+external call after an uncertain first outcome. V39 persists intent/receipts,
+reconciles uncertainty using reads only, binds approval replay to one event/matter,
+commits approval and audit atomically, scopes HTTP worker selection to the tenant,
+and makes selected-event UI success contingent on read-back evidence. Operator
+recovery is read-only. The platform suite passes 89/89 synthetic tests. This is
+D-018 defect remediation; real Graph/Proclaim and product evidence gates remain.

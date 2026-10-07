@@ -61,7 +61,7 @@ test('integration API is tenant-capability scoped and supports synthetic lifecyc
   } finally {await new Promise(r=>server.close(r));store.close();fs.rmSync(dir,{recursive:true,force:true});}
 });
 
-test('v38 integration reliability control plane is present in the Aurora UI',()=>{
+test('v39 integration reliability control plane is present in the Aurora UI',()=>{
   const html=fs.readFileSync(new URL('../ui/index.html',import.meta.url),'utf8');const js=fs.readFileSync(new URL('../ui/app.js',import.meta.url),'utf8');
-  assert.match(html,/V38/);assert.match(html,/Integrations/);assert.match(html,/RELIABILITY HARNESS/);assert.match(js,/Integration readiness/);assert.match(js,/Synthetic Graph subscription/);assert.match(js,/Proclaim validation/);assert.match(js,/HARD BOUNDARY/);assert.match(js,/Webhook reliability/);assert.match(js,/Simulate webhook/);
+  assert.match(html,/V39/);assert.match(html,/Integrations/);assert.match(html,/RELIABILITY HARNESS/);assert.match(js,/Integration readiness/);assert.match(js,/Synthetic Graph subscription/);assert.match(js,/Proclaim validation/);assert.match(js,/HARD BOUNDARY/);assert.match(js,/Webhook reliability/);assert.match(js,/Simulate webhook/);
 });
