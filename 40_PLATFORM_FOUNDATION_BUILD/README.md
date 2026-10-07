@@ -145,3 +145,11 @@ route IDs as client errors, and exposes only privately recorded application erro
 envelopes. Connector audit failure reasons share this safe classification. See
 `docs/V46_HTTP_BOUNDARY_SAFETY.md` and `TEST_RESULTS_V46.md` for compatibility,
 regression evidence and delivery requirements.
+
+## V47 combined attachment and storage safety batch
+
+Owned object references and stored bytes are checked before reuse. Linked paths,
+corruption and blocked filename aliases fail closed; inbound processing verifies
+attachment availability before classification and completion. Existing retry and
+quarantine flows remain in use. See `docs/V47_ATTACHMENT_STORAGE_SAFETY.md` and
+`TEST_RESULTS_V47.md` for evidence, byte limits and recovery boundaries.

@@ -246,3 +246,12 @@ classification and unexpected exception metadata exposure are fixed together.
 Private immutable application-error envelopes also protect integration audit
 failure reasons. Platform: 246/246, including 39 boundary tests. No production
 access or legal workflow expansion; D-018 and human security review remain.
+
+## 2026-10-07 — Combined attachment/storage safety batch — V47
+
+Reproduced corrupt-object reuse, malformed reference acceptance, linked storage
+paths and blocked filename aliases are fixed. Inbound processing verifies owned
+attachment bytes before classification and completion; unavailable evidence cannot
+become approvable. Platform: 293/293, including 47 new tests. Existing retry/review
+flows remain; no automatic data repair, production access or new legal scope.
+D-018 and human security review requirements remain unchanged.
