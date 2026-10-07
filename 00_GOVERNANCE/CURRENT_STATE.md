@@ -272,3 +272,12 @@ replacement and mutable registry records are fixed together. Read-only synthetic
 validation now distinguishes PASS/NOT_TESTED/BLOCKED and does not claim live
 readiness. Platform: 409/409, including 57 new cases. No schema reset, live calls,
 new legal scope or production access; D-018 and human security review remain.
+
+## 2026-10-07 — Combined writeback boundary safety batch — V50
+
+Reproduced reconciliation attribution, lost-command resend, mutable approval proof,
+invalid retry counters/flags and malformed adapter evidence defects are fixed
+within the existing synthetic writeback path. Historical recovery is read-only;
+late results cannot overwrite changed approval/job/receipt bindings.
+Platform: 489/489, including 80 new cases. No schema reset, automatic data repair,
+live calls or new legal scope; D-018 and human security review remain unchanged.
