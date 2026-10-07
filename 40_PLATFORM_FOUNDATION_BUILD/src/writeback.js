@@ -6,6 +6,9 @@ const requestScope = (tenantId, key) => JSON.stringify([tenantId, 'reconcile-wri
 const unavailable = () => appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
 const conflict = () => appError('writeback state does not permit this action', {status: 409, code: 'INVALID_WRITEBACK_STATE'});
 const validId = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 200;
+class SupersededClaim extends Error {}
+class SupersededCycle extends Error {}
+const superseded=job=>({jobId:job.id,eventId:job.payload.eventId,status:'SUPERSEDED'});
 const view = command => ({state: command.state, externalWriteId: command.externalWriteId || null, verified: command.state === 'RECONCILED', writeAttempts: command.writeAttempts, reconciliationAttempts: command.reconciliationAttempts, totalReadAttempts: command.totalReadAttempts, recoveryCount: command.recoveryCount, errorCode: command.errorCode || null});
 
 export function newWritebackCommand({tenantId, event, matter, key, jobId}) {
@@ -17,7 +20,9 @@ export class WritebackWorker {
   constructor({store, proclaim, maxWrites = 3, maxReads = 3}) {
     Object.assign(this, {store, proclaim, maxWrites, maxReads});
   }
+  #assertClaim(job) {if (!this.store.isCurrentClaim(job)) throw new SupersededClaim();}
   #load(job) {
+    this.#assertClaim(job);
     const {eventId, matterId, approvalKey} = job.payload;
     const event = this.store.getEvent(job.tenantId, eventId);
     const matter = this.store.getMatter(job.tenantId, matterId);
@@ -36,46 +41,78 @@ export class WritebackWorker {
         command.state = 'OUTCOME_UNKNOWN';
         command.uncertain = true;
       }
-      this.#persist(command);
+      this.#persist(command,null,job);
     }
     if (command.tenantId !== job.tenantId || command.eventId !== event.id || command.matterId !== matter.id || command.externalMatterId !== matter.externalId || command.key !== approvalKey || (event.writeback?.commandKey && event.writeback.commandKey !== approvalKey)) throw conflict();
     return command;
   }
-  #persist(command, audit = null) {
-    return this.store.transaction(() => {
-      const scope = writebackScope(command.tenantId, command.key);
-      const current = this.store.getIdempotent(scope);
-      // A late worker may never downgrade proven read-back success.
-      if (current?.state === 'RECONCILED') return current;
-      if (current) {
-        const olderCycle = command.recoveryCount < current.recoveryCount;
-        const sameCycle = command.recoveryCount === current.recoveryCount;
-        command.writeAttempts = Math.max(command.writeAttempts, current.writeAttempts);
-        command.totalReadAttempts = Math.max(command.totalReadAttempts, current.totalReadAttempts);
-        if (sameCycle || olderCycle) command.reconciliationAttempts = Math.max(command.reconciliationAttempts, current.reconciliationAttempts);
-        if (olderCycle) { command.recoveryCount = current.recoveryCount; command.jobId = current.jobId; }
+  #record(command,audit=null) {
+    const event=this.store.getEvent(command.tenantId,command.eventId);
+    if (!event||event.approvedMatterId!==command.matterId) throw conflict();
+    command.updatedAt=new Date().toISOString();
+    this.store.setIdempotent(writebackScope(command.tenantId,command.key),command);
+    const exhausted=command.reconciliationAttempts>=this.maxReads;
+    event.status=command.state==='RECONCILED'?'COMPLETED'
+      :command.state==='FAILED_KNOWN'&&(!command.retryable||command.writeAttempts>=this.maxWrites)?'WRITE_FAILED'
+      :command.uncertain?'OUTCOME_UNKNOWN'
+      :['SUCCEEDED','RECONCILING'].includes(command.state)?(exhausted?'RECONCILIATION_FAILED':'RECONCILING'):'APPROVED';
+    event.writeback={...view(command),commandKey:command.key};
+    this.store.updateEvent(event);
+    if (audit) this.store.audit({tenantId:command.tenantId,traceId:command.traceId,actorId:command.actorId,matterId:command.matterId,objectId:command.eventId,...audit});
+    return structuredClone(command);
+  }
+  #persist(command,audit=null,job=null) {
+    let oldCycle=false;
+    const result=this.store.transaction(()=>{
+      if (job) this.#assertClaim(job);
+      const current=this.store.getIdempotent(writebackScope(command.tenantId,command.key));
+      if (current&&['tenantId','eventId','matterId','externalMatterId','key','classification'].some(field=>current[field]!==command[field])) throw conflict();
+      if (job&&current&&command.recoveryCount<current.recoveryCount) {
+        oldCycle=true;
+        // Old failures cannot consume/reset the new cycle. Retain only bound positive evidence.
+        if (current.state==='RECONCILED') return current;
+        const receipt=validId(command.externalWriteId)&&(!current.externalWriteId||current.externalWriteId===command.externalWriteId);
+        if (receipt&&command.state==='RECONCILED') {
+          const next={...current,externalWriteId:command.externalWriteId,state:'RECONCILED',uncertain:false,errorCode:null};
+          return this.#record(next,{action:'PROCLAIM_WRITE_RECONCILED',outcome:'SUCCESS',reason:'LATE_CYCLE_READBACK'});
+        }
+        if (receipt&&command.state==='SUCCEEDED'&&!current.externalWriteId) {
+          const next={...current,externalWriteId:command.externalWriteId,uncertain:false,
+            errorCode:current.errorCode==='EXTERNAL_WRITE_OUTCOME_UNKNOWN'?null:current.errorCode,
+            state:current.state==='RECONCILING'?'RECONCILING':'SUCCEEDED'};
+          return this.#record(next,{action:'PROCLAIM_LATE_RECEIPT_CAPTURED',outcome:'UNVERIFIED'});
+        }
+        return current;
       }
-      const event = this.store.getEvent(command.tenantId, command.eventId);
-      if (!event || event.approvedMatterId !== command.matterId) throw conflict();
-      command.updatedAt = new Date().toISOString();
-      this.store.setIdempotent(scope, command);
-      const exhausted = command.reconciliationAttempts >= this.maxReads;
-      event.status = command.state === 'RECONCILED' ? 'COMPLETED'
-        : command.state === 'FAILED_KNOWN' && (!command.retryable || command.writeAttempts >= this.maxWrites) ? 'WRITE_FAILED'
-        : command.uncertain ? 'OUTCOME_UNKNOWN'
-        : ['SUCCEEDED', 'RECONCILING'].includes(command.state) ? (exhausted ? 'RECONCILIATION_FAILED' : 'RECONCILING') : 'APPROVED';
-      event.writeback = {...view(command), commandKey: command.key};
-      this.store.updateEvent(event);
-      if (audit) this.store.audit({tenantId: command.tenantId, traceId: command.traceId, actorId: command.actorId, matterId: command.matterId, objectId: command.eventId, ...audit});
-      return structuredClone(command);
+      if (current?.state==='RECONCILED') return current;
+      if (current) {
+        command.writeAttempts=Math.max(command.writeAttempts,current.writeAttempts);
+        command.totalReadAttempts=Math.max(command.totalReadAttempts,current.totalReadAttempts);
+        if (command.recoveryCount===current.recoveryCount) command.reconciliationAttempts=Math.max(command.reconciliationAttempts,current.reconciliationAttempts);
+        if (command.recoveryCount<current.recoveryCount) return current;
+      }
+      return this.#record(command,audit);
+    });
+    if (oldCycle) throw new SupersededCycle();
+    return result;
+  }
+  #reserveRead(job,command) {
+    return this.store.transaction(()=>{
+      this.#assertClaim(job);
+      const latest=this.store.getIdempotent(writebackScope(job.tenantId,command.key));
+      if (!latest||latest.eventId!==command.eventId||latest.matterId!==command.matterId) throw conflict();
+      if (command.recoveryCount<latest.recoveryCount) throw new SupersededCycle();
+      if (latest.state==='RECONCILED'||latest.reconciliationAttempts>=this.maxReads) return {command:latest,reserved:false};
+      latest.state='RECONCILING';latest.reconciliationAttempts+=1;latest.totalReadAttempts+=1;
+      return {command:this.#persist(latest,null,job),reserved:true};
     });
   }
   #finish(job, command) {
-    this.store.completeJob(job.id);
+    if (!this.store.completeClaimedJob(job)) throw new SupersededClaim();
     return {jobId: job.id, eventId: command.eventId, status: 'DONE', result: view(command)};
   }
   #wait(job, command, retry) {
-    this.store.failJob(job.id, command.errorCode || 'WRITEBACK_UNVERIFIED', {retry});
+    if (!this.store.failClaimedJob(job,command.errorCode || 'WRITEBACK_UNVERIFIED',{retry})) throw new SupersededClaim();
     return {jobId: job.id, eventId: command.eventId, status: 'FAILED', error: command.errorCode || 'WRITEBACK_UNVERIFIED', result: view(command)};
   }
   async processNext({tenantId = null, eventId = null} = {}) {
@@ -86,6 +123,7 @@ export class WritebackWorker {
       let command = this.#load(job);
       if (command.state === 'RECONCILED') return this.#finish(job, command);
       const attempt = this.store.transaction(() => {
+        this.#assertClaim(job);
         const latest = this.store.getIdempotent(writebackScope(job.tenantId, command.key));
         const mayWrite = !job.payload.reconcileOnly && (latest.state === 'PENDING' || latest.state === 'FAILED_KNOWN' && latest.retryable) && latest.writeAttempts < this.maxWrites;
         if (!mayWrite) return {command: latest, write: false};
@@ -93,7 +131,7 @@ export class WritebackWorker {
         latest.writeAttempts += 1;
         latest.retryable = false;
         latest.errorCode = null;
-        return {command: this.#persist(latest, {action: 'PROCLAIM_WRITE_ATTEMPTED', outcome: 'ATTEMPT'}), write: true};
+        return {command: this.#persist(latest, {action: 'PROCLAIM_WRITE_ATTEMPTED', outcome: 'ATTEMPT'}, job), write: true};
       });
       command = attempt.command;
       if (attempt.write) {
@@ -105,14 +143,14 @@ export class WritebackWorker {
             command.state = 'FAILED_KNOWN';
             command.retryable = error.retryable;
             command.errorCode = error.code;
-            command = this.#persist(command, {action: 'PROCLAIM_WRITE_FAILED_KNOWN', outcome: 'FAILED', reason: command.errorCode});
+            command = this.#persist(command, {action: 'PROCLAIM_WRITE_FAILED_KNOWN', outcome: 'FAILED', reason: command.errorCode}, job);
             if (command.state === 'RECONCILED') return this.#finish(job, command);
             return this.#wait(job, command, command.retryable && command.writeAttempts < this.maxWrites);
           }
           command.state = 'OUTCOME_UNKNOWN';
           command.uncertain = true;
           command.errorCode = 'EXTERNAL_WRITE_OUTCOME_UNKNOWN';
-          command = this.#persist(command, {action: 'PROCLAIM_WRITE_UNCERTAIN', outcome: 'UNKNOWN', reason: command.errorCode});
+          command = this.#persist(command, {action: 'PROCLAIM_WRITE_UNCERTAIN', outcome: 'UNKNOWN', reason: command.errorCode}, job);
         }
         if (receipt !== undefined) {
           if (validId(receipt?.externalWriteId)) {
@@ -123,33 +161,37 @@ export class WritebackWorker {
             command.uncertain = true;
             command.errorCode = 'INVALID_WRITE_RECEIPT';
           }
-          command = this.#persist(command);
+          command = this.#persist(command,null,job);
         } else if (command.state === 'ATTEMPTING') {
           command.state = 'OUTCOME_UNKNOWN'; command.uncertain = true; command.errorCode = 'INVALID_WRITE_RECEIPT';
-          command = this.#persist(command);
+          command = this.#persist(command,null,job);
         }
       }
       if (command.state === 'RECONCILED') return this.#finish(job, command);
       if (command.state === 'ATTEMPTING') {
         // A persisted attempt with no receipt may have reached the external service.
         command.state = 'OUTCOME_UNKNOWN'; command.uncertain = true; command.errorCode = 'EXTERNAL_WRITE_OUTCOME_UNKNOWN';
-        command = this.#persist(command);
+        command = this.#persist(command,null,job);
       }
       if (!['SUCCEEDED', 'OUTCOME_UNKNOWN', 'RECONCILING'].includes(command.state)) return this.#wait(job, command, false);
       if (command.reconciliationAttempts >= this.maxReads) return this.#wait(job, command, false);
       return await this.#reconcile(job, command);
-    } catch {
+    } catch (error) {
+      if (error instanceof SupersededClaim) return superseded(job);
+      if (error instanceof SupersededCycle) {
+        try {this.store.completeClaimedJob(job);return superseded(job);}
+        catch {return {jobId:job.id,eventId:job.payload.eventId,status:'FAILED',error:'WRITEBACK_INTERNAL_ERROR'};}
+      }
       // Do not return/store adapter error text: it may contain credentials or source content.
-      this.store.failJob(job.id, 'WRITEBACK_INTERNAL_ERROR', {retry: job.attempts < 3});
+      if (!this.store.failClaimedJob(job,'WRITEBACK_INTERNAL_ERROR',{retry:job.attempts<3})) return superseded(job);
       return {jobId: job.id, eventId: job.payload.eventId, status: 'FAILED', error: 'WRITEBACK_INTERNAL_ERROR'};
     }
   }
   async #reconcile(job, command) {
-    command.state = 'RECONCILING';
-    command.reconciliationAttempts += 1;
-    command.totalReadAttempts += 1;
-    command = this.#persist(command);
-    if (command.state === 'RECONCILED') return this.#finish(job, command);
+    const reservation=this.#reserveRead(job,command);
+    command=reservation.command;
+    if (command.state==='RECONCILED') return this.#finish(job,command);
+    if (!reservation.reserved) return this.#wait(job,command,false);
     let history;
     try {
       history = await this.proclaim.getHistory({tenantId: command.tenantId, externalMatterId: command.externalMatterId});
@@ -157,7 +199,7 @@ export class WritebackWorker {
     } catch {
       command.state = command.uncertain ? 'OUTCOME_UNKNOWN' : 'SUCCEEDED';
       command.errorCode = 'READBACK_UNAVAILABLE';
-      command = this.#persist(command, {action: 'PROCLAIM_READBACK_PENDING', outcome: 'UNVERIFIED', reason: command.errorCode});
+      command = this.#persist(command, {action: 'PROCLAIM_READBACK_PENDING', outcome: 'UNVERIFIED', reason: command.errorCode}, job);
       if (command.state === 'RECONCILED') return this.#finish(job, command);
       return this.#wait(job, command, command.reconciliationAttempts < this.maxReads);
     }
@@ -166,12 +208,19 @@ export class WritebackWorker {
     if (matches.length === 1 && (!command.externalWriteId || matches[0].id === command.externalWriteId)) {
       command.externalWriteId = matches[0].id;
       command.state = 'RECONCILED'; command.uncertain = false; command.errorCode = null;
-      command = this.#persist(command, {action: 'PROCLAIM_WRITE_RECONCILED', outcome: 'SUCCESS'});
-      return this.#finish(job, command);
+      return this.store.transaction(()=>{
+        try {command=this.#persist(command,{action:'PROCLAIM_WRITE_RECONCILED',outcome:'SUCCESS'},job);}
+        catch (error) {
+          if (!(error instanceof SupersededCycle)) throw error;
+          if (!this.store.completeClaimedJob(job)) throw new SupersededClaim();
+          return superseded(job);
+        }
+        return this.#finish(job,command);
+      });
     }
     command.state = command.uncertain ? 'OUTCOME_UNKNOWN' : 'SUCCEEDED';
     command.errorCode = matches.length > 1 ? 'AMBIGUOUS_READBACK' : 'READBACK_NOT_CONFIRMED';
-    command = this.#persist(command, {action: 'PROCLAIM_READBACK_PENDING', outcome: 'UNVERIFIED', reason: command.errorCode});
+    command = this.#persist(command, {action: 'PROCLAIM_READBACK_PENDING', outcome: 'UNVERIFIED', reason: command.errorCode}, job);
     if (command.state === 'RECONCILED') return this.#finish(job, command);
     return this.#wait(job, command, command.reconciliationAttempts < this.maxReads);
   }

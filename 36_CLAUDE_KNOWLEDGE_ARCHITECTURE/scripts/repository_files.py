@@ -21,7 +21,7 @@ def repository_files(root: Path) -> list[Path]:
             name=p.name
             if ((name=='.env' or name.startswith('.env.')) and name!='.env.example') or p.suffix.lower() in {'.sqlite','.db','.log','.zip','.pem','.key','.pfx','.p12'}:
                 continue
-            if len(p.relative_to(root).parts)==1 and re.fullmatch(r'APPLY_.*_V\d+.*\.ps1',name,re.I):
+            if len(p.relative_to(root).parts)==1 and re.fullmatch(r'APPLY_(?:.*_)?V\d+.*\.ps1',name,re.I):
                 continue
             candidates.append(p)
     files=[]
