@@ -13,15 +13,15 @@ function Need($cmd, $installHint) {
   }
 }
 
-function Run-Python([string[]]$Args) {
+function Run-Python([string[]]$PyArgs) {
   if (Get-Command python -ErrorAction SilentlyContinue) {
-    & python @Args
+    & python @PyArgs
   } elseif (Get-Command py -ErrorAction SilentlyContinue) {
-    & py -3 @Args
+    & py -3 @PyArgs
   } else {
     throw "Python 3 is required for repository security/knowledge checks. Install with: winget install --id Python.Python.3.12 -e"
   }
-  if ($LASTEXITCODE -ne 0) { throw "Python check failed: $($Args -join ' ')" }
+  if ($LASTEXITCODE -ne 0) { throw "Python check failed: $($PyArgs -join ' ')" }
 }
 
 Need "git" "Install Git for Windows: winget install --id Git.Git -e"
