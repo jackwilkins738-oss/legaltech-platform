@@ -2,13 +2,13 @@
 from __future__ import annotations
 from pathlib import Path
 import argparse, csv, sys
+from repository_files import repository_files
 
 ROOT = Path(__file__).resolve().parents[2]
 NAV = ROOT / '36_CLAUDE_KNOWLEDGE_ARCHITECTURE'
 CATALOG = NAV / 'FILE_CATALOG.csv'
 SELF = '36_CLAUDE_KNOWLEDGE_ARCHITECTURE/FILE_CATALOG.csv'
 FIELDS = ['path','domain','status','authority','type','bytes']
-IGNORE_PARTS = {'.git','node_modules','.venv','venv','__pycache__','.pytest_cache','.mypy_cache','.next','dist','coverage','.dev-data'}
 
 DOMAIN_BY_ROOT = {
     '.claude': 'claude_config', '.github': 'github_governance',
@@ -45,7 +45,7 @@ def read_existing() -> dict[str,dict[str,str]]:
 def build_rows() -> list[dict[str,str]]:
     old = read_existing()
     rows=[]
-    candidates=(p for p in ROOT.rglob('*') if p.is_file() and not any(part in IGNORE_PARTS for part in p.relative_to(ROOT).parts))
+    candidates=repository_files(ROOT)
     for f in sorted(candidates, key=lambda p:p.relative_to(ROOT).as_posix().lower()):
         rel=f.relative_to(ROOT).as_posix()
         if rel == SELF: continue

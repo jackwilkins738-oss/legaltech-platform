@@ -59,7 +59,15 @@ export class PlatformStore {
   getException(t,id){const r=this.db.prepare('SELECT data_json FROM exceptions WHERE tenant_id=? AND id=?').get(t,id);return parse(r?.data_json);}
   listExceptions(t,status){const q=status?'SELECT data_json FROM exceptions WHERE tenant_id=? AND status=? ORDER BY rowid':'SELECT data_json FROM exceptions WHERE tenant_id=? ORDER BY rowid';const rs=status?this.db.prepare(q).all(t,status):this.db.prepare(q).all(t);return rs.map(r=>parse(r.data_json));}
   enqueue({tenantId,type,payload,traceId,availableAt=new Date().toISOString()}){const id=this.uid('job'),now=new Date().toISOString();this.db.prepare("INSERT INTO jobs(id,tenant_id,type,status,attempts,available_at,payload_json,trace_id,created_at,updated_at) VALUES(?,?,?,'QUEUED',0,?,?,?,?,?)").run(id,tenantId,type,availableAt,json(payload),traceId,now,now);return this.getJob(id);}
-  getJob(id){const r=this.db.prepare('SELECT * FROM jobs WHERE id=?').get(id);return r?{id:r.id,tenantId:r.tenant_id,type:r.type,status:r.status,attempts:Number(r.attempts),availableAt:r.available_at,payload:parse(r.payload_json),lastError:r.last_error,traceId:r.trace_id}:null;}
+  getJob(id){const r=this.db.prepare('SELECT * FROM jobs WHERE id=?').get(id);return r?{id:r.id,tenantId:r.tenant_id,type:r.type,status:r.status,attempts:Number(r.attempts),availableAt:r.available_at,payload:parse(r.payload_json),lastError:r.last_error,traceId:r.trace_id,updatedAt:r.updated_at,createdAt:r.created_at}:null;}
+  listEventJobs(tenantId,eventId,type='PROCESS_INBOUND') {
+    return this.db.prepare("SELECT id FROM jobs WHERE tenant_id=? AND type=? AND json_extract(payload_json,'$.eventId')=? ORDER BY rowid DESC")
+      .all(tenantId,type,eventId).map(row=>this.getJob(row.id));
+  }
+  cancelInboundJob(tenantId,jobId) {
+    return Number(this.db.prepare("UPDATE jobs SET status='CANCELLED',updated_at=? WHERE id=? AND tenant_id=? AND type='PROCESS_INBOUND' AND status='RUNNING'")
+      .run(new Date().toISOString(),jobId,tenantId).changes);
+  }
   claimNext(type = null, tenantId = null, {eventId = null} = {}) {
     const now = new Date().toISOString();
     let query = "SELECT id FROM jobs WHERE status='QUEUED' AND available_at<=?";
