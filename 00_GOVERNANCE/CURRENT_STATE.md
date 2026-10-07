@@ -333,3 +333,17 @@ and each operation validates one time observation before changing state.
 Platform: 931/931, including 80 new cases. No live Graph semantics, credentials,
 customer mailbox permissions, new legal scope or schema migration are introduced.
 D-018, integration evidence gates and human security review remain unchanged.
+
+## 2026-10-07 — Combined storage/attachment evidence boundary batch — V56
+
+Reproduced ignored sidecar corruption, mutable root authority and malformed basic
+file-check inputs are fixed within the existing synthetic attachment pipeline.
+Owned hash/size/metadata evidence and bounded descriptor reads are checked before
+acknowledgement; missing or inconsistent records are preserved for investigation.
+Platform: 1024/1024, including 93 new cases. No migration, automatic repair, live
+connector, production scanner or new legal scope. D-018, integration evidence gates
+and human security review remain unchanged.
+
+V56 Windows feedback identified 12 fixture cleanup failures from deleting a temporary
+folder before SQLite close. The shared fixture now closes its stores first; all
+assertions and publication gates remain. Native Windows rerun is pending.
