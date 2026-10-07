@@ -1,3 +1,4 @@
+import {assertProcessingEvidence} from './processingEvidence.js';
 import crypto from 'node:crypto';
 import {appError} from './errors.js';
 import {KnownWriteFailure} from './adapters.js';
@@ -39,7 +40,7 @@ export class WritebackWorker {
   }
   #validate(command,event,matter) {
     if (!record(command)||!['tenantId','eventId','matterId','jobId'].every(field=>validId(command[field]))||!event||!matter||!eventStates.includes(event.status)||
-        command.tenantId!==event.tenantId||command.eventId!==event.id||command.matterId!==matter.id||event.approvedMatterId!==matter.id||
+        matter.tenantId!==event.tenantId||command.tenantId!==event.tenantId||command.eventId!==event.id||command.matterId!==matter.id||event.approvedMatterId!==matter.id||
         command.externalMatterId!==matter.externalId||!validId(matter.externalId,512)||!validId(command.key,208)||
         (event.writeback?.commandKey!==undefined&&event.writeback.commandKey!==command.key)||command.actorId!==event.approvedBy||!validId(event.approvedBy)||
         command.traceId!==event.traceId||!validId(event.traceId)||command.classification!==(event.classification?.classification||'UNKNOWN')||
@@ -48,6 +49,7 @@ export class WritebackWorker {
         (command.externalWriteId!==null&&!validId(command.externalWriteId))||
         (command.errorCode!==null&&!errorCodes.includes(command.errorCode))||
         (command.state==='RECONCILED'&&(!validId(command.externalWriteId)||command.uncertain))) throw conflict();
+    try {assertProcessingEvidence(event);}catch {throw conflict();}
     return command;
   }
   #current(command) {

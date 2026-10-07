@@ -281,3 +281,13 @@ within the existing synthetic writeback path. Historical recovery is read-only;
 late results cannot overwrite changed approval/job/receipt bindings.
 Platform: 489/489, including 80 new cases. No schema reset, automatic data repair,
 live calls or new legal scope; D-018 and human security review remain unchanged.
+
+## 2026-10-07 — Combined inbound evidence safety batch — V51
+
+Reproduced classifier metadata trust, stale source/match commits, incomplete inbound
+claim fencing and the broken demo source are fixed in the existing synthetic path.
+New classification evidence is bound through processing, human approval and dispatch;
+recognized historical synthetic evidence retains its previous human gates.
+Platform: 598/598, including 109 new cases and eight fixed synthetic contract samples.
+No new legal scope, auto-action threshold, live model or production access is added.
+D-018, integration evidence gates and human security review remain unchanged.
