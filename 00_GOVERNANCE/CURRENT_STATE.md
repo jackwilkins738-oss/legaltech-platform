@@ -291,3 +291,14 @@ recognized historical synthetic evidence retains its previous human gates.
 Platform: 598/598, including 109 new cases and eight fixed synthetic contract samples.
 No new legal scope, auto-action threshold, live model or production access is added.
 D-018, integration evidence gates and human security review remain unchanged.
+
+
+## 2026-10-07 — Combined authentication boundary safety batch — V52
+
+Reproduced string capability grants, inherited/coerced OIDC identities, mutable
+static registry records and delayed-body tenant/actor substitution are fixed within
+the existing synthetic authentication path. Typed immutable request projections
+precede retrieval and mutation; OIDC signature verification remains upstream.
+Platform: 679/679, including 81 new cases. No production SSO, live credentials,
+new legal scope or data migration is introduced. D-018, integration evidence gates
+and human security review remain unchanged.
