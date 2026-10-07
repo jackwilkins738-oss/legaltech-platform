@@ -233,3 +233,12 @@ and directory identity changes. Invalid metadata/input types fail before creatio
 and basic inspection quarantines malformed filenames, byte inputs and size budgets.
 No incomplete evidence is silently repaired. See
 `docs/V56_STORAGE_EVIDENCE_BOUNDARY.md` for compatibility and investigation limits.
+
+## V57 — Read-only validation and registry evidence
+
+Proclaim validation captures its tenant/provider methods and keeps request generation
+private. Provider history must be a bounded dense array of unique owned records;
+raw payloads and accessors are not used as proof. Registry records are private JSON
+snapshots, and validation persists only against its original connection revision,
+then checks the acknowledgement through read-back. Live and write evidence remains
+blocked/untested. See `docs/V57_VALIDATION_EVIDENCE_BOUNDARY.md` for compatibility.

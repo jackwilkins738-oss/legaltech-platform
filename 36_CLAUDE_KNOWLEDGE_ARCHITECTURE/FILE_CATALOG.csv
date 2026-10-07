@@ -25,7 +25,7 @@ path,domain,status,authority,type,bytes
 .gitignore,governance,current,high,file,649
 00_GOVERNANCE/COMPANY_OPERATING_MODEL.md,governance,reference,medium,md,1703
 00_GOVERNANCE/CONSOLIDATION_NOTES.md,governance,reference,medium,md,1106
-00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,26965
+00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,27624
 00_GOVERNANCE/DECISION_GATES.md,governance,reference,medium,md,1121
 00_GOVERNANCE/DECISIONS.md,governance,reference,high,md,3857
 00_GOVERNANCE/FILE_PRIORITY_BUILD_ORDER.md,governance,reference,medium,md,1298
@@ -584,9 +584,10 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/docs/V54_INBOUND_RECOVERY_BOUNDARY.md,platform_build,current,medium,md,4379
 40_PLATFORM_FOUNDATION_BUILD/docs/V55_GRAPH_BOUNDARY_SAFETY.md,platform_build,current,medium,md,4479
 40_PLATFORM_FOUNDATION_BUILD/docs/V56_STORAGE_EVIDENCE_BOUNDARY.md,platform_build,current,medium,md,6198
+40_PLATFORM_FOUNDATION_BUILD/docs/V57_VALIDATION_EVIDENCE_BOUNDARY.md,platform_build,current,medium,md,5681
 40_PLATFORM_FOUNDATION_BUILD/package.json,engineering,current,high,json,262
 40_PLATFORM_FOUNDATION_BUILD/QUICKSTART_WINDOWS.md,engineering,current,high,md,837
-40_PLATFORM_FOUNDATION_BUILD/README.md,engineering,current,high,md,12725
+40_PLATFORM_FOUNDATION_BUILD/README.md,engineering,current,high,md,13281
 40_PLATFORM_FOUNDATION_BUILD/RESET_LOCAL_APP.bat,engineering,current,high,bat,113
 40_PLATFORM_FOUNDATION_BUILD/RUN_LOCAL_APP.bat,engineering,current,high,bat,238
 40_PLATFORM_FOUNDATION_BUILD/src/adapters.js,engineering,current,high,js,1678
@@ -602,12 +603,13 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/inboundJobEvidence.js,platform_build,current,medium,js,4350
 40_PLATFORM_FOUNDATION_BUILD/src/inboundRecovery.js,platform_build,current,medium,js,5462
 40_PLATFORM_FOUNDATION_BUILD/src/inboundRequest.js,platform_build,current,medium,js,3453
-40_PLATFORM_FOUNDATION_BUILD/src/integrationRegistry.js,platform_build,current,medium,js,2988
+40_PLATFORM_FOUNDATION_BUILD/src/integrationInput.js,platform_build,current,medium,js,2243
+40_PLATFORM_FOUNDATION_BUILD/src/integrationRegistry.js,platform_build,current,medium,js,2872
 40_PLATFORM_FOUNDATION_BUILD/src/matcher.js,engineering,current,high,js,1741
 40_PLATFORM_FOUNDATION_BUILD/src/objectStorage.js,engineering,current,high,js,7186
 40_PLATFORM_FOUNDATION_BUILD/src/platform.js,engineering,current,high,js,20379
 40_PLATFORM_FOUNDATION_BUILD/src/processingEvidence.js,platform_build,current,medium,js,1292
-40_PLATFORM_FOUNDATION_BUILD/src/proclaimValidation.js,platform_build,current,medium,js,3896
+40_PLATFORM_FOUNDATION_BUILD/src/proclaimValidation.js,platform_build,current,medium,js,6588
 40_PLATFORM_FOUNDATION_BUILD/src/reviewEvidence.js,platform_build,current,medium,js,2877
 40_PLATFORM_FOUNDATION_BUILD/src/reviewRequest.js,platform_build,current,medium,js,1208
 40_PLATFORM_FOUNDATION_BUILD/src/store.js,engineering,current,high,js,12461
@@ -631,6 +633,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/test/reviewRequestSafety.test.js,platform_build,current,medium,js,8354
 40_PLATFORM_FOUNDATION_BUILD/test/storageBoundary.test.js,platform_build,current,medium,js,15054
 40_PLATFORM_FOUNDATION_BUILD/test/store.test.js,engineering,current,high,js,1194
+40_PLATFORM_FOUNDATION_BUILD/test/validationBoundary.test.js,platform_build,current,medium,js,20948
 40_PLATFORM_FOUNDATION_BUILD/test/workerClaimSafety.test.js,platform_build,current,medium,js,17158
 40_PLATFORM_FOUNDATION_BUILD/test/writebackBoundarySafety.test.js,platform_build,current,medium,js,20172
 40_PLATFORM_FOUNDATION_BUILD/test/writebackRecoverySafety.test.js,platform_build,current,medium,js,10103
@@ -665,6 +668,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V54.md,platform_build,current,medium,md,2064
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V55.md,platform_build,current,medium,md,2084
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V56.md,platform_build,current,medium,md,3197
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V57.md,platform_build,current,medium,md,2318
 40_PLATFORM_FOUNDATION_BUILD/ui/app.css,engineering,current,high,css,36744
 40_PLATFORM_FOUNDATION_BUILD/ui/app.js,engineering,current,high,js,52002
 40_PLATFORM_FOUNDATION_BUILD/ui/index.html,engineering,current,high,html,5469
