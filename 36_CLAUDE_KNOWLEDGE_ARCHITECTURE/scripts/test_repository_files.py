@@ -9,7 +9,7 @@ class InventoryTests(unittest.TestCase):
         self.folder=tempfile.TemporaryDirectory()
         self.root=Path(self.folder.name)
         subprocess.run(['git','init','-q',str(self.root)],check=True,capture_output=True)
-        (self.root/'.gitignore').write_text('.env\n*.sqlite\n/APPLY_*_V[0-9]*.ps1\n')
+        (self.root/'.gitignore').write_text('.env\n*.sqlite\n/APPLY_*_V[0-9]*.ps1\n/APPLY_V[0-9]*.ps1\n')
     def tearDown(self):
         self.folder.cleanup()
     def names(self):
@@ -35,6 +35,20 @@ class InventoryTests(unittest.TestCase):
             root=Path(folder);(root/'note.md').write_text('note');(root/'APPLY_DEMO_V42.ps1').write_text('# installer')
             (root/'.dev-data').mkdir();(root/'.dev-data'/'secret.json').write_text('{}')
             self.assertEqual({p.name for p in repository_files(root)},{'note.md'})
+    def test_prefix_versioned_conflict_download_is_excluded(self):
+        (self.root/'APPLY_V42_PR_CONFLICT_FIX.ps1').write_text('# downloaded helper')
+        self.assertEqual(self.names(),{'.gitignore'})
+    def test_prefix_versioned_download_is_excluded_in_export_fallback(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            (root/'APPLY_V42_PR_CONFLICT_FIX (1).ps1').write_text('# downloaded helper')
+            (root/'note.md').write_text('documentation')
+            self.assertEqual({p.name for p in repository_files(root)},{'note.md'})
+    def test_tracked_prefix_versioned_source_is_still_preserved(self):
+        name='APPLY_V1_ARCHIVED_SOURCE.ps1'
+        (self.root/name).write_text('# explicitly tracked source')
+        subprocess.run(['git','-C',str(self.root),'add','-f',name],check=True)
+        self.assertIn(name,self.names())
     def test_missing_tracked_file_is_not_catalogued(self):
         p=self.root/'source.js';p.write_text('source');subprocess.run(['git','-C',str(self.root),'add','source.js'],check=True);p.unlink()
         self.assertNotIn('source.js',self.names())

@@ -227,3 +227,14 @@ reuse active read-only work without resetting its read budget or stacking jobs.
 Cached recovery results verify owned command/job bindings. Platform: 183/183 tests.
 No live integration, production access or new legal workflow scope is introduced;
 human security review, connector evidence and D-018 gates remain unchanged.
+
+## 2026-10-07 — Combined worker/recovery safety batch — V45
+
+The V45 batch fixes reproduced lease-handoff and old-cycle budget corruption,
+reserves shared read budgets durably, commits read-back/audit/job completion
+atomically and explains SUPERSEDED results in the UI. Valid late owned-cycle
+receipt/read-back evidence is retained conservatively. Download inventory and
+publication guards preserve unrelated local work. Platform: 207/207 tests;
+repository inventory: 9/9.
+No schema reset, live connector or legal workflow expansion is introduced;
+human security review and D-018/evidence gates remain unchanged.

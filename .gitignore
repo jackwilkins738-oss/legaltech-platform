@@ -52,3 +52,5 @@ __pycache__/
 
 # Downloaded versioned patch installers are distribution artifacts, not source
 /APPLY_*_V[0-9]*.ps1
+
+/APPLY_V[0-9]*.ps1

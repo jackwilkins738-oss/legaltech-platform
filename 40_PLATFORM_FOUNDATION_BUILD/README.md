@@ -128,3 +128,12 @@ proved. See `docs/V43_REVIEW_REQUEST_SAFETY.md` and `TEST_RESULTS_V43.md`.
 Repeated verification requests now reuse an active read-only job without resetting
 its read budget or stacking jobs. Cached recovery results verify owned job/command
 bindings. See `docs/V44_WRITEBACK_RECOVERY_SAFETY.md` and `TEST_RESULTS_V44.md`.
+
+## V45 combined worker and recovery safety batch
+
+Claim/attempt fences protect reclaimed work; old-cycle results preserve new
+budgets and valid receipt evidence. Reads reserve a shared durable budget and
+successful read-back commits with audit/job completion. The UI explains retired
+work without claiming success. Download inventory and publication guards protect
+unrelated local work. See `docs/V45_WORKER_RECOVERY_SAFETY.md` and
+`TEST_RESULTS_V45.md` for the combined fix, tests and rollback boundaries.

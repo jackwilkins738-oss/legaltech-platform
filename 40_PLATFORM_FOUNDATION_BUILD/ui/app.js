@@ -104,6 +104,7 @@ if(el('#runProclaimValidation'))el('#runProclaimValidation').onclick=async()=>{t
 if(el('#closeNotifications'))el('#closeNotifications').onclick=()=>{state.notificationsOpen=false;render()};document.querySelectorAll('[data-notification]').forEach((b,i)=>b.onclick=()=>{const n=notifications()[i];state.notificationsOpen=false;if(n?.target)state.view=n.target;render();if(n?.id)setTimeout(()=>document.getElementById(`ex-${n.id}`)?.scrollIntoView({behavior:'smooth'}),0)})}
 async function bulkRejectSelected(){const ids=[...selectedExceptions].filter(id=>state.exceptions.some(ex=>ex.id===id));if(!ids.length)return;try{for(const id of ids){await api(`/api/v1/exceptions/${encodeURIComponent(id)}/resolve`,{method:'POST',idempotency:`ui-bulk-reject-${id}`,body:{resolution:'REJECT',matterId:null,notes:'Synthetic bulk triage rejection'}})}selectedExceptions.clear();notice(`${ids.length} synthetic exceptions rejected. No writebacks created.`);await refresh()}catch(e){notice(e.message,true)}}
 function writebackNotice(worker, eventId) {
+  if (worker?.eventId===eventId&&worker?.status==='SUPERSEDED') {notice('Verification moved to newer work. Check the latest inbound outcome before further action.',true);return;}
   if (worker?.eventId === eventId && worker?.result?.verified === true) { notice('Approved. Mock Proclaim writeback reconciled.'); return; }
   notice('Approved, but writeback is unverified. Check the inbound stream and verify the outcome before further action.', true);
 }
@@ -125,8 +126,9 @@ async function reconcileWriteback(eventId){
     if(requested.status==='COMPLETED') notice('Writeback is already verified.');
     else{
       const data=await api('/api/v1/dev/workers/drain-one',{method:'POST',body:{worker:'writeback',eventId}});
-      const verified=data.result?.eventId===eventId&&data.result?.result?.verified===true;
-      notice(verified?'Writeback verified from read-back evidence.':'Outcome remains unverified. No external write was resent.',!verified);
+      const superseded=data.result?.eventId===eventId&&data.result?.status==='SUPERSEDED';
+      const verified=!superseded&&data.result?.eventId===eventId&&data.result?.result?.verified===true;
+      notice(superseded?'Verification moved to newer work. Check the latest inbound outcome. No external write was resent.':verified?'Writeback verified from read-back evidence.':'Outcome remains unverified. No external write was resent.',!verified);
     }
     await refresh();
   }catch(e){notice(e.message,true)}
