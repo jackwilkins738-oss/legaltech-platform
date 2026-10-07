@@ -161,3 +161,11 @@ Review exceptions cannot be bypassed, first approval checks attachment availabil
 and writeback dispatch checks approved actor/classification/trace. See
 `docs/V48_DECISION_RECOVERY_SAFETY.md` and `TEST_RESULTS_V48.md` for historical
 compatibility, rollback and delivery requirements.
+
+## V49 combined connector evidence safety batch
+
+Connector validation uses owned read evidence, bounded failures and honest untested
+write/live checks. Revision/generation fences protect newer results; registry
+records are isolated and validated before mutation. Checkpoint tokens remain out
+of API/UI responses. See `docs/V49_CONNECTOR_EVIDENCE_SAFETY.md` and
+`TEST_RESULTS_V49.md` for compatibility and evidence limits.
