@@ -623,6 +623,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/ui/index.html,engineering,current,high,html,5469
 APPLY_CONNECTOR_RELIABILITY.ps1,repository_root,current,low,ps1,5462
 APPLY_CONNECTOR_RELIABILITY_COMPAT.ps1,repository_root,current,low,ps1,53718
+APPLY_V42_PR_CONFLICT_FIX.ps1,repository_root,current,low,ps1,11987
 CLAUDE.md,other,reference,medium,md,4391
 CONNECT_GITHUB.ps1,governance,current,high,ps1,4253
 GITHUB_SETUP.md,governance,current,high,md,1550
