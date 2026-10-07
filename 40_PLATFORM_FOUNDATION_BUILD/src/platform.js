@@ -1,16 +1,50 @@
+import {normalizeInboundInput, inboundFingerprint, ingestScope} from './inboundRequest.js';
 import {WritebackWorker, newWritebackCommand, writebackScope} from './writeback.js';
 import crypto from 'node:crypto'; import {appError} from './errors.js'; import {inspectFile} from './fileSafety.js'; import {matchMatter} from './matcher.js';
 export class Platform {
   constructor({store,objectStorage,aiGateway,proclaim,graph=null}){this.store=store;this.objectStorage=objectStorage;this.aiGateway=aiGateway;this.proclaim=proclaim;this.graph=graph;this.writebackWorker=new WritebackWorker({store,proclaim});}
   #trace(){return `trc_${crypto.randomUUID()}`;}
-  ingest({tenantId,input,idempotencyKey}){
-    if(!tenantId)throw appError('tenant required',{status:401,code:'TENANT_REQUIRED'}); if(!idempotencyKey)throw appError('idempotency key required',{code:'IDEMPOTENCY_REQUIRED'});
+  ingest({tenantId,input,idempotencyKey}) {
+    if (typeof tenantId!=='string'||!tenantId||tenantId.length>200) throw appError('tenant required',{status:401,code:'TENANT_REQUIRED'});
+    if (typeof idempotencyKey!=='string'||!idempotencyKey.trim()||idempotencyKey.length>200) throw appError('idempotency key required',{code:'IDEMPOTENCY_REQUIRED'});
+    const normalized=normalizeInboundInput(input);
+    const fingerprint=inboundFingerprint(normalized);
     return this.store.transaction(() => {
-    const scope=`${tenantId}:ingest:${idempotencyKey}`;const existing=this.store.getIdempotent(scope);if(existing)return {...existing,replayed:true};
-    const traceId=this.#trace(),eventId=this.store.uid('evt'),attachments=[];
-    for(const a of input.attachments||[]){const bytes=Buffer.isBuffer(a.bytes)?a.bytes:Buffer.from(a.bytes||'');const safety=inspectFile({filename:a.filename,bytes});let objectRef=null;if(safety.verdict==='SAFE_FOR_PARSER')objectRef=this.objectStorage.put({tenantId,bytes,contentType:a.contentType||'application/octet-stream',metadata:{filename:a.filename}}).objectRef;attachments.push({filename:a.filename,safety,objectRef});}
-    const event={id:eventId,tenantId,traceId,status:'QUEUED',sourceSystem:input.sourceSystem||'MANUAL',externalEventId:input.externalEventId||null,subject:input.subject||'',body:input.body||'',attachments};this.store.putEvent(event);
-    const job=this.store.enqueue({tenantId,type:'PROCESS_INBOUND',payload:{eventId},traceId});const result={eventId,jobId:job.id,traceId,status:'QUEUED',replayed:false};this.store.setIdempotent(scope,result);this.store.audit({tenantId,traceId,action:'INBOUND_ACCEPTED',objectId:eventId,outcome:'SUCCESS'});return result;
+      const scope=ingestScope(tenantId,idempotencyKey);
+      const existing=this.store.getIdempotent(scope)||this.store.getIdempotent(`${tenantId}:ingest:${idempotencyKey}`);
+      if (existing) {
+        if (typeof existing.eventId!=='string'||typeof existing.jobId!=='string') throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+        // Old delimiter-qualified scopes can collide. Verify ownership before replay.
+        const event=this.store.getEvent(tenantId,existing.eventId);
+        const job=this.store.getJob(existing.jobId);
+        if (!event||!job||job.tenantId!==tenantId||job.type!=='PROCESS_INBOUND'||job.payload?.eventId!==event.id) throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+        let original=event.ingestFingerprint;
+        if (!original) {
+          // Older attachment records lack the original MIME/byte fingerprint.
+          if (!Array.isArray(event.attachments)||event.attachments.length) throw appError('original request cannot be verified',{status:409,code:'IDEMPOTENCY_UNVERIFIABLE'});
+          original=inboundFingerprint(normalizeInboundInput({sourceSystem:event.sourceSystem,externalEventId:event.externalEventId,subject:event.subject,body:event.body}));
+        }
+        if (original!==fingerprint) throw appError('idempotency key conflicts with prior request',{status:409,code:'IDEMPOTENCY_CONFLICT'});
+        if (!event.ingestFingerprint) {event.ingestFingerprint=original;this.store.updateEvent(event);}
+        const result={eventId:event.id,jobId:job.id,traceId:event.traceId,status:'QUEUED',replayed:false};
+        this.store.setIdempotent(scope,result);
+        return {...result,replayed:true};
+      }
+      const traceId=this.#trace(),eventId=this.store.uid('evt'),attachments=[];
+      for (const attachment of normalized.attachments) {
+        const safety=inspectFile({filename:attachment.filename,bytes:attachment.bytes});
+        let objectRef=null;
+        if (safety.verdict==='SAFE_FOR_PARSER') objectRef=this.objectStorage.put({tenantId,bytes:attachment.bytes,contentType:attachment.contentType,metadata:{filename:attachment.filename}}).objectRef;
+        attachments.push({filename:attachment.filename,safety,objectRef});
+      }
+      const event={id:eventId,tenantId,traceId,status:'QUEUED',sourceSystem:normalized.sourceSystem,
+        externalEventId:normalized.externalEventId,subject:normalized.subject,body:normalized.body,attachments,ingestFingerprint:fingerprint};
+      this.store.putEvent(event);
+      const job=this.store.enqueue({tenantId,type:'PROCESS_INBOUND',payload:{eventId},traceId});
+      const result={eventId,jobId:job.id,traceId,status:'QUEUED',replayed:false};
+      this.store.setIdempotent(scope,result);
+      this.store.audit({tenantId,traceId,action:'INBOUND_ACCEPTED',objectId:eventId,outcome:'SUCCESS'});
+      return result;
     });
   }
   async processNext({tenantId=null,eventId=null}={}) {

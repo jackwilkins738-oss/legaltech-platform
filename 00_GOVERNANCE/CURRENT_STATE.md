@@ -195,3 +195,11 @@ V40 makes database acceptance and processing/audit/job completion atomic, preser
 human decisions against late jobs, validates classifier shape and requires genuine
 selected-event processing proof in the scenario UI. Platform suite: 111/111 synthetic
 tests. D-018 scope and real integration/customer evidence gates remain unchanged.
+
+## 2026-10-07 — Inbound request/replay safety — V41
+Reproduced V40 request defects allowed changed-content replay, delimiter-qualified
+cross-tenant cache collision and malformed upload decoding. V41 adds unambiguous
+ingest scopes, owned-resource replay checks, durable normalized payload fingerprints
+and shared HTTP/domain input validation. Historical attached replay fails closed
+when original identity cannot be verified. Platform suite: 135/135 synthetic tests.
+This is D-018 remediation; live integration and customer evidence gates remain.

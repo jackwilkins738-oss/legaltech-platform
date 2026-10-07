@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {appError} from './errors.js';
+import {decodeInboundBody} from './inboundRequest.js';
 import {requireCapability} from './auth.js';
 
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -81,23 +82,6 @@ function assertBodyTenant(body, session) {
   }
 }
 
-function inboundFromBody(body) {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) throw appError('invalid request', {code: 'INVALID_REQUEST'});
-  const sourceSystem = body.sourceSystem || 'MANUAL';
-  if (!['MANUAL', 'MANUAL_UPLOAD', 'MICROSOFT_GRAPH'].includes(sourceSystem)) {
-    throw appError('unsupported source system', {code: 'INVALID_SOURCE_SYSTEM'});
-  }
-  if (body.subject != null && typeof body.subject !== 'string') throw appError('invalid subject', {code: 'INVALID_REQUEST'});
-  if (body.body != null && typeof body.body !== 'string') throw appError('invalid body', {code: 'INVALID_REQUEST'});
-  if (body.attachments != null && !Array.isArray(body.attachments)) throw appError('invalid attachments', {code: 'INVALID_REQUEST'});
-  const attachments = (body.attachments || []).map((a) => {
-    if (!a || typeof a.filename !== 'string') throw appError('invalid attachment', {code: 'INVALID_REQUEST'});
-    const bytes = a.base64 ? Buffer.from(a.base64, 'base64') : Buffer.from(a.text || '', 'utf8');
-    return {filename: a.filename, contentType: a.contentType || 'application/octet-stream', bytes};
-  });
-  return {sourceSystem, externalEventId: body.externalEventId || null, subject: body.subject || '', body: body.body || '', attachments};
-}
-
 export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null}) {
   async function integrationMutation(session, traceId, action, objectId, run) {
     const entry = {tenantId: session.tenantId, actorId: session.actorId, traceId, action, objectId: /^(?:sub|del)_[a-f0-9-]{36}$/.test(objectId) ? objectId : ['MICROSOFT_GRAPH', 'PROCLAIM'].includes(objectId) ? objectId : 'MICROSOFT_GRAPH'};
@@ -160,7 +144,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'inbound:create');
         const body = await readJson(req);
         assertBodyTenant(body, session);
-        const result = platform.ingest({tenantId: session.tenantId, idempotencyKey: idempotencyKey(req), input: inboundFromBody(body)});
+        const result = platform.ingest({tenantId: session.tenantId, idempotencyKey: idempotencyKey(req), input: decodeInboundBody(body)});
         return send(res, 202, result, result.traceId || traceId);
       }
 
