@@ -166,3 +166,24 @@ The bounded pre-TO foundation build is now an actual runnable API service, not o
 
 ## 2026-10-07 — Integration readiness control plane — V36
 `40_PLATFORM_FOUNDATION_BUILD/` now adds a tenant-scoped synthetic integration control plane. It models Microsoft Graph reader/write/send capability separation, mailbox allow-list metadata, subscription renewal/lifecycle and delta checkpoints; adds a Proclaim capability/validation harness with explicit BLOCKED live checks; and adds a production-shaped OIDC claims mapper that accepts only already-verified server-side claims. The Aurora UI includes an Integrations workspace for connector health and validation. Current platform suite: 32/32 passing. No real customer credentials, Graph mailbox, Proclaim endpoint or client data are used; real integration behaviour remains access/evidence-dependent and D-018 remains intact.
+
+
+## 2026-10-07 — Connector reliability harness — V37
+`40_PLATFORM_FOUNDATION_BUILD/` now includes synthetic integration reliability tooling for Graph-style notification deduplication, retry/dead-letter state, lifecycle attention, reconciliation checkpoints and operator recovery controls. This remains integration-test/evidence tooling under D-018; it does not add legal workflow scope or claim live Microsoft/Proclaim behaviour is proven.
+
+## 2026-10-07 — Connector safety fixes — V38
+Defect fixes in `40_PLATFORM_FOUNDATION_BUILD/` close cross-tenant integration
+access, enforce mailbox/read scope, validate input and subscription expiry, prevent
+rejected notifications from interfering with deduplication, constrain retry/recovery
+transitions and audit HTTP connector mutations with actor/trace attribution.
+The platform suite passes 51/51 tests. This is synthetic defect remediation under
+D-018; product scope and live Graph/Proclaim evidence gates remain unchanged.
+
+## 2026-10-07 — Durable writeback safety — V39
+A reproduced writeback defect in `40_PLATFORM_FOUNDATION_BUILD/` permitted another
+external call after an uncertain first outcome. V39 persists intent/receipts,
+reconciles uncertainty using reads only, binds approval replay to one event/matter,
+commits approval and audit atomically, scopes HTTP worker selection to the tenant,
+and makes selected-event UI success contingent on read-back evidence. Operator
+recovery is read-only. The platform suite passes 89/89 synthetic tests. This is
+D-018 defect remediation; real Graph/Proclaim and product evidence gates remain.

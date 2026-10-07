@@ -15,3 +15,14 @@ export class MockProclaimAdapter {
   }
   async getHistory({tenantId,externalMatterId}){return this.history.filter(x=>x.tenantId===tenantId&&x.externalMatterId===externalMatterId).map(x=>structuredClone(x));}
 }
+
+// Trusted adapters may use this ONLY when evidence proves no external write occurred.
+// Timeouts, transport errors and malformed responses must remain uncertain.
+export class KnownWriteFailure extends Error {
+  constructor({retryable = false, code = 'MOCK_FAILURE'} = {}) {
+    const safeCode = ['RATE_LIMITED', 'AUTH_REVOKED', 'UNAVAILABLE', 'INVALID_REQUEST', 'MOCK_FAILURE'].includes(code) ? code : 'MOCK_FAILURE';
+    super(safeCode);
+    this.retryable = retryable === true;
+    this.code = safeCode;
+  }
+}

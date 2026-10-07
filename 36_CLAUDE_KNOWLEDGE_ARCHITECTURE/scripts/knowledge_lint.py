@@ -4,6 +4,7 @@ import json, csv, sys
 ROOT=Path(__file__).resolve().parents[2]
 NAV=ROOT/'36_CLAUDE_KNOWLEDGE_ARCHITECTURE'
 errors=[]; warnings=[]
+IGNORE_PARTS={'.git','node_modules','.venv','venv','__pycache__','.pytest_cache','.mypy_cache','.next','dist','coverage','.dev-data'}
 
 def need(path,label):
     if not (ROOT/path).exists(): errors.append(f'MISSING {label}: {path}')
@@ -49,7 +50,7 @@ for start in edge:
 # Catalog coverage (exclude catalog itself because it cannot catalog its own final bytes deterministically)
 with (NAV/'FILE_CATALOG.csv').open(encoding='utf-8') as f:
     cat={r['path'] for r in csv.DictReader(f)}
-actual={p.relative_to(ROOT).as_posix() for p in ROOT.rglob('*') if p.is_file() and p.relative_to(ROOT).as_posix()!='36_CLAUDE_KNOWLEDGE_ARCHITECTURE/FILE_CATALOG.csv'}
+actual={p.relative_to(ROOT).as_posix() for p in ROOT.rglob('*') if p.is_file() and not any(part in IGNORE_PARTS for part in p.relative_to(ROOT).parts) and p.relative_to(ROOT).as_posix()!='36_CLAUDE_KNOWLEDGE_ARCHITECTURE/FILE_CATALOG.csv'}
 missing=actual-cat; extra=cat-actual
 if missing: warnings.append(f'CATALOG missing {len(missing)} files; regenerate catalog')
 if extra: warnings.append(f'CATALOG references {len(extra)} absent files')
