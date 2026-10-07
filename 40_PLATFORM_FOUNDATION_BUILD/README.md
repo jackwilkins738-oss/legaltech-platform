@@ -179,3 +179,12 @@ recheck approval/job/receipt bindings and preserve changed evidence. Typed count
 bounded budgets and normalized adapter evidence fail closed. See
 `docs/V50_WRITEBACK_BOUNDARY_SAFETY.md` and `TEST_RESULTS_V50.md` for compatibility
 and the required security review.
+
+## V51 combined inbound evidence safety batch
+
+Classifier results retain only the recognized synthetic output contract. Processing
+binds source/classification/match evidence through first approval and worker dispatch;
+retired claims cannot commit or requeue replacement work. Matching verifies current
+owned matter references at completion, and `npm run demo` uses a supported source.
+See `docs/V51_INBOUND_EVIDENCE_SAFETY.md` and `TEST_RESULTS_V51.md` for historical
+compatibility, provider admission limits and the required security review.

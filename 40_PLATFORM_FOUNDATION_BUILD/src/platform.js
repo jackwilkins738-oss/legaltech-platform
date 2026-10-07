@@ -1,9 +1,12 @@
+import {sourceFingerprint,processingFingerprint,assertProcessingEvidence} from './processingEvidence.js';
+import {normalizeClassificationResult} from './aiGateway.js';
 import {normalizeApprovalRequest,approvalScope,approvalFingerprint,replayApproval} from './approvalRequest.js';
 import {normalizeReviewRequest, reviewScope, reviewFingerprint} from './reviewRequest.js';
 import {inboundEventView, requestInboundRecovery} from './inboundRecovery.js';
 import {normalizeInboundInput, inboundFingerprint, ingestScope} from './inboundRequest.js';
 import {WritebackWorker, newWritebackCommand, writebackScope} from './writeback.js';
 import crypto from 'node:crypto'; import {appError} from './errors.js'; import {inspectFile} from './fileSafety.js'; import {matchMatter} from './matcher.js';
+class SupersededInbound extends Error {}
 export class Platform {
   constructor({store,objectStorage,aiGateway,proclaim,graph=null}){this.store=store;this.objectStorage=objectStorage;this.aiGateway=aiGateway;this.proclaim=proclaim;this.graph=graph;this.writebackWorker=new WritebackWorker({store,proclaim});}
   #trace(){return `trc_${crypto.randomUUID()}`;}
@@ -56,18 +59,30 @@ export class Platform {
     try {
       const result = await this.#processInbound(job);
       return {jobId:job.id,status:'DONE',result};
-    } catch {
-      if (this.store.getJob(job.id)?.status==='CANCELLED') return {jobId:job.id,status:'SUPERSEDED',eventId:job.payload.eventId};
+    } catch (error) {
+      if(error instanceof SupersededInbound||!this.#currentInboundClaim(job)) return this.#supersededInbound(job);
       // Provider/storage errors may contain document text, credentials or paths.
       const code = 'INBOUND_PROCESSING_FAILED';
-      this.store.failJob(job.id,code,{retry:job.attempts<3,delayMs:0});
+      if(!this.store.failClaimedJob(job,code,{retry:job.attempts<3,delayMs:0})) return this.#supersededInbound(job);
       return {jobId:job.id,status:'FAILED',error:code};
     }
   }
+  #currentInboundClaim(job) {
+    if(!this.store.isCurrentClaim(job))return false;
+    const latest=this.store.getJob(job.id);
+    return latest?.traceId===job.traceId&&JSON.stringify(latest.payload)===JSON.stringify(job.payload);
+  }
+  #supersededInbound(job) {
+    const eventId=job.payload?.eventId;
+    return {jobId:job.id,status:'SUPERSEDED',eventId,result:{eventId,superseded:true}};
+  }
+  #assertInbound(job,event) {
+    if(!this.#currentInboundClaim(job))throw new SupersededInbound();
+    if(!event||event.id!==job.payload?.eventId||event.tenantId!==job.tenantId||event.traceId!==job.traceId)throw new Error('inbound binding unavailable');
+  }
   #finishInbound(job,event,replayed=false) {
-    const active=this.store.getJob(job.id);
-    if (active?.status!=='RUNNING'||active.attempts!==job.attempts) return {eventId:event.id,status:event.status,superseded:true};
-    this.store.completeJob(job.id);
+    this.#assertInbound(job,event);
+    if(!this.store.completeClaimedJob(job))throw new SupersededInbound();
     return {eventId:event.id,status:event.status,match:event.match,
       classification:event.classification,exceptionId:event.processing?.exceptionId||null,replayed};
   }
@@ -83,32 +98,33 @@ export class Platform {
   }
   async #processInbound(job) {
     const event = this.store.getEvent(job.tenantId,job.payload.eventId);
-    if (!event) throw new Error('event unavailable');
+    this.#assertInbound(job,event);
     const processedStates = ['REVIEW_REQUIRED','READY_FOR_APPROVAL','APPROVED','REJECTED','COMPLETED',
       'OUTCOME_UNKNOWN','RECONCILING','RECONCILIATION_FAILED','WRITE_FAILED'];
     if (event.status !== 'QUEUED') {
       if (!processedStates.includes(event.status)) throw new Error('invalid inbound state');
       return this.store.transaction(() => this.#finishInbound(job,event,true));
     }
+    const source=normalizeInboundInput({sourceSystem:event.sourceSystem,externalEventId:event.externalEventId,subject:event.subject,body:event.body});
     this.#verifyAttachments(event);
     // External classification is outside the synchronous SQLite transaction.
-    const match = matchMatter({tenantId:job.tenantId,subject:event.subject,body:event.body,store:this.store});
-    const ai = await this.aiGateway.classifyInbound({authorizedContext:{subject:event.subject,body:event.body}});
-    if (!ai || typeof ai !== 'object' || Array.isArray(ai) || !['OK','BLOCKED'].includes(ai.status) || typeof ai.classification !== 'string' || !ai.classification.trim() || !Number.isFinite(ai.confidence) || ai.confidence<0 || ai.confidence>1) throw new Error('invalid classification response');
-    const unsafe = event.attachments.filter(a=>a.safety.verdict!=='SAFE_FOR_PARSER');
-    const needsReview = unsafe.length>0 || match.decision!=='AUTO' || ai.status!=='OK';
+    const fingerprint=sourceFingerprint(event);
+    const response = await this.aiGateway.classifyInbound({authorizedContext:{subject:source.subject,body:source.body}});
     return this.store.transaction(() => {
       // A competing job may have processed/approved the event while AI was running.
       const current = this.store.getEvent(job.tenantId,event.id);
-      if (!current) throw new Error('event unavailable');
-      const active=this.store.getJob(job.id);
-      if (active?.status!=='RUNNING'||active.attempts!==job.attempts) return {eventId:current.id,status:current.status,superseded:true};
+      this.#assertInbound(job,current);
       if (current.status !== 'QUEUED') {
         if (!processedStates.includes(current.status)) throw new Error('invalid inbound state');
         return this.#finishInbound(job,current,true);
       }
-      // Classification can outlive changes to the object files; check again before commit.
+      if(sourceFingerprint(current)!==fingerprint)throw new Error('inbound source changed');
+      // Current owned matter evidence and bytes must still support this source.
       this.#verifyAttachments(current);
+      const ai=normalizeClassificationResult(response);
+      const match=matchMatter({tenantId:job.tenantId,subject:current.subject,body:current.body,store:this.store});
+      const unsafe=current.attachments.filter(a=>a.safety.verdict!=='SAFE_FOR_PARSER');
+      const needsReview=unsafe.length>0||match.decision!=='AUTO'||ai.status!=='OK';
       let exceptionId = null;
       if (needsReview) {
         const exception = {id:this.store.uid('exc'),tenantId:job.tenantId,eventId:event.id,status:'OPEN',
@@ -120,7 +136,7 @@ export class Platform {
       }
       current.match=match;current.classification=ai;
       current.status=needsReview?'REVIEW_REQUIRED':'READY_FOR_APPROVAL';
-      current.processing={...current.processing,state:'COMPLETED',exceptionId};
+      current.processing={...current.processing,state:'COMPLETED',exceptionId,evidenceVersion:'v51',evidenceFingerprint:processingFingerprint(current)};
       this.store.updateEvent(current);
       this.store.audit({tenantId:job.tenantId,traceId:current.traceId,action:'INBOUND_PROCESSED',objectId:current.id,
         matterId:match.matterId||null,outcome:needsReview?'REVIEW':'READY',reason:exceptionId||'policy_ready'});
@@ -203,9 +219,10 @@ export class Platform {
       if(this.store.getIdempotent(writebackScope(tenantId,idempotencyKey)))throw appError('idempotency key conflicts with prior decision',{status:409,code:'IDEMPOTENCY_CONFLICT'});
       const resolvedMatterId = matterId ?? event.match?.matterId;
       const matter = this.store.getMatter(tenantId,resolvedMatterId);
-      if (!resolvedMatterId || !matter) throw appError('matter unavailable', {status:404,code:'NOT_FOUND'});
+      if (!resolvedMatterId || !matter || matter.id!==resolvedMatterId || matter.tenantId!==tenantId) throw appError('matter unavailable', {status:404,code:'NOT_FOUND'});
       if(event.status==='REVIEW_REQUIRED'&&exceptionId===null)throw appError('open exception decision required',{status:409,code:'INVALID_REVIEW_STATE'});
       try {this.#verifyAttachments(event);}catch {throw appError('attachment evidence unavailable',{status:409,code:'ATTACHMENT_UNAVAILABLE'});}
+      try {assertProcessingEvidence(event);}catch {throw appError('classification evidence unavailable',{status:409,code:'CLASSIFICATION_UNAVAILABLE'});}
       if (exceptionId) {
         const ex = this.store.getException(tenantId,exceptionId);
         if (!ex || ex.eventId !== eventId) throw appError('exception unavailable', {status:404,code:'NOT_FOUND'});
