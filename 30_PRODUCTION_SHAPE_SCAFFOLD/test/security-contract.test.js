@@ -90,7 +90,7 @@ test('production requires OIDC managed infrastructure and restricted DB role', (
 test('real client data fails closed until external security evidence gates pass', () => {
   const base={NODE_ENV:'production',DATABASE_URL:'postgresql://runtime:secret@db/prod',AUTH_MODE:'oidc',OIDC_ISSUER:'https://login.example.test/tenant/v2.0',OIDC_AUDIENCE:'api://legaltech',OIDC_JWKS_URI:'https://login.example.test/tenant/discovery/v2.0/keys',OIDC_ALLOWED_DIRECTORY_TENANTS:'directory-a',PUBLIC_ORIGIN:'https://app.example.test',SESSION_ABSOLUTE_TTL_MINUTES:'480',SESSION_IDLE_TTL_MINUTES:'30',SECRET_STORE_MODE:'managed',OBJECT_STORAGE_MODE:'managed-object-storage',QUEUE_MODE:'managed-queue',SESSION_STORE_MODE:'managed-session',RATE_LIMIT_MODE:'managed-rate-limit',AUDIT_SINK_MODE:'managed-audit',DATABASE_ROLE_MODE:'restricted-runtime',ALLOW_REAL_CLIENT_DATA:'true'};
   assert.throws(()=>validateEnv(base),/REAL_CLIENT_DATA_GATE_/);
-  assert.doesNotThrow(()=>validateEnv({...base,PRODUCTION_SECURITY_APPROVED:'true',INDEPENDENT_PEN_TEST_STATUS:'PASS',SESSION_REVOCATION_STATUS:'PASS',OIDC_STEP_UP_STATUS:'PASS',SECRETS_KMS_STATUS:'PASS',NETWORK_ISOLATION_STATUS:'PASS',MONITORING_STATUS:'PASS',AUDIT_EXPORT_STATUS:'PASS',BACKUP_ENCRYPTION_STATUS:'PASS',RESTORE_TEST_STATUS:'PASS',MALWARE_SCAN_MODE:'managed',PARSER_ISOLATION_MODE:'isolated',GRAPH_LIVE_VALIDATED:'true',PROCLAIM_LIVE_VALIDATED:'true'}));
+  assert.doesNotThrow(()=>validateEnv({...base,PRODUCTION_SECURITY_APPROVED:'true',INDEPENDENT_PEN_TEST_STATUS:'PASS',SESSION_REVOCATION_STATUS:'PASS',OIDC_STEP_UP_STATUS:'PASS',SECRETS_KMS_STATUS:'PASS',NETWORK_ISOLATION_STATUS:'PASS',MONITORING_STATUS:'PASS',AUDIT_EXPORT_STATUS:'PASS',BACKUP_ENCRYPTION_STATUS:'PASS',RESTORE_TEST_STATUS:'PASS',MALWARE_SCAN_MODE:'managed',PARSER_ISOLATION_MODE:'isolated',QUARANTINE_STORAGE_MODE:'isolated',DOCUMENT_SECURITY_PIPELINE_STATUS:'PASS',GRAPH_LIVE_VALIDATED:'true',PROCLAIM_LIVE_VALIDATED:'true'}));
 });
 
 
@@ -101,4 +101,12 @@ test('production identity config pins JWKS to issuer origin and bounded server-s
   assert.throws(()=>validateEnv({...base,PUBLIC_ORIGIN:'http://app.example.test'}),/INSECURE_PUBLIC_ORIGIN/);
   assert.throws(()=>validateEnv({...base,SESSION_IDLE_TTL_MINUTES:'600'}),/INVALID_SESSION_IDLE_TTL/);
   assert.throws(()=>validateEnv({...base,OIDC_ALLOWED_DIRECTORY_TENANTS:'directory-a, bad tenant'}),/INVALID_OIDC_ALLOWED_DIRECTORY_TENANTS/);
+});
+
+
+test('real client data requires isolated quarantine storage and proven document-security pipeline', () => {
+  const base={NODE_ENV:'production',DATABASE_URL:'postgresql://runtime:secret@db/prod',AUTH_MODE:'oidc',OIDC_ISSUER:'https://login.example.test/tenant/v2.0',OIDC_AUDIENCE:'api://legaltech',OIDC_JWKS_URI:'https://login.example.test/tenant/discovery/v2.0/keys',OIDC_ALLOWED_DIRECTORY_TENANTS:'directory-a',PUBLIC_ORIGIN:'https://app.example.test',SESSION_ABSOLUTE_TTL_MINUTES:'480',SESSION_IDLE_TTL_MINUTES:'30',SECRET_STORE_MODE:'managed',OBJECT_STORAGE_MODE:'managed-object-storage',QUEUE_MODE:'managed-queue',SESSION_STORE_MODE:'managed-session',RATE_LIMIT_MODE:'managed-rate-limit',AUDIT_SINK_MODE:'managed-audit',DATABASE_ROLE_MODE:'restricted-runtime',ALLOW_REAL_CLIENT_DATA:'true',PRODUCTION_SECURITY_APPROVED:'true',INDEPENDENT_PEN_TEST_STATUS:'PASS',SESSION_REVOCATION_STATUS:'PASS',OIDC_STEP_UP_STATUS:'PASS',SECRETS_KMS_STATUS:'PASS',NETWORK_ISOLATION_STATUS:'PASS',MONITORING_STATUS:'PASS',AUDIT_EXPORT_STATUS:'PASS',BACKUP_ENCRYPTION_STATUS:'PASS',RESTORE_TEST_STATUS:'PASS',MALWARE_SCAN_MODE:'managed',PARSER_ISOLATION_MODE:'isolated',QUARANTINE_STORAGE_MODE:'isolated',DOCUMENT_SECURITY_PIPELINE_STATUS:'PASS',GRAPH_LIVE_VALIDATED:'true',PROCLAIM_LIVE_VALIDATED:'true'};
+  assert.doesNotThrow(()=>validateEnv(base));
+  assert.throws(()=>validateEnv({...base,QUARANTINE_STORAGE_MODE:'shared'}),/REAL_CLIENT_DATA_GATE_QUARANTINE_STORAGE_MODE/);
+  assert.throws(()=>validateEnv({...base,DOCUMENT_SECURITY_PIPELINE_STATUS:'PENDING'}),/REAL_CLIENT_DATA_GATE_DOCUMENT_SECURITY_PIPELINE_STATUS/);
 });

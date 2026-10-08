@@ -380,3 +380,8 @@ step-up evidence. Token-supplied LegalTech roles/capabilities are never authorit
 Platform: 1133/1133; production-shape contracts: 28/28. No real Entra tenant, customer
 credential, managed session service or client data is introduced; live Entra/Conditional
 Access/CAE evidence remains required before the V58 real-data gate can pass.
+
+
+## 2026-10-08 — Hostile document containment boundary — V60
+
+V60 hardens the attachment path with explicit MIME/signature checks, bounded archive metadata inspection, path-traversal/macro/nested-archive/decompression-bomb rejection, object-bound malware-scan evidence and isolated-parser evidence. Production document mode fails closed before AI and approval until clean isolated evidence exists; infected or forged evidence cannot authorize Proclaim writeback. Platform: 1147/1147; production-shape contracts: 29/29; security policy: 9/9. No live malware scanner, parser sandbox, quarantine store or customer document is claimed; those remain external evidence gates.

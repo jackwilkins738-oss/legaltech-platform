@@ -59,6 +59,8 @@ export function validateEnv(env) {
       RESTORE_TEST_STATUS: 'PASS',
       MALWARE_SCAN_MODE: 'managed',
       PARSER_ISOLATION_MODE: 'isolated',
+      QUARANTINE_STORAGE_MODE: 'isolated',
+      DOCUMENT_SECURITY_PIPELINE_STATUS: 'PASS',
       GRAPH_LIVE_VALIDATED: 'true',
       PROCLAIM_LIVE_VALIDATED: 'true',
     };
