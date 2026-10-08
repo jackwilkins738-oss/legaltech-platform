@@ -8,7 +8,11 @@
     "bank_details",
     "access_token",
     "refresh_token",
-    "authorization_header"
+    "authorization_header",
+    "client_secret",
+    "api_key",
+    "private_key",
+    "credential_value"
   ],
   "unsafe_env_defaults": {
     "ALLOW_EXTERNAL_SEND": "true",
@@ -39,6 +43,13 @@
     "decompression bomb",
     "isolated parser",
     "quarantine storage",
-    "document security pipeline"
+    "document security pipeline",
+    "managed secret",
+    "credential containment",
+    "credential rotation",
+    "credential revocation",
+    "workload identity",
+    "secret egress",
+    "durable credential generation"
   ]
 }

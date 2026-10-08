@@ -19,3 +19,7 @@ def test_production_identity_security_concepts_required():
 
 def test_hostile_document_security_concepts_required():
  required=set(policy['required_test_concepts']); assert {'mime signature','decompression bomb','isolated parser','quarantine storage','document security pipeline'} <= required
+
+def test_connector_secret_containment_concepts_required():
+ required=set(policy['required_test_concepts']); assert {'managed secret','credential containment','credential rotation','credential revocation','workload identity','secret egress','durable credential generation'} <= required
+ assert {'client_secret','api_key','private_key'} <= set(policy['forbidden_log_keys'])

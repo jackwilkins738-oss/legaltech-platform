@@ -261,3 +261,6 @@ The foundation now includes a production-shaped OIDC/JWKS verification and opaqu
 
 ## V60 hostile-document containment boundary
 The foundation now includes bounded MIME/signature inspection, Office/archive safety checks, decompression-bomb and path-traversal rejection, managed malware-scan evidence binding, isolated-parser evidence binding and a production mode that refuses AI/approval until clean isolated document evidence exists. See `docs/V60_HOSTILE_DOCUMENT_BOUNDARY.md`. This remains a boundary/reference implementation: no real malware scanner or parser service is claimed.
+
+## V61 connector credential containment boundary
+The foundation now includes strict managed-secret references and a tenant/kind/purpose-bound credential broker. Secret bytes are short-lived and zeroed, stale generations are rejected after rotation, registry/API surfaces reject or redact credential material, and production configuration requires workload/federated identity plus least-privilege connector identities. See `docs/V61_CONNECTOR_CREDENTIAL_CONTAINMENT.md`. No live vault, Graph or Proclaim credential is claimed.
