@@ -369,3 +369,14 @@ production-shape contracts: 27/27; security policy: 7/7; regression scan clean.
 Real customer data remains fail-closed until managed infrastructure, live Graph and
 Proclaim validation, restore/monitoring evidence and an independent penetration test
 are completed. No new legal workflow scope or autonomous legal action is introduced.
+
+## 2026-10-08 — Production identity boundary — V59
+
+V59 replaces the injected-verifier-only production identity gap with bounded RS256/JWKS
+verification primitives, exact issuer/audience/lifetime/directory-tenant policy, trusted
+external-to-internal identity resolution, opaque server-side browser sessions, idle and
+absolute expiry, provider-session revocation, exact-origin CSRF protection and MFA/auth-time
+step-up evidence. Token-supplied LegalTech roles/capabilities are never authoritative.
+Platform: 1133/1133; production-shape contracts: 28/28. No real Entra tenant, customer
+credential, managed session service or client data is introduced; live Entra/Conditional
+Access/CAE evidence remains required before the V58 real-data gate can pass.

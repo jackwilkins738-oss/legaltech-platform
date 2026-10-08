@@ -12,3 +12,6 @@ def test_private_key_file_types_are_scanned(): assert '.pem' in TEXT and '.key' 
 def test_secret_scanner_covers_modern_provider_tokens():
  names={name for name,_ in SECRET_PATTERNS}; assert {'GITHUB_PAT_FINE_GRAINED','NPM_TOKEN','AZURE_STORAGE_KEY','DATABASE_URI_PASSWORD','PRIVATE_KEY'} <= names
 def test_github_actions_are_immutable_sha_pinned(): assert scan_unpinned_actions()==[]
+
+def test_production_identity_security_concepts_required():
+ required=set(policy['required_test_concepts']); assert {'jwks','server session','session revocation','csrf','mfa step-up'} <= required

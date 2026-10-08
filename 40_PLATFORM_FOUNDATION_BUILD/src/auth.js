@@ -25,6 +25,18 @@ function labels(value,code) {
   }
   return Object.freeze([...new Set(result)]);
 }
+
+function authContext(value,code) {
+  if(value===undefined) return Object.freeze({method:'STATIC',mfaVerified:false,authTime:null,expiresAt:null,providerSessionId:null});
+  if(!record(value)) throw invalid(code);
+  const method=own(value,'method',code),mfa=own(value,'mfaVerified',code),authTime=own(value,'authTime',code),expiresAt=own(value,'expiresAt',code),provider=own(value,'providerSessionId',code);
+  if(!['STATIC','OIDC','SERVER_SESSION'].includes(method)||typeof mfa!=='boolean') throw invalid(code);
+  const parseOptional=(x)=>{if(x===undefined||x===null)return null;const ms=Date.parse(x);if(!Number.isFinite(ms))throw invalid(code);return new Date(ms).toISOString();};
+  const auth=parseOptional(authTime),exp=parseOptional(expiresAt);
+  if(auth&&exp&&Date.parse(auth)>Date.parse(exp)) throw invalid(code);
+  return Object.freeze({method,mfaVerified:mfa,authTime:auth,expiresAt:exp,providerSessionId:provider===undefined||provider===null?null:identifier(provider,code)});
+}
+
 function breakGlassGrants(value,code) {
   if(value===undefined) return Object.freeze([]);
   if(!Array.isArray(value)||Object.getPrototypeOf(value)!==Array.prototype||value.length>16) throw invalid(code);
@@ -59,8 +71,16 @@ export function normalizeSession(value,{code='AUTH_REQUIRED'}={}) {
     matterMembershipIds:labels(own(value,'matterMembershipIds',code),code),
     documentAccessRefs:labels(own(value,'documentAccessRefs',code),code),
     breakGlassGrants:breakGlassGrants(own(value,'breakGlassGrants',code),code),
+    authContext:authContext(own(value,'authContext',code),code),
     sessionId:sessionId===undefined?`ses_${crypto.randomUUID()}`:identifier(sessionId,code),
   });
+}
+
+export function requireRecentStepUp(session,{now=Date.now(),maxAgeMs=5*60*1000}={}) {
+  if(!Number.isInteger(maxAgeMs)||maxAgeMs<30_000||maxAgeMs>15*60*1000) throw invalid('AUTH_CONFIGURATION_INVALID');
+  const s=normalizeSession(session),auth=s.authContext,at=auth.authTime===null?NaN:Date.parse(auth.authTime),exp=auth.expiresAt===null?Infinity:Date.parse(auth.expiresAt);
+  if(auth.mfaVerified!==true||!Number.isFinite(at)||at>now||now-at>maxAgeMs||exp<=now) throw appError('step-up authentication required',{status:401,code:'STEP_UP_REQUIRED'});
+  return true;
 }
 
 // Local synthetic sessions only. Production authentication remains an upstream boundary.

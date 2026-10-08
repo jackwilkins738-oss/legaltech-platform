@@ -254,3 +254,6 @@ security scanner now detects unpinned Actions and additional credential classes.
 Real customer data remains blocked until live infrastructure, connector, recovery
 and independent penetration-test evidence exists. See
 `docs/V58_SECURITY_HARDENING.md` and `TEST_RESULTS_V58.md`.
+
+## V59 production identity boundary
+The foundation now includes a production-shaped OIDC/JWKS verification and opaque server-session boundary. See `docs/V59_PRODUCTION_IDENTITY_BOUNDARY.md`. The local static bearer flow remains synthetic-only; real Entra and managed-session evidence is still required before real-client-data mode can be approved.
