@@ -346,7 +346,7 @@ and human security review remain unchanged.
 
 V56 Windows feedback identified 12 fixture cleanup failures from deleting a temporary
 folder before SQLite close. The shared fixture now closes its stores first; all
-assertions and publication gates remain. Native Windows rerun is pending.
+assertions and publication gates remain. Native Windows rerun completed successfully on 2026-10-08: 1,110 tests, 1,105 passed, 0 failed, 5 skipped. The V56 SQLite fixture cleanup issue is verified closed on Windows.
 
 ## 2026-10-07 — Combined validation/registry evidence boundary batch — V57
 
