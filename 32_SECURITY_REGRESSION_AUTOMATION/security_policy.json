@@ -12,7 +12,10 @@
     "client_secret",
     "api_key",
     "private_key",
-    "credential_value"
+    "credential_value",
+    "ip_address",
+    "user_agent",
+    "session_cookie"
   ],
   "unsafe_env_defaults": {
     "ALLOW_EXTERNAL_SEND": "true",
@@ -50,6 +53,14 @@
     "credential revocation",
     "workload identity",
     "secret egress",
-    "durable credential generation"
+    "durable credential generation",
+    "tamper-evident audit",
+    "security alert sink",
+    "bulk exfiltration",
+    "session anomaly",
+    "break-glass alert",
+    "connector abuse",
+    "security retention",
+    "incident correlation"
   ]
 }

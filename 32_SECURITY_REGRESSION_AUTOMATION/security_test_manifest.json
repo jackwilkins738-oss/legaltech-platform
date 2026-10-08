@@ -34,6 +34,26 @@
       "id": "SEC-FILE",
       "concept": "hostile file",
       "severity": "HIGH"
+    },
+    {
+      "id": "SEC-AUDIT-CHAIN",
+      "concept": "tamper-evident audit chain",
+      "severity": "BLOCKER"
+    },
+    {
+      "id": "SEC-ALERT-SINK",
+      "concept": "central security alert sink",
+      "severity": "BLOCKER"
+    },
+    {
+      "id": "SEC-EXFIL",
+      "concept": "bulk exfiltration detection",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-BREAK-GLASS-ALERT",
+      "concept": "break-glass alert",
+      "severity": "HIGH"
     }
   ]
 }

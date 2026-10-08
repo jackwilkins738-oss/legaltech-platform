@@ -1,5 +1,5 @@
 const sensitiveKeys = new Set([
-  'body','content','documentText','medicalDetails','clientName','password','secret','token','accessToken','refreshToken','signedUrl'
+  'body','content','documentText','medicalDetails','clientName','password','secret','token','accessToken','refreshToken','signedUrl','authorization','authorizationHeader','clientSecret','apiKey','privateKey','credentialValue','emailBody','bankDetails','dob'
 ]);
 
 export function redact(value) {

@@ -155,6 +155,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
 
       const session = normalizeSession(await authProvider.authenticate(req.headers,{method:req.method,url:url.pathname}));
       abuseLimiter.checkTenant(session);
+      platform.securityMonitor?.observeRequest({session,req,traceId});
       if (integrations && (url.pathname === '/api/v1/integrations' || url.pathname.startsWith('/api/v1/integrations/'))) {
         requireCapability(session, req.method === 'GET' ? 'integration:read' : 'integration:manage');
         // A shared harness is bound to one tenant. Never trust capability possession alone.
@@ -169,6 +170,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'matter:read');
         const limit=boundedLimit(url,{fallback:100,max:200});
         const items=platform.listMatters(session.tenantId,limit).filter(matter=>matterAccessAllowed(session,matter));
+        platform.securityMonitor?.observeRead({session,traceId,resource:'matters',count:items.length,matterIds:items.map(x=>x.id)});
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -178,6 +180,8 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         const matter = platform.getMatter(session.tenantId, routeId(matterMatch[1]));
         if (!matter) throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
         assertMatterAccess(session,matter);
+        platform.securityMonitor?.observeMatterAccess({session,traceId,matter});
+        platform.securityMonitor?.observeRead({session,traceId,resource:'matter',count:1});
         return send(res, 200, {matter}, traceId);
       }
 
@@ -185,6 +189,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'inbound:read');
         const limit=boundedLimit(url,{fallback:50,max:200});
         const items=platform.listEvents(session.tenantId,limit).filter(event=>eventVisible(session,platform,event));
+        platform.securityMonitor?.observeRead({session,traceId,resource:'inbound-events',count:items.length,matterIds:items.flatMap(linkedMatterIds)});
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -194,6 +199,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         const event = platform.getEvent(session.tenantId, routeId(eventMatch[1]));
         if (!event) throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
         assertEventMatterAccess(session,platform,event);
+        platform.securityMonitor?.observeRead({session,traceId,resource:'inbound-event',count:1,matterIds:linkedMatterIds(event)});
         return send(res, 200, {event}, traceId);
       }
 
@@ -233,6 +239,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
           const event=platform.getEvent(session.tenantId,ex.eventId);
           return event&&eventVisible(session,platform,event);
         });
+        platform.securityMonitor?.observeRead({session,traceId,resource:'exceptions',count:items.length,matterIds:items.map(ex=>platform.getEvent(session.tenantId,ex.eventId)).filter(Boolean).flatMap(linkedMatterIds)});
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -264,7 +271,16 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
           const matter=platform.getMatter(session.tenantId,item.matterId);
           return matter&&matterAccessAllowed(session,matter);
         });
+        platform.securityMonitor?.observeRead({session,traceId,resource:'audit',count:items.length,matterIds:items.map(x=>x.matterId).filter(Boolean)});
         return send(res, 200, {items, next_cursor: null}, traceId);
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/v1/security/alerts') {
+        requireCapability(session, 'security:read');
+        const limit=boundedLimit(url,{fallback:50,max:200});
+        const items=platform.securityAlerts(session.tenantId,limit);
+        platform.securityMonitor?.observeRead({session,traceId,resource:'security-alerts',count:items.length});
+        return send(res,200,{items,next_cursor:null},traceId);
       }
 
       if (integrations && req.method === 'GET' && url.pathname === '/api/v1/integrations') {

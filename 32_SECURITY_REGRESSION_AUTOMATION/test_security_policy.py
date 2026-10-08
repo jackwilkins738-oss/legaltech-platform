@@ -23,3 +23,8 @@ def test_hostile_document_security_concepts_required():
 def test_connector_secret_containment_concepts_required():
  required=set(policy['required_test_concepts']); assert {'managed secret','credential containment','credential rotation','credential revocation','workload identity','secret egress','durable credential generation'} <= required
  assert {'client_secret','api_key','private_key'} <= set(policy['forbidden_log_keys'])
+
+
+def test_security_monitoring_concepts_required():
+ required=set(policy['required_test_concepts']); assert {'tamper-evident audit','security alert sink','bulk exfiltration','session anomaly','break-glass alert','connector abuse','security retention','incident correlation'} <= required
+ assert {'ip_address','user_agent','session_cookie'} <= set(policy['forbidden_log_keys'])
