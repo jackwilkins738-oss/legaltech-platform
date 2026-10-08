@@ -55,7 +55,7 @@ function eventVisible(session,platform,event) {
   try { assertEventMatterAccess(session,platform,event); return true; } catch(error) { return error?.code==='NOT_FOUND'?false:(()=>{throw error;})(); }
 }
 
-function send(res, status, payload, traceId) {
+function send(res, status, payload, traceId, extraHeaders={}) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -63,6 +63,7 @@ function send(res, status, payload, traceId) {
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
     'x-trace-id': traceId,
+    ...extraHeaders,
   });
   res.end(body);
 }
@@ -120,7 +121,7 @@ function assertBodyTenant(body, session) {
   }
 }
 
-export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter()}) {
+export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter(), identitySessionService = null}) {
   async function integrationMutation(session, traceId, action, objectId, run) {
     const entry = {tenantId: session.tenantId, actorId: session.actorId, traceId, action, objectId: /^(?:sub|del)_[a-f0-9-]{36}$/.test(objectId) ? objectId : ['MICROSOFT_GRAPH', 'PROCLAIM'].includes(objectId) ? objectId : 'MICROSOFT_GRAPH'};
     // Fail closed before changing connector state if the audit store is unavailable.
@@ -142,8 +143,16 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       const url = requestUrl(req.url);
       if (req.method === 'GET' && serveStatic(res, uiRoot, url.pathname)) return;
       if (req.method === 'GET' && url.pathname === '/api/v1/health') return send(res, 200, {status: 'ok'}, traceId);
+      if (identitySessionService && req.method === 'POST' && url.pathname === '/api/v1/auth/session') {
+        const exchanged=await identitySessionService.exchange(req.headers);
+        return send(res,200,{status:'AUTHENTICATED',expiresAt:exchanged.expiresAt},traceId,{'set-cookie':exchanged.setCookie});
+      }
+      if (identitySessionService && req.method === 'POST' && url.pathname === '/api/v1/auth/logout') {
+        const loggedOut=identitySessionService.logout(req.headers);
+        return send(res,200,{status:'SIGNED_OUT'},traceId,{'set-cookie':loggedOut.setCookie});
+      }
 
-      const session = normalizeSession(await authProvider.authenticate(req.headers));
+      const session = normalizeSession(await authProvider.authenticate(req.headers,{method:req.method,url:url.pathname}));
       abuseLimiter.checkTenant(session);
       if (integrations && (url.pathname === '/api/v1/integrations' || url.pathname.startsWith('/api/v1/integrations/'))) {
         requireCapability(session, req.method === 'GET' ? 'integration:read' : 'integration:manage');

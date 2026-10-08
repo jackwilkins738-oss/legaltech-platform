@@ -7,16 +7,33 @@ function httpsUrl(value) {
   try { return new URL(value).protocol === 'https:'; } catch { return false; }
 }
 
+function httpsOrigin(value) {
+  try { const u=new URL(value); return u.protocol==='https:'&&!u.username&&!u.password&&u.pathname==='/'&&!u.search&&!u.hash; } catch { return false; }
+}
+function integerInRange(value,min,max) {
+  if(!/^[0-9]+$/.test(String(value??''))) return false;
+  const n=Number(value); return Number.isInteger(n)&&n>=min&&n<=max;
+}
+function tenantList(value) {
+  return typeof value==='string'&&value.length<=4096&&value.split(',').every(x=>/^[A-Za-z0-9._:-]{1,128}$/.test(x.trim()))&&value.split(',').filter(x=>x.trim()).length>0;
+}
+
 export function validateEnv(env) {
   const nodeEnv = env.NODE_ENV ?? 'development';
   if (!allowedEnvironments.has(nodeEnv)) throw new Error('INVALID_NODE_ENV');
   if (env.DATABASE_URL && /change-me|local-only-change-me/.test(env.DATABASE_URL) && nodeEnv === 'production') throw new Error('INSECURE_PRODUCTION_DATABASE_URL');
 
   if (nodeEnv === 'production') {
-    const required = ['DATABASE_URL','OIDC_ISSUER','OIDC_AUDIENCE','SECRET_STORE_MODE','OBJECT_STORAGE_MODE','QUEUE_MODE','SESSION_STORE_MODE','RATE_LIMIT_MODE','AUDIT_SINK_MODE','DATABASE_ROLE_MODE'];
+    const required = ['DATABASE_URL','OIDC_ISSUER','OIDC_AUDIENCE','OIDC_JWKS_URI','OIDC_ALLOWED_DIRECTORY_TENANTS','PUBLIC_ORIGIN','SESSION_ABSOLUTE_TTL_MINUTES','SESSION_IDLE_TTL_MINUTES','SECRET_STORE_MODE','OBJECT_STORAGE_MODE','QUEUE_MODE','SESSION_STORE_MODE','RATE_LIMIT_MODE','AUDIT_SINK_MODE','DATABASE_ROLE_MODE'];
     for (const key of required) if (!env[key]) throw new Error(`MISSING_${key}`);
     if (env.AUTH_MODE !== 'oidc') throw new Error('INSECURE_PRODUCTION_AUTH_MODE');
     if (!httpsUrl(env.OIDC_ISSUER)) throw new Error('INSECURE_OIDC_ISSUER');
+    if (!httpsUrl(env.OIDC_JWKS_URI)) throw new Error('INSECURE_OIDC_JWKS_URI');
+    if (new URL(env.OIDC_JWKS_URI).origin !== new URL(env.OIDC_ISSUER).origin) throw new Error('OIDC_JWKS_ORIGIN_MISMATCH');
+    if (!tenantList(env.OIDC_ALLOWED_DIRECTORY_TENANTS)) throw new Error('INVALID_OIDC_ALLOWED_DIRECTORY_TENANTS');
+    if (!httpsOrigin(env.PUBLIC_ORIGIN)) throw new Error('INSECURE_PUBLIC_ORIGIN');
+    if (!integerInRange(env.SESSION_ABSOLUTE_TTL_MINUTES,5,1440)) throw new Error('INVALID_SESSION_ABSOLUTE_TTL');
+    if (!integerInRange(env.SESSION_IDLE_TTL_MINUTES,1,120) || Number(env.SESSION_IDLE_TTL_MINUTES) > Number(env.SESSION_ABSOLUTE_TTL_MINUTES)) throw new Error('INVALID_SESSION_IDLE_TTL');
     if (!secureStores.has(env.SECRET_STORE_MODE)) throw new Error('INSECURE_SECRET_STORE_MODE');
     if (localModes.has(String(env.OBJECT_STORAGE_MODE).toLowerCase())) throw new Error('INSECURE_OBJECT_STORAGE_MODE');
     if (localModes.has(String(env.QUEUE_MODE).toLowerCase())) throw new Error('INSECURE_QUEUE_MODE');

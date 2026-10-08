@@ -29,6 +29,11 @@
     "rate limit",
     "append-only",
     "malware",
-    "connector"
+    "connector",
+    "jwks",
+    "server session",
+    "session revocation",
+    "csrf",
+    "mfa step-up"
   ]
 }
