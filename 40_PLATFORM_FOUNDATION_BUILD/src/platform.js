@@ -7,7 +7,7 @@ import {normalizeReviewRequest, reviewScope, reviewFingerprint} from './reviewRe
 import {inboundEventView, requestInboundRecovery} from './inboundRecovery.js';
 import {normalizeInboundInput, inboundFingerprint, ingestScope} from './inboundRequest.js';
 import {WritebackWorker, newWritebackCommand, writebackScope} from './writeback.js';
-import crypto from 'node:crypto'; import {appError} from './errors.js'; import {inspectFile} from './fileSafety.js'; import {matchMatter} from './matcher.js';
+import crypto from 'node:crypto'; import {appError} from './errors.js'; import {inspectFile,basicIngestAccepted} from './fileSafety.js'; import {matchMatter} from './matcher.js';
 class SupersededInbound extends Error {}
 class InvalidInboundEvidence extends Error {}
 export class Platform {
@@ -43,7 +43,7 @@ export class Platform {
       for (const attachment of normalized.attachments) {
         const safety=inspectFile({filename:attachment.filename,bytes:attachment.bytes});
         let objectRef=null;
-        if (safety.verdict==='SAFE_FOR_PARSER') objectRef=this.objectStorage.put({tenantId,bytes:attachment.bytes,contentType:attachment.contentType,metadata:{filename:attachment.filename}}).objectRef;
+        if (basicIngestAccepted(safety.verdict)) objectRef=this.objectStorage.put({tenantId,bytes:attachment.bytes,contentType:attachment.contentType,metadata:{filename:attachment.filename}}).objectRef;
         attachments.push({filename:attachment.filename,safety,objectRef});
       }
       const event={id:eventId,tenantId,traceId,status:'QUEUED',sourceSystem:normalized.sourceSystem,
@@ -93,11 +93,11 @@ export class Platform {
   #verifyAttachments(event) {
     if(!Array.isArray(event.attachments))throw new Error('attachment state unavailable');
     for(const attachment of event.attachments) {
-      if(!attachment||!['SAFE_FOR_PARSER','QUARANTINE'].includes(attachment.safety?.verdict))throw new Error('attachment state unavailable');
+      if(!attachment||!(basicIngestAccepted(attachment.safety?.verdict)||attachment.safety?.verdict==='QUARANTINE'))throw new Error('attachment state unavailable');
       if(attachment.safety.verdict==='QUARANTINE')continue;
       // The durable safety label is insufficient if the owned object is unavailable.
       const bytes=this.objectStorage.get({tenantId:event.tenantId,objectRef:attachment.objectRef});
-      if(!Buffer.isBuffer(bytes)||inspectFile({filename:attachment.filename,bytes}).verdict!=='SAFE_FOR_PARSER')throw new Error('attachment unavailable');
+      if(!Buffer.isBuffer(bytes)||!basicIngestAccepted(inspectFile({filename:attachment.filename,bytes}).verdict))throw new Error('attachment unavailable');
     }
   }
   async #processInbound(job) {
@@ -127,7 +127,7 @@ export class Platform {
       this.#verifyAttachments(current);
       const ai=normalizeClassificationResult(response);
       const match=matchMatter({tenantId:job.tenantId,subject:current.subject,body:current.body,store:this.store});
-      const unsafe=current.attachments.filter(a=>a.safety.verdict!=='SAFE_FOR_PARSER');
+      const unsafe=current.attachments.filter(a=>!basicIngestAccepted(a.safety.verdict));
       const needsReview=unsafe.length>0||match.decision!=='AUTO'||ai.status!=='OK';
       let exceptionId = null;
       if (needsReview) {
@@ -148,7 +148,8 @@ export class Platform {
     });
   }
   getMatter(tenantId,matterId){return this.store.getMatter(tenantId,matterId);}
-  listExceptions(tenantId){return this.store.listExceptions(tenantId,'OPEN');}
+  listExceptions(tenantId,limit=100){return this.store.listExceptions(tenantId,'OPEN',limit);}
+  getException(tenantId,exceptionId){return this.store.getException(tenantId,exceptionId);}
   resolveException({tenantId,exceptionId,resolution,matterId=null,notes=null,actorId='synthetic-reviewer',idempotencyKey}) {
     const request=normalizeReviewRequest({resolution,matterId,notes,actorId,idempotencyKey});
     ({matterId,notes}=request);
@@ -261,5 +262,5 @@ export class Platform {
   getEvent(tenantId,eventId){return inboundEventView(this.store,this.store.getEvent(tenantId,eventId));}
   listEvents(tenantId,limit=50){return this.store.listEvents(tenantId,limit).map(event=>inboundEventView(this.store,event));}
   listMatters(tenantId,limit=100){return this.store.listMatters(tenantId,limit);}
-  audits(tenantId){return this.store.listAudits(tenantId).map(reviewAuditView);}
+  audits(tenantId,limit=100){return this.store.listAudits(tenantId,limit).map(reviewAuditView);}
 }

@@ -175,7 +175,7 @@ test('all integration endpoints hide bound harness state from other tenants', as
     for (const [route, method, body] of routes) {
       const response = await request(route, {token: 'foreign', method, body});
       assert.equal(response.status, 404, route);
-      assert.deepEqual(await response.json(), {code: 'NOT_FOUND', message: 'resource unavailable', trace_id: 'trace-connector-safety'});
+      const denied=await response.json(); assert.equal(denied.code,'NOT_FOUND'); assert.equal(denied.message,'resource unavailable'); assert.match(denied.trace_id,/^trc_[0-9a-f-]{36}$/); assert.equal(denied.trace_id,response.headers.get('x-trace-id'));
     }
     const after = graph.snapshot(); delete before.health.lastCheck; delete after.health.lastCheck;
     assert.deepEqual(after, before);
@@ -226,7 +226,7 @@ test('every connector mutation has actor and trace audit with minimized contents
       assert.ok(response.ok, `${action}: ${response.status}`);
       const entries = store.listAudits('tenant-a').filter(x => x.action === action);
       assert.deepEqual(entries.map(x => x.outcome), ['ATTEMPT', 'SUCCESS']);
-      assert.ok(entries.every(x => x.actorId === 'operator-a' && x.traceId === 'trace-connector-safety'));
+      const serverTrace=response.headers.get('x-trace-id'); assert.match(serverTrace,/^trc_[0-9a-f-]{36}$/); assert.ok(entries.every(x => x.actorId === 'operator-a' && x.traceId === serverTrace));
     }
     assert.equal(store.listAudits('tenant-b').length, 0);
     assert.doesNotMatch(JSON.stringify(store.listAudits('tenant-a')), /private-checkpoint|private failure text|ops@example/);

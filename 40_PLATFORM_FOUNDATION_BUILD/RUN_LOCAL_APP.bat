@@ -8,5 +8,6 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+set LEGALTECH_ENABLE_SYNTHETIC_DEV_SERVER=true
 start "" http://127.0.0.1:3210
 node src\devServer.js

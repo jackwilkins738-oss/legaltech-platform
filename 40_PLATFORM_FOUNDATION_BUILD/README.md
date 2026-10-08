@@ -242,3 +242,15 @@ raw payloads and accessors are not used as proof. Registry records are private J
 snapshots, and validation persists only against its original connection revision,
 then checks the acknowledgement through read-back. Live and write evidence remains
 blocked/untested. See `docs/V57_VALIDATION_EVIDENCE_BOUNDARY.md` for compatibility.
+
+
+## V58 — Security hardening and production evidence gates
+
+V58 adds composite tenant integrity, restricted-matter membership, document-level
+security overrides, matter-bound step-up break-glass, server-owned trace identity,
+bounded collection/API abuse controls and explicit production identity/content/
+connector infrastructure gates. GitHub Actions are immutable-SHA pinned and the
+security scanner now detects unpinned Actions and additional credential classes.
+Real customer data remains blocked until live infrastructure, connector, recovery
+and independent penetration-test evidence exists. See
+`docs/V58_SECURITY_HARDENING.md` and `TEST_RESULTS_V58.md`.

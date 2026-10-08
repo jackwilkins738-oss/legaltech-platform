@@ -13,6 +13,7 @@ import {MockGraphHarness} from './graphHarness.js';
 import {ProclaimValidationHarness} from './proclaimValidation.js';
 
 if (process.env.NODE_ENV === 'production') throw new Error('Synthetic development server is forbidden in production');
+if (process.env.LEGALTECH_ENABLE_SYNTHETIC_DEV_SERVER !== 'true') throw new Error('Set LEGALTECH_ENABLE_SYNTHETIC_DEV_SERVER=true to run the local synthetic server');
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const dataDir=process.env.LEGALTECH_DEV_DATA_DIR || path.join(here,'..','.dev-data');

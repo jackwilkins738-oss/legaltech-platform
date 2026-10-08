@@ -68,7 +68,7 @@ export class PlatformStore {
       .run(next.status,json(next),original.id,original.tenantId,original.status,original.eventId,json(original)).changes)===1;
   }
   getException(t,id){const r=this.db.prepare('SELECT data_json FROM exceptions WHERE tenant_id=? AND id=?').get(t,id);return parse(r?.data_json);}
-  listExceptions(t,status){const q=status?'SELECT data_json FROM exceptions WHERE tenant_id=? AND status=? ORDER BY rowid':'SELECT data_json FROM exceptions WHERE tenant_id=? ORDER BY rowid';const rs=status?this.db.prepare(q).all(t,status):this.db.prepare(q).all(t);return rs.map(r=>parse(r.data_json));}
+  listExceptions(t,status,limit=100){const n=Math.max(1,Math.min(Number(limit)||100,200));const q=status?'SELECT data_json FROM exceptions WHERE tenant_id=? AND status=? ORDER BY rowid LIMIT ?':'SELECT data_json FROM exceptions WHERE tenant_id=? ORDER BY rowid LIMIT ?';const rs=status?this.db.prepare(q).all(t,status,n):this.db.prepare(q).all(t,n);return rs.map(r=>parse(r.data_json));}
   enqueue({tenantId,type,payload,traceId,availableAt=new Date().toISOString()}){const id=this.uid('job'),now=new Date().toISOString();this.db.prepare("INSERT INTO jobs(id,tenant_id,type,status,attempts,available_at,payload_json,trace_id,created_at,updated_at) VALUES(?,?,?,'QUEUED',0,?,?,?,?,?)").run(id,tenantId,type,availableAt,json(payload),traceId,now,now);return this.getJob(id);}
   getJob(id){const statement=this.db.prepare('SELECT * FROM jobs WHERE id=?');statement.setReadBigInts(true);const r=statement.get(id);return r?{id:r.id,tenantId:r.tenant_id,type:r.type,status:r.status,attempts:readJobAttempts(r.attempts),availableAt:r.available_at,payload:parse(r.payload_json),lastError:r.last_error,traceId:r.trace_id,updatedAt:r.updated_at,createdAt:r.created_at}:null;}
   listEventJobs(tenantId,eventId,type='PROCESS_INBOUND') {
@@ -118,5 +118,5 @@ export class PlatformStore {
   getIdempotent(scope){const r=this.db.prepare('SELECT data_json FROM idempotency WHERE scope=?').get(scope);return parse(r?.data_json);}
   setIdempotent(scope,value){this.db.prepare('INSERT OR REPLACE INTO idempotency(scope,data_json) VALUES(?,?)').run(scope,json(value));}
   audit({tenantId,traceId,...entry}){const item={id:this.uid('aud'),at:new Date().toISOString(),tenantId,traceId,...entry};this.db.prepare('INSERT INTO audits(id,tenant_id,at,trace_id,data_json) VALUES(?,?,?,?,?)').run(item.id,tenantId,item.at,traceId,json(item));return item;}
-  listAudits(t){return this.db.prepare('SELECT data_json FROM audits WHERE tenant_id=? ORDER BY seq').all(t).map(r=>parse(r.data_json));}
+  listAudits(t,limit=100){const n=Math.max(1,Math.min(Number(limit)||100,500));return this.db.prepare('SELECT data_json FROM (SELECT seq,data_json FROM audits WHERE tenant_id=? ORDER BY seq DESC LIMIT ?) ORDER BY seq').all(t,n).map(r=>parse(r.data_json));}
 }

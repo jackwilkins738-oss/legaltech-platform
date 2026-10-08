@@ -20,3 +20,6 @@ Double-click `RESET_LOCAL_APP.bat`.
 
 ## Important
 This is a local synthetic development build. Do not expose port 3210 publicly and do not put real client data into it. The development bearer token is intentionally static and is not a production authentication design.
+
+## Command-line opt-in
+The synthetic server now requires `LEGALTECH_ENABLE_SYNTHETIC_DEV_SERVER=true`. `RUN_LOCAL_APP.bat` sets this automatically. This prevents an accidental shared/staging launch from silently enabling the static development bearer token.
