@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const here=path.dirname(fileURLToPath(import.meta.url));
 const migrationDir=path.join(here,'../db/migrations');
 const all=fs.readdirSync(migrationDir).sort().map(f=>fs.readFileSync(path.join(migrationDir,f),'utf8')).join('\n');
-const tenantTables=['actors','matters','external_mappings','inbound_events','exceptions','idempotency_records','audit_events','jobs','security_zones','actor_security_zones','matter_actor_access','matter_break_glass_grants','document_security','document_actor_access'];
+const tenantTables=['actors','matters','external_mappings','inbound_events','exceptions','idempotency_records','audit_events','jobs','security_zones','actor_security_zones','matter_actor_access','matter_break_glass_grants','document_security','document_actor_access','security_alerts'];
 
 test('all tenant-scoped tables define tenant_id NOT NULL',()=>{
   for (const table of tenantTables) {
@@ -39,6 +39,7 @@ test('every tenant table has an RLS policy after hardening',()=>{
     matter_break_glass_grants:/CREATE POLICY break_glass_self_read ON matter_break_glass_grants/i,
     document_security:/CREATE POLICY document_security_effective_read ON document_security/i,
     document_actor_access:/CREATE POLICY document_actor_access_self_read ON document_actor_access/i,
+    security_alerts:/CREATE POLICY tenant_security_alert_read ON security_alerts/i,
   };
   for (const table of tenantTables) assert.match(all,policyPatterns[table],`${table} lacks hardened policy`);
 });
@@ -90,4 +91,13 @@ test('audit ledger is insert/select oriented and database append-only',()=>{
   assert.match(all,/CREATE POLICY tenant_insert_audit ON audit_events\s+FOR INSERT/i);
   assert.match(all,/CREATE TRIGGER audit_events_append_only\s+BEFORE UPDATE OR DELETE ON audit_events/i);
   assert.match(all,/RAISE EXCEPTION 'audit_events are append-only'/i);
+});
+
+
+test('audit ledger is server hash-chained and security alerts are append-only',()=>{
+  assert.match(all,/CREATE TRIGGER audit_events_hash_chain\s+BEFORE INSERT ON audit_events/i);
+  assert.match(all,/NEW\.previous_hash := COALESCE\(prior, repeat\('0',64\)\)/i);
+  assert.match(all,/digest\(material,'sha256'\)/i);
+  assert.match(all,/CREATE TABLE IF NOT EXISTS security_alerts/i);
+  assert.match(all,/CREATE TRIGGER security_alerts_append_only\s+BEFORE UPDATE OR DELETE ON security_alerts/i);
 });

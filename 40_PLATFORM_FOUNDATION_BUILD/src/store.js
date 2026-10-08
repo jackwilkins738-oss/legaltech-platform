@@ -1,8 +1,10 @@
 import crypto from 'node:crypto'; import {DatabaseSync} from 'node:sqlite';
+import {auditEntryHash,verifyAuditChainEntries} from './securityMonitoring.js';
 const json=x=>JSON.stringify(x); const parse=x=>x?JSON.parse(x):null;
 const readJobAttempts=value=>typeof value==='bigint'?(Number.isSafeInteger(Number(value))?Number(value):NaN):typeof value==='number'?value:NaN;
 export class PlatformStore {
-  constructor(filename=':memory:',seed={}){this.db=new DatabaseSync(filename);this.#migrate();this.#seed(seed);}
+  constructor(filename=':memory:',seed={}){this.db=new DatabaseSync(filename);this.securityMonitor=null;this.#migrate();this.#seed(seed);}
+  attachSecurityMonitor(monitor){if(!monitor||typeof monitor.observeAudit!=='function')throw new Error('invalid security monitor');this.securityMonitor=monitor;return monitor;}
   transaction(run) {
     const name = `sp_${crypto.randomUUID().replaceAll('-', '')}`;
     this.db.exec(`SAVEPOINT ${name}`);
@@ -44,6 +46,12 @@ export class PlatformStore {
     CREATE TABLE IF NOT EXISTS idempotency(scope TEXT PRIMARY KEY,data_json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS audits(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,tenant_id TEXT NOT NULL,at TEXT NOT NULL,trace_id TEXT NOT NULL,data_json TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS audits_tenant ON audits(tenant_id,seq);
+    CREATE TABLE IF NOT EXISTS security_alerts(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,tenant_id TEXT NOT NULL,at TEXT NOT NULL,trace_id TEXT NOT NULL,data_json TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS security_alerts_tenant ON security_alerts(tenant_id,seq);
+    CREATE TRIGGER IF NOT EXISTS audits_append_only_update BEFORE UPDATE ON audits BEGIN SELECT RAISE(ABORT,'audit ledger is append-only'); END;
+    CREATE TRIGGER IF NOT EXISTS audits_append_only_delete BEFORE DELETE ON audits BEGIN SELECT RAISE(ABORT,'audit ledger is append-only'); END;
+    CREATE TRIGGER IF NOT EXISTS security_alerts_append_only_update BEFORE UPDATE ON security_alerts BEGIN SELECT RAISE(ABORT,'security alerts are append-only'); END;
+    CREATE TRIGGER IF NOT EXISTS security_alerts_append_only_delete BEFORE DELETE ON security_alerts BEGIN SELECT RAISE(ABORT,'security alerts are append-only'); END;
   `);}
   #seed(seed){const n=Number(this.db.prepare('SELECT COUNT(*) c FROM matters').get().c);if(n)return;for(const m of seed.matters||[])this.insertMatter(m);}
   insertMatter(m){this.db.prepare('INSERT INTO matters(id,tenant_id,external_id,data_json) VALUES(?,?,?,?)').run(m.id,m.tenantId,m.externalId,json(m));const st=this.db.prepare('INSERT INTO matter_refs(tenant_id,matter_id,ref) VALUES(?,?,?)');for(const ref of m.externalRefs||[])st.run(m.tenantId,m.id,ref);}
@@ -117,6 +125,15 @@ export class PlatformStore {
   failJob(id,error,{retry=true,delayMs=0}={}){const state=retry?'QUEUED':'DEAD';this.db.prepare('UPDATE jobs SET status=?,available_at=?,last_error=?,updated_at=? WHERE id=?').run(state,new Date(Date.now()+delayMs).toISOString(),String(error),new Date().toISOString(),id);return this.getJob(id);}
   getIdempotent(scope){const r=this.db.prepare('SELECT data_json FROM idempotency WHERE scope=?').get(scope);return parse(r?.data_json);}
   setIdempotent(scope,value){this.db.prepare('INSERT OR REPLACE INTO idempotency(scope,data_json) VALUES(?,?)').run(scope,json(value));}
-  audit({tenantId,traceId,...entry}){const item={id:this.uid('aud'),at:new Date().toISOString(),tenantId,traceId,...entry};this.db.prepare('INSERT INTO audits(id,tenant_id,at,trace_id,data_json) VALUES(?,?,?,?,?)').run(item.id,tenantId,item.at,traceId,json(item));return item;}
+  audit({tenantId,traceId,...entry}){
+    const previous=this.db.prepare('SELECT data_json FROM audits WHERE tenant_id=? ORDER BY seq DESC LIMIT 1').get(tenantId);
+    const previousItem=parse(previous?.data_json),previousHash=previousItem?.entryHash??'0'.repeat(64);
+    const base={id:this.uid('aud'),at:new Date().toISOString(),tenantId,traceId,...entry};
+    const item={...base,previousHash,entryHash:auditEntryHash(previousHash,base)};
+    this.db.prepare('INSERT INTO audits(id,tenant_id,at,trace_id,data_json) VALUES(?,?,?,?,?)').run(item.id,tenantId,item.at,traceId,json(item));this.securityMonitor?.observeAudit(item);return item;
+  }
   listAudits(t,limit=100){const n=Math.max(1,Math.min(Number(limit)||100,500));return this.db.prepare('SELECT data_json FROM (SELECT seq,data_json FROM audits WHERE tenant_id=? ORDER BY seq DESC LIMIT ?) ORDER BY seq').all(t,n).map(r=>parse(r.data_json));}
+  verifyAuditChain(t){const items=this.db.prepare('SELECT data_json FROM audits WHERE tenant_id=? ORDER BY seq').all(t).map(r=>parse(r.data_json));return verifyAuditChainEntries(items);}
+  securityAlert(input){const item={id:this.uid('sal'),at:new Date().toISOString(),...input};this.db.prepare('INSERT INTO security_alerts(id,tenant_id,at,trace_id,data_json) VALUES(?,?,?,?,?)').run(item.id,item.tenantId,item.at,item.traceId,json(item));return item;}
+  listSecurityAlerts(t,limit=100){const n=Math.max(1,Math.min(Number(limit)||100,500));return this.db.prepare('SELECT data_json FROM (SELECT seq,data_json FROM security_alerts WHERE tenant_id=? ORDER BY seq DESC LIMIT ?) ORDER BY seq').all(t,n).map(r=>parse(r.data_json));}
 }
