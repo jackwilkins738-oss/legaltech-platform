@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import {appError} from './errors.js';
+import {parseManagedSecretRef} from './secretManagement.js';
 
 const plain=value=>value!==null&&typeof value==='object'&&[Object.prototype,null].includes(Object.getPrototypeOf(value));
 const data=(value,key)=>{const d=Object.getOwnPropertyDescriptor(value,key);if(!d)return undefined;if(!Object.hasOwn(d,'value'))throw appError('invalid connector payload',{code:'INVALID_REQUEST'});return d.value;};
@@ -26,7 +27,8 @@ export function validateGraphNotificationBatch(input,{expectedClientState,maxIte
 export function assertLiveConnectorConfig(config,{kind}={}){
   if(!plain(config)||!['MICROSOFT_GRAPH','PROCLAIM'].includes(kind))throw new Error('LIVE_CONNECTOR_CONFIGURATION_INVALID');
   const mode=data(config,'mode'),credentialRef=data(config,'credentialRef'),capabilities=data(config,'capabilities');
-  if(mode!=='LIVE'||!text(credentialRef,512)||!/^(?:secret|keyvault|secretsmanager|secretmanager):\/\/[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$/.test(credentialRef))throw new Error('LIVE_CONNECTOR_CONFIGURATION_INVALID');
+  if(mode!=='LIVE'||!text(credentialRef,512))throw new Error('LIVE_CONNECTOR_CONFIGURATION_INVALID');
+  try{parseManagedSecretRef(credentialRef);}catch{throw new Error('LIVE_CONNECTOR_CONFIGURATION_INVALID');}
   if(!Array.isArray(capabilities)||capabilities.length<1||capabilities.length>64||capabilities.some(x=>!text(x,128)))throw new Error('LIVE_CONNECTOR_CONFIGURATION_INVALID');
   if(kind==='MICROSOFT_GRAPH'&&capabilities.includes('MAILBOX_ALL'))throw new Error('LIVE_CONNECTOR_CONFIGURATION_INVALID');
   if(kind==='PROCLAIM'&&capabilities.includes('WRITE')&&!capabilities.includes('READ_BACK'))throw new Error('LIVE_CONNECTOR_CONFIGURATION_INVALID');

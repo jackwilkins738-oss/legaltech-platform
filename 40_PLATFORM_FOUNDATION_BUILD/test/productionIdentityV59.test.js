@@ -50,7 +50,7 @@ test('V59 rejects algorithm confusion before any JWKS network call',async()=>{
 
 test('V59 rejects forged signature, issuer, audience, expiry and foreign directory tenant',async()=>{
   for(const token of [
-    (()=>{const t=sign();const last=t.at(-1);return t.slice(0,-1)+(last==='A'?'B':'A');})(),
+    (()=>{const [h,payload,sig]=sign().split('.');const bytes=Buffer.from(sig,'base64url');bytes[0]^=1;return `${h}.${payload}.${bytes.toString('base64url')}`;})(),
     sign({iss:'https://evil.example.test/tenant/v2.0'}),
     sign({aud:'api://other'}),
     sign({exp:seconds(now-120_000)}),

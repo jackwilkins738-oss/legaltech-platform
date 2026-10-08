@@ -7,6 +7,7 @@ import {isUtf8} from 'node:buffer';
 import {decodeInboundBody} from './inboundRequest.js';
 import {requireCapability,normalizeSession,assertMatterAccess,matterAccessAllowed} from './auth.js';
 import {InMemoryAbuseLimiter} from './abuseControl.js';
+import {redactPublicIntegrationData} from './secretManagement.js';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const STATIC_FILES = new Map([
@@ -269,7 +270,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       if (integrations && req.method === 'GET' && url.pathname === '/api/v1/integrations') {
         requireCapability(session, 'integration:read');
         const summary = integrations.summary(session.tenantId);
-        return send(res, 200, summary, traceId);
+        return send(res, 200, redactPublicIntegrationData(summary), traceId);
       }
 
       if (integrations && req.method === 'GET' && url.pathname === '/api/v1/integrations/graph') {

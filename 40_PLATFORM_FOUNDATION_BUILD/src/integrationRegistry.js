@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';import {appError} from './errors.js';
+import crypto from 'node:crypto';import {appError} from './errors.js';import {assertNoSecretMaterial} from './secretManagement.js';
 import {integrationRecord,integrationOptions,integrationJson} from './integrationInput.js';
 const clone=x=>structuredClone(x);
 const invalid=()=>appError('invalid integration record',{code:'INVALID_REQUEST'});
@@ -9,7 +9,7 @@ export class IntegrationRegistry {
   #commit(input,expected=null){
     const {tenantId,kind,mode,status,capabilities,metadata,health}=integrationOptions(input,{tenantId:undefined,kind:undefined,mode:'MOCK',status:'NOT_CONFIGURED',capabilities:[],metadata:{},health:{}});
     if(!identifier(tenantId)||!identifier(kind,64)||!identifier(mode,64)||!identifier(status,100)||!Array.isArray(capabilities)||capabilities.length>100||!integrationRecord(metadata)||!integrationRecord(health))throw invalid();
-    const caps=integrationJson(capabilities);if(!caps.every(value=>identifier(value,128)))throw invalid();const ownedMetadata=integrationJson(metadata),ownedHealth=integrationJson(health),key=this.#key(tenantId,kind),previous=this.#connections.get(key);
+    const caps=integrationJson(capabilities);if(!caps.every(value=>identifier(value,128)))throw invalid();const ownedMetadata=integrationJson(metadata),ownedHealth=integrationJson(health);try{assertNoSecretMaterial(ownedMetadata);assertNoSecretMaterial(ownedHealth);}catch{throw invalid();}const key=this.#key(tenantId,kind),previous=this.#connections.get(key);
     if(expected&&(!previous||previous.id!==expected.id||previous.revision!==expected.revision))return null;
     const revision=(previous?.revision??0)+1;if(!Number.isSafeInteger(revision)||revision<1)throw invalid();
     const item=integrationJson({id:previous?.id||`con_${crypto.randomUUID()}`,tenantId,kind,mode,status,capabilities:[...new Set(caps)],metadata:{...(previous?.metadata||{}),...ownedMetadata},health:{...(previous?.health||{}),...ownedHealth},revision,updatedAt:new Date().toISOString()});

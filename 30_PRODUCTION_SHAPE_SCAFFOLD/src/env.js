@@ -1,6 +1,7 @@
 const allowedEnvironments = new Set(['development','test','staging','production']);
 const secureStores = new Set(['managed','key-vault','secrets-manager','secret-manager']);
 const localModes = new Set(['local','mock','memory','filesystem','sqlite']);
+const workloadIdentityModes = new Set(['workload-identity','managed-identity','oidc-federation']);
 const truthy = value => String(value ?? '').toLowerCase() === 'true';
 
 function httpsUrl(value) {
@@ -24,7 +25,7 @@ export function validateEnv(env) {
   if (env.DATABASE_URL && /change-me|local-only-change-me/.test(env.DATABASE_URL) && nodeEnv === 'production') throw new Error('INSECURE_PRODUCTION_DATABASE_URL');
 
   if (nodeEnv === 'production') {
-    const required = ['DATABASE_URL','OIDC_ISSUER','OIDC_AUDIENCE','OIDC_JWKS_URI','OIDC_ALLOWED_DIRECTORY_TENANTS','PUBLIC_ORIGIN','SESSION_ABSOLUTE_TTL_MINUTES','SESSION_IDLE_TTL_MINUTES','SECRET_STORE_MODE','OBJECT_STORAGE_MODE','QUEUE_MODE','SESSION_STORE_MODE','RATE_LIMIT_MODE','AUDIT_SINK_MODE','DATABASE_ROLE_MODE'];
+    const required = ['DATABASE_URL','OIDC_ISSUER','OIDC_AUDIENCE','OIDC_JWKS_URI','OIDC_ALLOWED_DIRECTORY_TENANTS','PUBLIC_ORIGIN','SESSION_ABSOLUTE_TTL_MINUTES','SESSION_IDLE_TTL_MINUTES','SECRET_STORE_MODE','OBJECT_STORAGE_MODE','QUEUE_MODE','SESSION_STORE_MODE','RATE_LIMIT_MODE','AUDIT_SINK_MODE','DATABASE_ROLE_MODE','SECRET_STORE_AUTH_MODE','CONNECTOR_CREDENTIAL_MODE','CONNECTOR_SECRET_CACHE_MODE','GRAPH_CREDENTIAL_SCOPE_MODE','PROCLAIM_CREDENTIAL_SCOPE_MODE','CONNECTOR_CREDENTIAL_GENERATION_STORE_MODE'];
     for (const key of required) if (!env[key]) throw new Error(`MISSING_${key}`);
     if (env.AUTH_MODE !== 'oidc') throw new Error('INSECURE_PRODUCTION_AUTH_MODE');
     if (!httpsUrl(env.OIDC_ISSUER)) throw new Error('INSECURE_OIDC_ISSUER');
@@ -35,6 +36,12 @@ export function validateEnv(env) {
     if (!integerInRange(env.SESSION_ABSOLUTE_TTL_MINUTES,5,1440)) throw new Error('INVALID_SESSION_ABSOLUTE_TTL');
     if (!integerInRange(env.SESSION_IDLE_TTL_MINUTES,1,120) || Number(env.SESSION_IDLE_TTL_MINUTES) > Number(env.SESSION_ABSOLUTE_TTL_MINUTES)) throw new Error('INVALID_SESSION_IDLE_TTL');
     if (!secureStores.has(env.SECRET_STORE_MODE)) throw new Error('INSECURE_SECRET_STORE_MODE');
+    if (!workloadIdentityModes.has(env.SECRET_STORE_AUTH_MODE)) throw new Error('INSECURE_SECRET_STORE_AUTH_MODE');
+    if (env.CONNECTOR_CREDENTIAL_MODE !== 'brokered-managed') throw new Error('INSECURE_CONNECTOR_CREDENTIAL_MODE');
+    if (env.CONNECTOR_SECRET_CACHE_MODE !== 'none') throw new Error('INSECURE_CONNECTOR_SECRET_CACHE_MODE');
+    if (env.GRAPH_CREDENTIAL_SCOPE_MODE !== 'least-privilege') throw new Error('INSECURE_GRAPH_CREDENTIAL_SCOPE_MODE');
+    if (env.PROCLAIM_CREDENTIAL_SCOPE_MODE !== 'least-privilege') throw new Error('INSECURE_PROCLAIM_CREDENTIAL_SCOPE_MODE');
+    if (env.CONNECTOR_CREDENTIAL_GENERATION_STORE_MODE !== 'durable') throw new Error('INSECURE_CONNECTOR_CREDENTIAL_GENERATION_STORE_MODE');
     if (localModes.has(String(env.OBJECT_STORAGE_MODE).toLowerCase())) throw new Error('INSECURE_OBJECT_STORAGE_MODE');
     if (localModes.has(String(env.QUEUE_MODE).toLowerCase())) throw new Error('INSECURE_QUEUE_MODE');
     if (localModes.has(String(env.SESSION_STORE_MODE).toLowerCase())) throw new Error('INSECURE_SESSION_STORE_MODE');
@@ -63,6 +70,10 @@ export function validateEnv(env) {
       DOCUMENT_SECURITY_PIPELINE_STATUS: 'PASS',
       GRAPH_LIVE_VALIDATED: 'true',
       PROCLAIM_LIVE_VALIDATED: 'true',
+      CONNECTOR_CREDENTIAL_ROTATION_STATUS: 'PASS',
+      CONNECTOR_CREDENTIAL_REVOCATION_STATUS: 'PASS',
+      CONNECTOR_SECRET_AUDIT_STATUS: 'PASS',
+      CONNECTOR_CREDENTIAL_GENERATION_STORE_STATUS: 'PASS',
     };
     for (const [key,expected] of Object.entries(gates)) if (String(env[key] ?? '') !== expected) throw new Error(`REAL_CLIENT_DATA_GATE_${key}`);
   }
