@@ -5,7 +5,8 @@ import path from 'node:path';
 import {appError,publicError} from './errors.js';
 import {isUtf8} from 'node:buffer';
 import {decodeInboundBody} from './inboundRequest.js';
-import {requireCapability,normalizeSession} from './auth.js';
+import {requireCapability,normalizeSession,assertMatterAccess,matterAccessAllowed} from './auth.js';
+import {InMemoryAbuseLimiter} from './abuseControl.js';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const STATIC_FILES = new Map([
@@ -32,10 +33,26 @@ function requestUrl(value) {
   catch { throw appError('invalid request URL',{code:'INVALID_REQUEST'}); }
 }
 
-function safeTraceId(req) {
-  const supplied = req.headers['x-trace-id'];
-  if (typeof supplied === 'string' && /^[A-Za-z0-9._:-]{8,128}$/.test(supplied)) return supplied;
-  return `trc_${crypto.randomUUID()}`;
+function serverTraceId() { return `trc_${crypto.randomUUID()}`; }
+function boundedLimit(url,{name='limit',fallback=50,max=200}={}) {
+  const raw=url.searchParams.get(name);
+  if(raw===null) return fallback;
+  if(!/^[1-9][0-9]{0,5}$/.test(raw)) throw appError('invalid pagination limit',{code:'INVALID_REQUEST'});
+  return Math.min(Number(raw),max);
+}
+function linkedMatterIds(event) {
+  if(!event||typeof event!=='object') return [];
+  return [...new Set([event.approvedMatterId,event.match?.matterId].filter(value=>typeof value==='string'&&value))];
+}
+function assertEventMatterAccess(session,platform,event) {
+  for(const matterId of linkedMatterIds(event)) {
+    const matter=platform.getMatter(session.tenantId,matterId);
+    if(!matter) throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+    assertMatterAccess(session,matter);
+  }
+}
+function eventVisible(session,platform,event) {
+  try { assertEventMatterAccess(session,platform,event); return true; } catch(error) { return error?.code==='NOT_FOUND'?false:(()=>{throw error;})(); }
 }
 
 function send(res, status, payload, traceId) {
@@ -103,7 +120,7 @@ function assertBodyTenant(body, session) {
   }
 }
 
-export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null}) {
+export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter()}) {
   async function integrationMutation(session, traceId, action, objectId, run) {
     const entry = {tenantId: session.tenantId, actorId: session.actorId, traceId, action, objectId: /^(?:sub|del)_[a-f0-9-]{36}$/.test(objectId) ? objectId : ['MICROSOFT_GRAPH', 'PROCLAIM'].includes(objectId) ? objectId : 'MICROSOFT_GRAPH'};
     // Fail closed before changing connector state if the audit store is unavailable.
@@ -118,14 +135,16 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
     }
   }
   return http.createServer(async (req, res) => {
-    const traceId = safeTraceId(req);
+    const traceId = serverTraceId();
     try {
+      abuseLimiter.checkIp(req);
       assertSingleSecurityHeaders(req);
       const url = requestUrl(req.url);
       if (req.method === 'GET' && serveStatic(res, uiRoot, url.pathname)) return;
       if (req.method === 'GET' && url.pathname === '/api/v1/health') return send(res, 200, {status: 'ok'}, traceId);
 
       const session = normalizeSession(await authProvider.authenticate(req.headers));
+      abuseLimiter.checkTenant(session);
       if (integrations && (url.pathname === '/api/v1/integrations' || url.pathname.startsWith('/api/v1/integrations/'))) {
         requireCapability(session, req.method === 'GET' ? 'integration:read' : 'integration:manage');
         // A shared harness is bound to one tenant. Never trust capability possession alone.
@@ -138,7 +157,9 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
 
       if (req.method === 'GET' && url.pathname === '/api/v1/matters') {
         requireCapability(session, 'matter:read');
-        return send(res, 200, {items: platform.listMatters(session.tenantId), next_cursor: null}, traceId);
+        const limit=boundedLimit(url,{fallback:100,max:200});
+        const items=platform.listMatters(session.tenantId,limit).filter(matter=>matterAccessAllowed(session,matter));
+        return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
       const matterMatch = url.pathname.match(/^\/api\/v1\/matters\/([^/]+)$/);
@@ -146,12 +167,15 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'matter:read');
         const matter = platform.getMatter(session.tenantId, routeId(matterMatch[1]));
         if (!matter) throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
+        assertMatterAccess(session,matter);
         return send(res, 200, {matter}, traceId);
       }
 
       if (req.method === 'GET' && url.pathname === '/api/v1/inbound-events') {
         requireCapability(session, 'inbound:read');
-        return send(res, 200, {items: platform.listEvents(session.tenantId, Number(url.searchParams.get('limit') || 50)), next_cursor: null}, traceId);
+        const limit=boundedLimit(url,{fallback:50,max:200});
+        const items=platform.listEvents(session.tenantId,limit).filter(event=>eventVisible(session,platform,event));
+        return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
       const eventMatch = url.pathname.match(/^\/api\/v1\/inbound-events\/([^/]+)$/);
@@ -159,6 +183,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'inbound:read');
         const event = platform.getEvent(session.tenantId, routeId(eventMatch[1]));
         if (!event) throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
+        assertEventMatterAccess(session,platform,event);
         return send(res, 200, {event}, traceId);
       }
 
@@ -184,13 +209,21 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'integration:manage');
         requireCapability(session, 'inbound:read');
         const body = await readJson(req); assertBodyTenant(body, session);
+        const event=platform.getEvent(session.tenantId,routeId(reconcileWriteback[1]));
+        if(!event) throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+        assertEventMatterAccess(session,platform,event);
         const result = platform.requestWritebackReconciliation({tenantId: session.tenantId, eventId: routeId(reconcileWriteback[1]), actorId: session.actorId, idempotencyKey: idempotencyKey(req)});
         return send(res, 202, result, traceId);
       }
 
       if (req.method === 'GET' && url.pathname === '/api/v1/exceptions') {
         requireCapability(session, 'exception:read');
-        return send(res, 200, {items: platform.listExceptions(session.tenantId), next_cursor: null}, traceId);
+        const limit=boundedLimit(url,{fallback:100,max:200});
+        const items=platform.listExceptions(session.tenantId,limit).filter(ex=>{
+          const event=platform.getEvent(session.tenantId,ex.eventId);
+          return event&&eventVisible(session,platform,event);
+        });
+        return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
       const exceptionMatch = url.pathname.match(/^\/api\/v1\/exceptions\/([^/]+)\/resolve$/);
@@ -199,13 +232,29 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         const body = await readJson(req);
         assertBodyTenant(body, session);
         if (Object.keys(body).some(key=>!['tenantId','resolution','matterId','notes'].includes(key))) throw appError('invalid review request',{code:'INVALID_REQUEST'});
+        if(body.matterId!=null&&(typeof body.matterId!=='string'||!body.matterId.trim()||body.matterId.length>200||/[\x00-\x1f\x7f]/.test(body.matterId)))throw appError('invalid review request',{code:'INVALID_REQUEST'});
+        if(body.notes!=null&&(typeof body.notes!=='string'||body.notes.length>4096||/[\x00\x7f]/.test(body.notes)))throw appError('invalid review request',{code:'INVALID_REQUEST'});
+        if(typeof platform.getException==='function'&&typeof platform.getEvent==='function'){
+          const ex=platform.getException(session.tenantId,routeId(exceptionMatch[1]));
+          if(!ex) throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+          const event=platform.getEvent(session.tenantId,ex.eventId);
+          if(!event) throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+          assertEventMatterAccess(session,platform,event);
+          if(body.matterId!=null&&typeof platform.getMatter==='function'){const matter=platform.getMatter(session.tenantId,body.matterId);if(!matter)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});assertMatterAccess(session,matter);}
+        }
         const result = platform.resolveException({tenantId: session.tenantId, exceptionId: routeId(exceptionMatch[1]), resolution: body.resolution, matterId: body.matterId ?? null, notes: body.notes ?? null, actorId: session.actorId, idempotencyKey: idempotencyKey(req)});
         return send(res, 200, result, traceId);
       }
 
       if (req.method === 'GET' && url.pathname === '/api/v1/audit') {
         requireCapability(session, 'audit:read');
-        return send(res, 200, {items: platform.audits(session.tenantId), next_cursor: null}, traceId);
+        const limit=boundedLimit(url,{fallback:100,max:500});
+        const items=platform.audits(session.tenantId,limit).filter(item=>{
+          if(!item.matterId) return true;
+          const matter=platform.getMatter(session.tenantId,item.matterId);
+          return matter&&matterAccessAllowed(session,matter);
+        });
+        return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
       if (integrations && req.method === 'GET' && url.pathname === '/api/v1/integrations') {
@@ -294,7 +343,11 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         const body = await readJson(req);
         assertBodyTenant(body, session);
         if (body.eventId != null && (typeof body.eventId !== 'string' || !body.eventId || body.eventId.length > 200)) throw appError('invalid eventId', {code:'INVALID_REQUEST'});
-        if (body.eventId != null && !platform.getEvent(session.tenantId, body.eventId)) throw appError('resource unavailable', {status:404,code:'NOT_FOUND'});
+        if (body.eventId != null) {
+          const event=platform.getEvent(session.tenantId,body.eventId);
+          if(!event) throw appError('resource unavailable', {status:404,code:'NOT_FOUND'});
+          assertEventMatterAccess(session,platform,event);
+        }
         const workerContext = {tenantId: session.tenantId, eventId: body.eventId ?? null};
         const result = body.worker === 'inbound' ? await platform.processNext(workerContext)
           : body.worker === 'writeback' ? await platform.processWritebackNext(workerContext)

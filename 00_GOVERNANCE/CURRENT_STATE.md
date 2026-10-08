@@ -357,3 +357,15 @@ stale or unverified acknowledgements from claiming persisted validation evidence
 Platform: 1110/1110, including 86 new cases. No Proclaim writes, live credentials,
 customer access, data migration or new legal scope. D-018, integration evidence gates
 and human security review remain unchanged. Requires corrected V56 on main.
+
+## 2026-10-08 — Security hardening and production evidence gates — V58
+
+The V58 security batch hardens tenant-consistent database relationships, restricted
+matter membership, security zones, document overrides, matter-bound step-up
+break-glass, append-only audit behaviour, production OIDC/configuration boundaries,
+server-owned trace identity, hostile-file evidence semantics, connector credential/
+payload constraints, API abuse bounds and CI/supply-chain controls. Platform: 1123/1123;
+production-shape contracts: 27/27; security policy: 7/7; regression scan clean.
+Real customer data remains fail-closed until managed infrastructure, live Graph and
+Proclaim validation, restore/monitoring evidence and an independent penetration test
+are completed. No new legal workflow scope or autonomous legal action is introduced.

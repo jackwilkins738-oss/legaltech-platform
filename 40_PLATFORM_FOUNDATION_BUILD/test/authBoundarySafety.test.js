@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import {StaticAuthProvider,VerifiedOidcClaimsMapper,requireCapability} from '../src/auth.js';
+import {StaticAuthProvider,VerifiedOidcClaimsMapper,OidcAuthProvider,requireCapability,matterAccessAllowed,documentAccessAllowed} from '../src/auth.js';
 import {createApiServer} from '../src/httpApi.js';
 const session=extra=>({tenantId:'tenant-a',actorId:'operator',roles:['reviewer'],capabilities:['matter:read','inbound:create'],...extra});
 const claims=extra=>({__verified:true,tenant_id:'tenant-a',sub:'operator',roles:['reviewer'],capabilities:['matter:read'],...extra});
@@ -33,6 +33,35 @@ test('capability array getters are not executed',()=>{let calls=0;const caps=[];
 test('valid maximum bounds and null prototype claims remain supported',()=>{const c=Object.assign(Object.create(null),claims({tenant_id:'x'.repeat(200),sid:'s'.repeat(200),roles:Array.from({length:128},(_,i)=>'role_'+i)}));const s=new VerifiedOidcClaimsMapper().mapVerifiedClaims(c);assert.equal(s.roles.length,128);assert.equal(s.tenantId.length,200);});
 test('static inherited configuration cannot supply identities',()=>denied(()=>new StaticAuthProvider([Object.create({token:'synthetic',...session()})]),'AUTH_CONFIGURATION_INVALID'));
 test('OIDC marker must be own boolean true',()=>{for(const marker of [1,'true',false,null])denied(()=>new VerifiedOidcClaimsMapper().mapVerifiedClaims(claims({__verified:marker})),'OIDC_VERIFICATION_REQUIRED');});
-test('session extras and token are absent from authenticated projection',async()=>{const auth=new StaticAuthProvider([{token:'synthetic',...session({privatePayload:'synthetic-private'})}]);const s=await auth.authenticate({authorization:'Bearer synthetic'});assert.deepEqual(Object.keys(s).sort(),['actorId','capabilities','roles','sessionId','tenantId']);assert.doesNotMatch(JSON.stringify(s),/privatePayload|synthetic-private|token/);});
+test('session extras and token are absent from authenticated projection',async()=>{const auth=new StaticAuthProvider([{token:'synthetic',...session({privatePayload:'synthetic-private'})}]);const s=await auth.authenticate({authorization:'Bearer synthetic'});assert.deepEqual(Object.keys(s).sort(),['actorId','breakGlassGrants','capabilities','documentAccessRefs','matterMembershipIds','roles','securityZoneIds','sessionId','tenantId']);assert.doesNotMatch(JSON.stringify(s),/privatePayload|synthetic-private|token/);});
 test('HTTP getter identity returns safe 401 without executing getter',async t=>{let calls=0;const s=session();Object.defineProperty(s,'tenantId',{get(){calls++;return 'tenant-a';}});const x=await api(t,()=>s);const r=await fetch(x.base+'/api/v1/matters');assert.equal(r.status,401);assert.equal(calls,0);assert.deepEqual(x.calls,[]);});
 test('HTTP review attribution snapshots actor and tenant before awaiting body',async t=>{const s=session({capabilities:['exception:resolve']});let ready;const auth=new Promise(r=>ready=r);const calls=[];const server=createApiServer({authProvider:{authenticate(){ready();return s;}},platform:{resolveException(x){calls.push(x);return {resolved:true};}}});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));});const status=await new Promise((resolve,reject)=>{const req=http.request({host:'127.0.0.1',port:server.address().port,path:'/api/v1/exceptions/synthetic/resolve',method:'POST',headers:{'content-type':'application/json','idempotency-key':'snapshot-review'}},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});req.on('error',reject);req.setTimeout(3000,()=>req.destroy(Error('test request timeout')));req.flushHeaders();auth.then(()=>setImmediate(()=>{s.actorId='other';s.tenantId='tenant-b';req.end(JSON.stringify({resolution:'DISMISS',tenantId:'tenant-a'}));}));});assert.equal(status,200);assert.equal(calls[0].actorId,'operator');assert.equal(calls[0].tenantId,'tenant-a');});
+
+
+test('restricted matter requires explicit server-derived membership even inside the same tenant',()=>{
+  const base=session({capabilities:['matter:read'],securityZoneIds:['zone-secret']});
+  assert.equal(matterAccessAllowed(base,{id:'m-private',tenantId:'tenant-a',visibility:'PRIVATE',securityZoneId:'zone-secret'}),false);
+  assert.equal(matterAccessAllowed({...base,matterMembershipIds:['m-private']},{id:'m-private',tenantId:'tenant-a',visibility:'PRIVATE',securityZoneId:'zone-secret'}),true);
+});
+
+test('document restriction remains stricter than parent matter access',()=>{
+  const matter={id:'m-a',tenantId:'tenant-a'};
+  const doc={tenantId:'tenant-a',matterId:'m-a',documentRef:'doc-privileged',mode:'PRIVILEGED'};
+  assert.equal(documentAccessAllowed(session({capabilities:['matter:read']}),doc,matter),false);
+  assert.equal(documentAccessAllowed(session({capabilities:['matter:read'],documentAccessRefs:['doc-privileged']}),doc,matter),true);
+});
+
+test('OIDC auth provider only trusts output from injected cryptographic verifier boundary',async()=>{
+  const seen=[];
+  const provider=new OidcAuthProvider({verifyBearerToken:async token=>{seen.push(token);return {tenant_id:'tenant-a',sub:'operator',roles:['reviewer'],capabilities:['matter:read'],security_zones:['zone-a'],sid:'oidc-session'};}});
+  const s=await provider.authenticate({authorization:'Bearer signed.jwt.value'});
+  assert.deepEqual(seen,['signed.jwt.value']);
+  assert.equal(s.tenantId,'tenant-a');assert.equal(s.sessionId,'oidc-session');assert.deepEqual(s.securityZoneIds,['zone-a']);
+});
+
+test('OIDC verifier failure and attempted verified-marker injection fail closed',async()=>{
+  const failed=new OidcAuthProvider({verifyBearerToken:async()=>{throw new Error('bad signature');}});
+  await assert.rejects(failed.authenticate({authorization:'Bearer signed.jwt.value'}),e=>e.code==='AUTH_REQUIRED');
+  const injected=new OidcAuthProvider({verifyBearerToken:async()=>({__verified:true,tenant_id:'tenant-a',sub:'operator'})});
+  await assert.rejects(injected.authenticate({authorization:'Bearer signed.jwt.value'}),e=>e.code==='OIDC_VERIFICATION_REQUIRED');
+});

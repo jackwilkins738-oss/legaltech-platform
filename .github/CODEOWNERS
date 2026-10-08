@@ -1,10 +1,17 @@
-# Replace this with your GitHub username/team after the first push.
 * @jackwilkins738-oss
 
-# Security-sensitive areas should always have an explicit owner/reviewer.
+# Security-sensitive areas require explicit review ownership.
+/.github/workflows/ @jackwilkins738-oss
+/.github/dependabot.yml @jackwilkins738-oss
 /09_SECURITY_PRIVACY/ @jackwilkins738-oss
+/30_PRODUCTION_SHAPE_SCAFFOLD/db/ @jackwilkins738-oss
+/30_PRODUCTION_SHAPE_SCAFFOLD/src/auth.js @jackwilkins738-oss
+/30_PRODUCTION_SHAPE_SCAFFOLD/src/env.js @jackwilkins738-oss
 /32_SECURITY_REGRESSION_AUTOMATION/ @jackwilkins738-oss
 /40_PLATFORM_FOUNDATION_BUILD/src/auth.js @jackwilkins738-oss
 /40_PLATFORM_FOUNDATION_BUILD/src/httpApi.js @jackwilkins738-oss
+/40_PLATFORM_FOUNDATION_BUILD/src/fileSafety.js @jackwilkins738-oss
+/40_PLATFORM_FOUNDATION_BUILD/src/connectorSecurity.js @jackwilkins738-oss
+/40_PLATFORM_FOUNDATION_BUILD/src/abuseControl.js @jackwilkins738-oss
 /40_PLATFORM_FOUNDATION_BUILD/src/graphHarness.js @jackwilkins738-oss
 /40_PLATFORM_FOUNDATION_BUILD/src/proclaimValidation.js @jackwilkins738-oss
