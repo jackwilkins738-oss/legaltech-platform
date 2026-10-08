@@ -7,11 +7,11 @@ import {normalizeReviewRequest, reviewScope, reviewFingerprint} from './reviewRe
 import {inboundEventView, requestInboundRecovery} from './inboundRecovery.js';
 import {normalizeInboundInput, inboundFingerprint, ingestScope} from './inboundRequest.js';
 import {WritebackWorker, newWritebackCommand, writebackScope} from './writeback.js';
-import crypto from 'node:crypto'; import {appError} from './errors.js'; import {inspectFile,basicIngestAccepted} from './fileSafety.js'; import {matchMatter} from './matcher.js';
+import crypto from 'node:crypto'; import {appError} from './errors.js'; import {inspectFile,basicIngestAccepted} from './fileSafety.js'; import {matchMatter} from './matcher.js'; import {SecurityMonitor} from './securityMonitoring.js';
 class SupersededInbound extends Error {}
 class InvalidInboundEvidence extends Error {}
 export class Platform {
-  constructor({store,objectStorage,aiGateway,proclaim,graph=null,documentSecurity=null,requireDocumentSecurityEvidence=false}){this.store=store;this.objectStorage=objectStorage;this.aiGateway=aiGateway;this.proclaim=proclaim;this.graph=graph;this.documentSecurity=documentSecurity;this.requireDocumentSecurityEvidence=requireDocumentSecurityEvidence===true;if(this.requireDocumentSecurityEvidence&&(!documentSecurity||typeof documentSecurity.assess!=='function'||typeof documentSecurity.verifyEvidence!=='function'))throw new Error('DOCUMENT_SECURITY_PIPELINE_REQUIRED');this.writebackWorker=new WritebackWorker({store,proclaim});}
+  constructor({store,objectStorage,aiGateway,proclaim,graph=null,documentSecurity=null,requireDocumentSecurityEvidence=false,securityMonitor=null,securityAlertSink=null,requireSecurityAlertSink=false}){this.store=store;this.objectStorage=objectStorage;this.aiGateway=aiGateway;this.proclaim=proclaim;this.graph=graph;this.documentSecurity=documentSecurity;this.requireDocumentSecurityEvidence=requireDocumentSecurityEvidence===true;if(this.requireDocumentSecurityEvidence&&(!documentSecurity||typeof documentSecurity.assess!=='function'||typeof documentSecurity.verifyEvidence!=='function'))throw new Error('DOCUMENT_SECURITY_PIPELINE_REQUIRED');if(requireSecurityAlertSink===true&&(!securityAlertSink||typeof securityAlertSink.emit!=='function'))throw new Error('SECURITY_ALERT_SINK_REQUIRED');this.securityMonitor=securityMonitor??new SecurityMonitor({store,alertSink:securityAlertSink});this.store.attachSecurityMonitor(this.securityMonitor);this.writebackWorker=new WritebackWorker({store,proclaim});}
   #trace(){return `trc_${crypto.randomUUID()}`;}
   ingest({tenantId,input,idempotencyKey}) {
     if (typeof tenantId!=='string'||!tenantId||tenantId.length>200) throw appError('tenant required',{status:401,code:'TENANT_REQUIRED'});
@@ -301,4 +301,6 @@ export class Platform {
   listEvents(tenantId,limit=50){return this.store.listEvents(tenantId,limit).map(event=>inboundEventView(this.store,event));}
   listMatters(tenantId,limit=100){return this.store.listMatters(tenantId,limit);}
   audits(tenantId,limit=100){return this.store.listAudits(tenantId,limit).map(reviewAuditView);}
+  verifyAuditChain(tenantId){return this.store.verifyAuditChain(tenantId);}
+  securityAlerts(tenantId,limit=100){return this.store.listSecurityAlerts(tenantId,limit);}
 }

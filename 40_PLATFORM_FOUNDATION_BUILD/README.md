@@ -264,3 +264,7 @@ The foundation now includes bounded MIME/signature inspection, Office/archive sa
 
 ## V61 connector credential containment boundary
 The foundation now includes strict managed-secret references and a tenant/kind/purpose-bound credential broker. Secret bytes are short-lived and zeroed, stale generations are rejected after rotation, registry/API surfaces reject or redact credential material, and production configuration requires workload/federated identity plus least-privilege connector identities. See `docs/V61_CONNECTOR_CREDENTIAL_CONTAINMENT.md`. No live vault, Graph or Proclaim credential is claimed.
+
+
+## V62 security monitoring and audit integrity boundary
+The foundation now hash-chains synthetic audit entries, verifies the chain, keeps local audit/security-alert ledgers append-only and emits bounded security signals for privileged connector actions, break-glass use, anomalous session context, bulk/cross-matter reads and connector failure bursts. Production-shaped configuration requires a managed alert sink, strict redaction, server-generated incident correlation and explicit retention. See `docs/V62_SECURITY_MONITORING.md` and `TEST_RESULTS_V62.md`. This is monitoring/reference logic only; no live SIEM/SOC integration is claimed.
