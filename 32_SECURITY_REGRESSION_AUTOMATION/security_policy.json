@@ -34,6 +34,11 @@
     "server session",
     "session revocation",
     "csrf",
-    "mfa step-up"
+    "mfa step-up",
+    "mime signature",
+    "decompression bomb",
+    "isolated parser",
+    "quarantine storage",
+    "document security pipeline"
   ]
 }

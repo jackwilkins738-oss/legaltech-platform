@@ -15,3 +15,7 @@ def test_github_actions_are_immutable_sha_pinned(): assert scan_unpinned_actions
 
 def test_production_identity_security_concepts_required():
  required=set(policy['required_test_concepts']); assert {'jwks','server session','session revocation','csrf','mfa step-up'} <= required
+
+
+def test_hostile_document_security_concepts_required():
+ required=set(policy['required_test_concepts']); assert {'mime signature','decompression bomb','isolated parser','quarantine storage','document security pipeline'} <= required

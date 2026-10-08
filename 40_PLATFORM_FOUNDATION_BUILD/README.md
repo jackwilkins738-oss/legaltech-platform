@@ -257,3 +257,7 @@ and independent penetration-test evidence exists. See
 
 ## V59 production identity boundary
 The foundation now includes a production-shaped OIDC/JWKS verification and opaque server-session boundary. See `docs/V59_PRODUCTION_IDENTITY_BOUNDARY.md`. The local static bearer flow remains synthetic-only; real Entra and managed-session evidence is still required before real-client-data mode can be approved.
+
+
+## V60 hostile-document containment boundary
+The foundation now includes bounded MIME/signature inspection, Office/archive safety checks, decompression-bomb and path-traversal rejection, managed malware-scan evidence binding, isolated-parser evidence binding and a production mode that refuses AI/approval until clean isolated document evidence exists. See `docs/V60_HOSTILE_DOCUMENT_BOUNDARY.md`. This remains a boundary/reference implementation: no real malware scanner or parser service is claimed.

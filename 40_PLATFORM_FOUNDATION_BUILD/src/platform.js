@@ -11,7 +11,7 @@ import crypto from 'node:crypto'; import {appError} from './errors.js'; import {
 class SupersededInbound extends Error {}
 class InvalidInboundEvidence extends Error {}
 export class Platform {
-  constructor({store,objectStorage,aiGateway,proclaim,graph=null}){this.store=store;this.objectStorage=objectStorage;this.aiGateway=aiGateway;this.proclaim=proclaim;this.graph=graph;this.writebackWorker=new WritebackWorker({store,proclaim});}
+  constructor({store,objectStorage,aiGateway,proclaim,graph=null,documentSecurity=null,requireDocumentSecurityEvidence=false}){this.store=store;this.objectStorage=objectStorage;this.aiGateway=aiGateway;this.proclaim=proclaim;this.graph=graph;this.documentSecurity=documentSecurity;this.requireDocumentSecurityEvidence=requireDocumentSecurityEvidence===true;if(this.requireDocumentSecurityEvidence&&(!documentSecurity||typeof documentSecurity.assess!=='function'||typeof documentSecurity.verifyEvidence!=='function'))throw new Error('DOCUMENT_SECURITY_PIPELINE_REQUIRED');this.writebackWorker=new WritebackWorker({store,proclaim});}
   #trace(){return `trc_${crypto.randomUUID()}`;}
   ingest({tenantId,input,idempotencyKey}) {
     if (typeof tenantId!=='string'||!tenantId||tenantId.length>200) throw appError('tenant required',{status:401,code:'TENANT_REQUIRED'});
@@ -41,10 +41,10 @@ export class Platform {
       }
       const traceId=this.#trace(),eventId=this.store.uid('evt'),attachments=[];
       for (const attachment of normalized.attachments) {
-        const safety=inspectFile({filename:attachment.filename,bytes:attachment.bytes});
+        const safety=inspectFile({filename:attachment.filename,bytes:attachment.bytes,contentType:attachment.contentType});
         let objectRef=null;
         if (basicIngestAccepted(safety.verdict)) objectRef=this.objectStorage.put({tenantId,bytes:attachment.bytes,contentType:attachment.contentType,metadata:{filename:attachment.filename}}).objectRef;
-        attachments.push({filename:attachment.filename,safety,objectRef});
+        attachments.push({filename:attachment.filename,contentType:attachment.contentType,safety,objectRef});
       }
       const event={id:eventId,tenantId,traceId,status:'QUEUED',sourceSystem:normalized.sourceSystem,
         externalEventId:normalized.externalEventId,subject:normalized.subject,body:normalized.body,attachments,ingestFingerprint:fingerprint};
@@ -90,15 +90,52 @@ export class Platform {
     return {eventId:event.id,status:event.status,match:event.match,
       classification:event.classification,exceptionId:event.processing?.exceptionId||null,replayed};
   }
-  #verifyAttachments(event) {
+  #documentDescriptor(event,attachment,bytes) {
+    const fresh=inspectFile({filename:attachment.filename,bytes,contentType:attachment.contentType??'application/octet-stream'});
+    if(!basicIngestAccepted(fresh.verdict)||fresh.contentEnvelope?.verdict!=='SCAN_REQUIRED')throw new Error('document security descriptor unavailable');
+    return Object.freeze({tenantId:event.tenantId,objectRef:attachment.objectRef,sha256:fresh.contentEnvelope.sha256,size:fresh.contentEnvelope.size,contentType:fresh.contentEnvelope.contentType,envelope:fresh.contentEnvelope});
+  }
+  #verifyAttachments(event,{requireDocumentSecurity=this.requireDocumentSecurityEvidence}={}) {
     if(!Array.isArray(event.attachments))throw new Error('attachment state unavailable');
     for(const attachment of event.attachments) {
       if(!attachment||!(basicIngestAccepted(attachment.safety?.verdict)||attachment.safety?.verdict==='QUARANTINE'))throw new Error('attachment state unavailable');
       if(attachment.safety.verdict==='QUARANTINE')continue;
       // The durable safety label is insufficient if the owned object is unavailable.
       const bytes=this.objectStorage.get({tenantId:event.tenantId,objectRef:attachment.objectRef});
-      if(!Buffer.isBuffer(bytes)||!basicIngestAccepted(inspectFile({filename:attachment.filename,bytes}).verdict))throw new Error('attachment unavailable');
+      const fresh=Buffer.isBuffer(bytes)?inspectFile({filename:attachment.filename,bytes,contentType:attachment.contentType??'application/octet-stream'}):null;
+      if(!Buffer.isBuffer(bytes)||!basicIngestAccepted(fresh?.verdict))throw new Error('attachment unavailable');
+      if(requireDocumentSecurity){const descriptor=this.#documentDescriptor(event,attachment,bytes);if(!this.documentSecurity.verifyEvidence(descriptor,attachment.contentSecurity))throw new Error('document security evidence unavailable');}
     }
+  }
+  async secureAttachments({tenantId,eventId,actorId='document-security-worker'}) {
+    if(!this.documentSecurity)throw appError('document security unavailable',{status:503,code:'DOCUMENT_SECURITY_UNAVAILABLE'});
+    if(typeof actorId!=='string'||!actorId||actorId.length>200)throw appError('invalid document security request',{code:'INVALID_REQUEST'});
+    const event=this.store.getEvent(tenantId,eventId);if(!event)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+    if(event.status!=='QUEUED')throw appError('document security state unavailable',{status:409,code:'DOCUMENT_SECURITY_STATE'});
+    const fingerprint=sourceFingerprint(event),results=[];
+    for(const attachment of event.attachments){
+      if(!basicIngestAccepted(attachment.safety?.verdict)){results.push({evidence:Object.freeze({verdict:'QUARANTINE',reason:attachment.safety?.reason||'basic_ingest_rejected'}),blocked:true});continue;}
+      const bytes=this.objectStorage.get({tenantId,objectRef:attachment.objectRef});if(!Buffer.isBuffer(bytes))throw appError('attachment evidence unavailable',{status:409,code:'ATTACHMENT_UNAVAILABLE'});
+      const fresh=inspectFile({filename:attachment.filename,bytes,contentType:attachment.contentType??'application/octet-stream'});
+      if(!basicIngestAccepted(fresh.verdict))throw appError('attachment evidence unavailable',{status:409,code:'ATTACHMENT_UNAVAILABLE'});
+      if(fresh.contentEnvelope?.verdict!=='SCAN_REQUIRED'){results.push({evidence:Object.freeze({verdict:'QUARANTINE',reason:fresh.contentEnvelope?.reason||'managed_scan_required'}),blocked:true});continue;}
+      const descriptor=this.#documentDescriptor(event,attachment,bytes),evidence=await this.documentSecurity.assess(descriptor);
+      results.push({evidence,blocked:!this.documentSecurity.verifyEvidence(descriptor,evidence)});
+    }
+    return this.store.transaction(()=>{
+      const current=this.store.getEvent(tenantId,eventId);if(!current||current.status!=='QUEUED'||sourceFingerprint(current)!==fingerprint)throw appError('document security state changed',{status:409,code:'DOCUMENT_SECURITY_STATE'});
+      this.#verifyAttachments(current,{requireDocumentSecurity:false});
+      current.attachments=current.attachments.map((attachment,index)=>({...attachment,contentSecurity:results[index].evidence}));
+      const blocked=results.filter(item=>item.blocked);
+      if(blocked.length){
+        const exception={id:this.store.uid('exc'),tenantId,eventId:current.id,status:'OPEN',type:'FILE_SAFETY',reason:'managed_document_security_block',candidates:[]};
+        this.store.putException(exception);current.status='REVIEW_REQUIRED';current.processing={state:'SECURITY_BLOCKED',exceptionId:exception.id,evidenceVersion:'v60-security'};
+        this.store.updateEvent(current);this.store.audit({tenantId,traceId:current.traceId,action:'DOCUMENT_SECURITY_EVALUATED',objectId:current.id,actorId,outcome:'BLOCKED',reason:'managed_document_security_block'});
+        return {eventId:current.id,status:current.status,exceptionId:exception.id,clean:results.length-blocked.length,blocked:blocked.length};
+      }
+      this.store.updateEvent(current);this.store.audit({tenantId,traceId:current.traceId,action:'DOCUMENT_SECURITY_EVALUATED',objectId:current.id,actorId,outcome:'SUCCESS',reason:'clean_isolated'});
+      return {eventId:current.id,status:current.status,exceptionId:null,clean:results.length,blocked:0};
+    });
   }
   async #processInbound(job) {
     const event = this.store.getEvent(job.tenantId,job.payload.eventId);
@@ -219,6 +256,7 @@ export class Platform {
     return this.store.transaction(() => {
       const event = this.store.getEvent(tenantId,eventId);
       if (!event) throw appError('event unavailable', {status:404,code:'NOT_FOUND'});
+      if(this.requireDocumentSecurityEvidence){try{this.#verifyAttachments(event);}catch{throw appError('document security evidence unavailable',{status:409,code:'DOCUMENT_SECURITY_UNAVAILABLE'});}}
       const scope=approvalScope(tenantId,idempotencyKey);
       const previous=this.store.getIdempotent(scope)||this.store.getIdempotent(`${tenantId}:approve:${idempotencyKey}`);
       if (previous) {
