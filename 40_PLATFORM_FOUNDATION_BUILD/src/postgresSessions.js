@@ -11,7 +11,8 @@ const tokenValid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(valu
 const brokerSql=`SELECT pg_has_role(current_user,'legaltech_session_broker','MEMBER') AS broker,
   EXISTS (SELECT 1 FROM pg_roles z WHERE pg_has_role(current_user,z.oid,'MEMBER')
     AND (z.rolsuper OR z.rolbypassrls OR z.rolcreatedb OR z.rolcreaterole OR z.rolreplication
-      OR z.rolname IN ('pg_read_all_data','pg_write_all_data','pg_read_server_files','pg_write_server_files','pg_execute_server_program')))
+      OR z.rolname IN ('pg_read_all_data','pg_write_all_data','pg_read_server_files','pg_write_server_files','pg_execute_server_program',
+        'legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter')))
     OR has_database_privilege(current_user,current_database(),'CREATE') AS privileged,
   EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='identity_security' AND pg_has_role(current_user,c.relowner,'MEMBER')) AS owns_relations,

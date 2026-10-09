@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V119 — Shared containment and abuse budgets
+
+V119 adds PostgreSQL interlock reader/operator boundaries and shared IP, tenant and actor read budgets with a common key/policy fingerprint. Migration 048 isolates security metadata from domain/session credentials and records interlock transitions atomically. Async document, connector, notification and writeback services now await containment; synchronous reference exports reject remote checks. See `40_PLATFORM_FOUNDATION_BUILD/docs/V119_SHARED_SECURITY_CONTROLS.md`.
+
+Local suites pass 1,820 platform and 138 scaffold tests, including 29 new V119 regressions. The real PostgreSQL test is skipped locally and its expanded PR job must pass before merge. Neither migration 048 nor deployed runtime/provider wiring has been validated here. Managed audit/other shared adapters, operational controls and full production composition remain outstanding. This is an authorised D-018 security integration/defect exception; the pre-TO freeze and customer-data deployment gate remain in force.
+
 ## V118 — Shared identity and tenant transaction foundation
 
 V118 adds a PostgreSQL session/revocation store, separate identity-broker role, current-permission refresh and asynchronous cookie exchange/logout wiring. The domain transaction boundary binds UUID tenant/actor context to one connection and discards failed, timed-out or contaminated backends. Migration 047 and a dedicated real PostgreSQL CI integration check cover the shared path. See `40_PLATFORM_FOUNDATION_BUILD/docs/V118_SHARED_IDENTITY.md`.

@@ -173,7 +173,7 @@ export class WritebackWorker {
       let command = this.#load(job);
       if (command.state === 'RECONCILED') return this.#finish(job, command);
       if(this.securityInterlock&&!job.payload.reconcileOnly&&(command.state==='PENDING'||command.state==='FAILED_KNOWN')){
-        try{this.securityInterlock.assertAllowed({tenantId:job.tenantId,operation:'PROCLAIM_WRITE'});}
+        try{await this.securityInterlock.assertAllowed({tenantId:job.tenantId,operation:'PROCLAIM_WRITE'});}
         catch(error){if(error?.message!=='SECURITY_INTERLOCK_ACTIVE')throw error;if(!this.store.failClaimedJob(job,'SECURITY_INTERLOCK_ACTIVE',{retry:true,delayMs:60_000}))throw new SupersededClaim();this.store.audit({tenantId:job.tenantId,traceId:job.traceId,actorId:'system:writeback',action:'PROCLAIM_WRITE_SECURITY_INTERLOCK',objectId:job.payload.eventId,outcome:'BLOCKED',reason:'SECURITY_INTERLOCK_ACTIVE'});return {jobId:job.id,eventId:job.payload.eventId,status:'DEFERRED',error:'SECURITY_INTERLOCK_ACTIVE'};}
       }
       const attempt = this.store.transaction(() => {

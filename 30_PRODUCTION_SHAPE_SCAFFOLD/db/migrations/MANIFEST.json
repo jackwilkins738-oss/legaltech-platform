@@ -235,6 +235,11 @@
       "file": "047_shared_identity_sessions.sql",
       "sha256": "14c566d19b7a21892e9eb8a0861f5ca709616cb0360a832339412ecf47049c82",
       "destructive": false
+    },
+    {
+      "file": "048_shared_security_controls.sql",
+      "sha256": "894c7ca30a29b59fb72e9db64aaecc47f2ba129e61f39cfc5afb3d433fbd626d",
+      "destructive": false
     }
   ]
 }

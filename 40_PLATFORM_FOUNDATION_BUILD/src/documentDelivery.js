@@ -31,17 +31,17 @@ export class DocumentDeliveryService {
   }
   async issueGrant(input){
     exact(input,['session','documentRef','traceId','ttlMs'],'DOCUMENT_DELIVERY_REQUEST_INVALID');const session=normalizeSession(input.session),documentRef=id(input.documentRef,'DOCUMENT_DELIVERY_DOCUMENT_REQUIRED',512),traceId=id(input.traceId,'DOCUMENT_DELIVERY_TRACE_REQUIRED'),ttlMs=Number(input.ttlMs);
-    if(!Number.isInteger(ttlMs)||ttlMs<1000||ttlMs>MAX_TTL_MS)throw new Error('DOCUMENT_DELIVERY_TTL_INVALID');this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'DOCUMENT_DELIVERY'});
-    const evidence=await this.#resolveSafe(session.tenantId,documentRef);this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'DOCUMENT_DELIVERY'});if(!this.#authorized(session,evidence,documentRef,traceId))throw new Error('DOCUMENT_DELIVERY_UNAVAILABLE');
+    if(!Number.isInteger(ttlMs)||ttlMs<1000||ttlMs>MAX_TTL_MS)throw new Error('DOCUMENT_DELIVERY_TTL_INVALID');await this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'DOCUMENT_DELIVERY'});
+    const evidence=await this.#resolveSafe(session.tenantId,documentRef);await this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'DOCUMENT_DELIVERY'});if(!this.#authorized(session,evidence,documentRef,traceId))throw new Error('DOCUMENT_DELIVERY_UNAVAILABLE');
     const token=crypto.randomBytes(32).toString('base64url'),row={id:`dgr_${crypto.randomUUID()}`,tenantId:session.tenantId,actorId:session.actorId,matterId:evidence.matter.id,documentRefHash:sha(documentRef),bindingHash:evidence.bindingHash,tokenHash:sha(token),status:'ACTIVE',issuedAt:this.#at(),expiresAt:new Date(this.#now()+ttlMs).toISOString(),consumedAt:null};this.#grants.set(`${row.tenantId}:${row.id}`,row);this.#event(row,'DOCUMENT_DELIVERY_GRANT_ISSUED',traceId,{expiresAt:row.expiresAt,documentRefHash:row.documentRefHash,bindingHash:row.bindingHash});return Object.freeze({grantId:row.id,token,expiresAt:row.expiresAt});
   }
   async consumeGrant(input){
     exact(input,['session','grantId','traceId','token','documentRef'],'DOCUMENT_DELIVERY_CONSUME_INVALID');const session=normalizeSession(input.session),grantId=id(input.grantId,'DOCUMENT_DELIVERY_GRANT_INVALID'),traceId=id(input.traceId,'DOCUMENT_DELIVERY_TRACE_REQUIRED'),documentRef=id(input.documentRef,'DOCUMENT_DELIVERY_DOCUMENT_REQUIRED',512);
-    if(typeof input.token!=='string'||input.token.length<32||input.token.length>128)throw new Error('DOCUMENT_DELIVERY_GRANT_INVALID');this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'DOCUMENT_DELIVERY'});
+    if(typeof input.token!=='string'||input.token.length<32||input.token.length>128)throw new Error('DOCUMENT_DELIVERY_GRANT_INVALID');await this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'DOCUMENT_DELIVERY'});
     const row=this.#grants.get(`${session.tenantId}:${grantId}`);if(!row||row.status!=='ACTIVE'||row.actorId!==session.actorId||Date.parse(row.expiresAt)<=this.#now()||row.documentRefHash!==sha(documentRef)||!equalHex(row.tokenHash,sha(input.token)))throw new Error('DOCUMENT_DELIVERY_GRANT_INVALID');
     const evidence=await this.#resolveSafe(session.tenantId,documentRef);if(evidence.matter.id!==row.matterId||!equalHex(evidence.bindingHash,row.bindingHash)||!this.#authorized(session,evidence,documentRef,traceId))throw new Error('DOCUMENT_DELIVERY_GRANT_INVALID');
     // Recheck after every await and immediately before the synchronous one-use claim.
-    this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'DOCUMENT_DELIVERY'});
+    await this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'DOCUMENT_DELIVERY'});
     if(row.status!=='ACTIVE'||Date.parse(row.expiresAt)<=this.#now())throw new Error('DOCUMENT_DELIVERY_GRANT_INVALID');
     row.status='CONSUMED';row.consumedAt=this.#at();let bytes;try{bytes=this.#storage.get({tenantId:session.tenantId,objectRef:evidence.objectRef});}catch{this.#event(row,'DOCUMENT_DELIVERY_FAILED',traceId,{reasonCode:'STORAGE_UNAVAILABLE'});throw new Error('DOCUMENT_DELIVERY_UNAVAILABLE');}
     if(!Buffer.isBuffer(bytes)||bytes.length!==evidence.size||sha(bytes)!==evidence.sha256){this.#event(row,'DOCUMENT_DELIVERY_FAILED',traceId,{reasonCode:'INTEGRITY_FAILURE'});throw new Error('DOCUMENT_DELIVERY_UNAVAILABLE');}
