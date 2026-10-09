@@ -42,7 +42,7 @@ function audienceMatches(value,expected) {
   if(typeof value==='string')return value===expected;
   return Array.isArray(value)&&Object.getPrototypeOf(value)===Array.prototype&&value.length>0&&value.length<=16&&value.every(x=>typeof x==='string')&&value.includes(expected);
 }
-async function boundedJson(response,maxBytes=JWKS_MAX_BYTES) {
+async function boundedJson(response,maxBytes=JWKS_MAX_BYTES,signal=null) {
   if(!response||response.ok!==true)throw authError('OIDC_KEY_UNAVAILABLE');
   const declared=Number(response.headers?.get?.('content-length')??0);
   if(Number.isFinite(declared)&&declared>maxBytes)throw authError('OIDC_KEY_UNAVAILABLE');
@@ -51,10 +51,12 @@ async function boundedJson(response,maxBytes=JWKS_MAX_BYTES) {
     if(bytes.length>maxBytes)throw authError('OIDC_KEY_UNAVAILABLE');
     try{return JSON.parse(bytes.toString('utf8'));}catch{throw authError('OIDC_KEY_UNAVAILABLE');}
   }
-  const reader=response.body.getReader(),chunks=[];let total=0;
+  const reader=response.body.getReader(),chunks=[];let total=0,complete=false;
+  const abort=()=>{try{Promise.resolve(reader.cancel()).catch(()=>{});}catch{}};
+  signal?.addEventListener('abort',abort,{once:true});
   try{
-    while(true){const {done,value}=await reader.read();if(done)break;total+=value.byteLength;if(total>maxBytes)throw authError('OIDC_KEY_UNAVAILABLE');chunks.push(Buffer.from(value));}
-  } finally { try{reader.releaseLock();}catch{} }
+    while(true){const {done,value}=await reader.read();if(done){complete=true;break;}total+=value.byteLength;if(total>maxBytes)throw authError('OIDC_KEY_UNAVAILABLE');chunks.push(Buffer.from(value));}
+  } finally { signal?.removeEventListener('abort',abort);if(!complete)abort();try{reader.releaseLock();}catch{} }
   try{return JSON.parse(Buffer.concat(chunks,total).toString('utf8'));}catch{throw authError('OIDC_KEY_UNAVAILABLE');}
 }
 function safeJwk(value) {
@@ -63,27 +65,37 @@ function safeJwk(value) {
 }
 
 export class JwksClient {
-  #uri;#fetch;#clock;#cacheMs;#keys=new Map();#expiresAt=0;
-  constructor({jwksUri,fetchImpl=globalThis.fetch,clock=()=>Date.now(),cacheMs=DEFAULT_KEY_CACHE_MS,issuer}={}){
+  #uri;#fetch;#clock;#cacheMs;#timeoutMs;#cooldownMs;#inFlight=null;#lastRefresh=-Infinity;#keys=new Map();#expiresAt=0;
+  constructor({jwksUri,fetchImpl=globalThis.fetch,clock=()=>Date.now(),cacheMs=DEFAULT_KEY_CACHE_MS,issuer,timeoutMs=5000,refreshCooldownMs=30000}={}){
     const uri=strictHttpsUrl(jwksUri),issuerUrl=issuer?strictHttpsUrl(issuer):null;
     if(issuerUrl&&uri.origin!==issuerUrl.origin)throw configError();
     if(typeof fetchImpl!=='function'||typeof clock!=='function'||!Number.isInteger(cacheMs)||cacheMs<60_000||cacheMs>60*60_000)throw configError();
-    this.#uri=uri.toString();this.#fetch=fetchImpl;this.#clock=clock;this.#cacheMs=cacheMs;
+    if(!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>10000||!Number.isInteger(refreshCooldownMs)||refreshCooldownMs<1000||refreshCooldownMs>60000)throw configError();
+    this.#uri=uri.toString();this.#fetch=fetchImpl;this.#clock=clock;this.#cacheMs=cacheMs;this.#timeoutMs=timeoutMs;this.#cooldownMs=refreshCooldownMs;
   }
   async #refresh(){
-    let response;try{response=await this.#fetch(this.#uri,{method:'GET',redirect:'error',headers:{accept:'application/json'}});}catch{throw authError('OIDC_KEY_UNAVAILABLE');}
-    const body=await boundedJson(response);
-    if(!record(body)||!Array.isArray(body.keys)||body.keys.length<1||body.keys.length>64)throw authError('OIDC_KEY_UNAVAILABLE');
-    const next=new Map();
-    for(const candidate of body.keys){const parsed=safeJwk(candidate);if(parsed&&!next.has(parsed.kid))next.set(parsed.kid,parsed.key);}
-    if(!next.size)throw authError('OIDC_KEY_UNAVAILABLE');
-    this.#keys=next;this.#expiresAt=this.#clock()+this.#cacheMs;
+    if(this.#inFlight)return this.#inFlight;
+    if(this.#clock()-this.#lastRefresh<this.#cooldownMs)throw authError('OIDC_KEY_UNAVAILABLE');
+    this.#lastRefresh=this.#clock();
+    const controller=new AbortController();let timer;
+    const work=(async()=>{
+      const response=await this.#fetch(this.#uri,{method:'GET',redirect:'error',signal:controller.signal,headers:{accept:'application/json'}});
+      const body=await boundedJson(response,JWKS_MAX_BYTES,controller.signal);
+      if(controller.signal.aborted||!record(body)||!Array.isArray(body.keys)||body.keys.length<1||body.keys.length>64)throw authError('OIDC_KEY_UNAVAILABLE');
+      const next=new Map();for(const candidate of body.keys){const parsed=safeJwk(candidate);if(parsed&&!next.has(parsed.kid))next.set(parsed.kid,parsed.key);}
+      if(!next.size)throw authError('OIDC_KEY_UNAVAILABLE');
+      this.#keys=next;this.#expiresAt=this.#clock()+this.#cacheMs;
+    })();
+    const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(authError('OIDC_KEY_UNAVAILABLE'));},this.#timeoutMs);});
+    const pending=Promise.race([work,timeout]);this.#inFlight=pending;
+    try{await pending;}catch{throw authError('OIDC_KEY_UNAVAILABLE');}finally{clearTimeout(timer);if(this.#inFlight===pending)this.#inFlight=null;}
   }
   async getKey(kid){
     if(typeof kid!=='string'||!/^[A-Za-z0-9._:-]{1,256}$/.test(kid))throw authError('AUTH_REQUIRED');
-    if(this.#clock()>=this.#expiresAt||!this.#keys.size)await this.#refresh();
+    let refreshed=false;
+    if(this.#clock()>=this.#expiresAt||!this.#keys.size){await this.#refresh();refreshed=true;}
     let key=this.#keys.get(kid);
-    if(!key){await this.#refresh();key=this.#keys.get(kid);}
+    if(!key&&!refreshed){await this.#refresh();key=this.#keys.get(kid);}
     if(!key)throw authError('AUTH_REQUIRED');
     return key;
   }

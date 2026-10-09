@@ -1,7 +1,14 @@
 import net from 'node:net';
 const PURPOSE=/^[A-Z][A-Z0-9_]{1,63}$/;
 function publicIPv4(ip){const p=ip.split('.').map(Number);if(p.length!==4||p.some(x=>!Number.isInteger(x)||x<0||x>255))return false;const [a,b]=p;return !(a===0||a===10||a===127||a>=224||(a===169&&b===254)||(a===172&&b>=16&&b<=31)||(a===192&&b===168)||(a===100&&b>=64&&b<=127));}
-function publicIPv6(ip){const x=ip.toLowerCase();if(x==='::'||x==='::1'||x.startsWith('fc')||x.startsWith('fd')||/^fe[89ab]/.test(x)||x.startsWith('ff'))return false;if(x.startsWith('::ffff:')){const tail=x.slice(7);return net.isIP(tail)===4&&publicIPv4(tail);}return true;}
+function publicIPv6(ip){
+  // WHATWG URL parsing canonicalises expanded and embedded IPv4 forms.
+  let x;try{x=new URL(`http://[${ip}]/`).hostname.slice(1,-1);}catch{return false;}
+  if(x.startsWith('::ffff:')){const words=x.slice(7).split(':');if(words.length!==2)return false;const n=parseInt(words[0],16)*65536+parseInt(words[1],16);return publicIPv4([n>>>24,(n>>>16)&255,(n>>>8)&255,n&255].join('.'));}
+  const first=parseInt(x.split(':')[0],16);
+  // Only global unicast; reject documentation and transition mechanisms too.
+  return first>=0x2000&&first<=0x3fff&&!/^2001:(?:db8|0):/.test(x)&&!x.startsWith('2001::')&&first!==0x2002&&first!==0x3fff;
+}
 export function isPublicAddress(ip){const v=net.isIP(ip);return v===4?publicIPv4(ip):v===6?publicIPv6(ip):false;}
 function normalizeEntry(entry){if(!entry||typeof entry!=='object'||Array.isArray(entry))throw new Error('EGRESS_ALLOWLIST_ENTRY_INVALID');let u;try{u=new URL(entry.origin);}catch{throw new Error('EGRESS_ALLOWLIST_ORIGIN_INVALID');}if(u.protocol!=='https:'||u.username||u.password||u.pathname!=='/'||u.search||u.hash)throw new Error('EGRESS_ALLOWLIST_ORIGIN_INVALID');const prefix=entry.pathPrefix??'/';if(typeof prefix!=='string'||!prefix.startsWith('/')||prefix.includes('\\')||prefix.length>512)throw new Error('EGRESS_ALLOWLIST_PATH_INVALID');const allowed=entry.allowedAddresses??[];if(!Array.isArray(allowed)||allowed.length>64||new Set(allowed).size!==allowed.length||allowed.some(x=>net.isIP(x)===0))throw new Error('EGRESS_ALLOWLIST_ADDRESS_INVALID');return Object.freeze({origin:u.origin,pathPrefix:prefix,allowedAddresses:Object.freeze([...allowed].sort())});}
 export class EgressPolicy {

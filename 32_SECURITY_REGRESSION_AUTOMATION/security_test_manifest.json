@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V116-REGRESSIONS",
+      "concept": "V116 security defect regression",
+      "severity": "HIGH"
+    },
+    {
       "id": "SEC-TENANT-READ",
       "concept": "cross-tenant",
       "severity": "BLOCKER"

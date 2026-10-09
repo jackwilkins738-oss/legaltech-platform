@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V116 — Confirmed security defect fixes
+
+V116 fixes restricted matter-candidate disclosure, support scope separation, failed-audit support activation, expanded IPv6 egress classification, asynchronous document-redemption races, export permission freshness and signing-key refresh abuse. Nineteen counterexample regressions were added; the full platform suite passes 1,758 tests. This is a defect-fix exception under D-018, not speculative feature expansion. See `40_PLATFORM_FOUNDATION_BUILD/docs/V116_SECURITY_DEFECT_FIXES.md`.
+
+Production composition/admission, shared durable security state, executable PostgreSQL isolation checks and deployed operational validation remain outstanding. Pre-TO freeze and the customer-data deployment gate remain in force.
+
 ## V115 — Practical TO evidence tooling
 
 V115 adds a local CLI for canonical field templates, validation-only preflight and aggregate reporting through the existing V66/V75 model. Reports require fully valid cleaned input and an explicit working-day assumption; source files are unchanged and outputs cannot overwrite existing files. No persistent customer data store, network integration or final workflow is introduced. See `40_PLATFORM_FOUNDATION_BUILD/docs/V115_TO_FIELD_CLI.md`.
