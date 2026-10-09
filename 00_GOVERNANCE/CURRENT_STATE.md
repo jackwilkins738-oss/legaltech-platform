@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V115 — Practical TO evidence tooling
+
+V115 adds a local CLI for canonical field templates, validation-only preflight and aggregate reporting through the existing V66/V75 model. Reports require fully valid cleaned input and an explicit working-day assumption; source files are unchanged and outputs cannot overwrite existing files. No persistent customer data store, network integration or final workflow is introduced. See `40_PLATFORM_FOUNDATION_BUILD/docs/V115_TO_FIELD_CLI.md`.
+
+Pre-TO development now pauses under D-018 except for identified defects, evidence-tooling gaps or authorised integration tests. The next milestone is partner observations and evidence analysis; V116 is not a prerequisite for the TO. This is not a production-readiness claim.
+
 ## Status
 Research/scoping is advanced. Product-market evidence is not yet complete.
 

@@ -28,7 +28,7 @@ path,domain,status,authority,type,bytes
 .gitignore,governance,current,high,file,649
 00_GOVERNANCE/COMPANY_OPERATING_MODEL.md,governance,reference,medium,md,1703
 00_GOVERNANCE/CONSOLIDATION_NOTES.md,governance,reference,medium,md,1106
-00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,62352
+00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,63115
 00_GOVERNANCE/DECISION_GATES.md,governance,reference,medium,md,1121
 00_GOVERNANCE/DECISIONS.md,governance,reference,high,md,3857
 00_GOVERNANCE/FILE_PRIORITY_BUILD_ORDER.md,governance,reference,medium,md,1298
@@ -472,7 +472,7 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/test/clock-integrity-v114.test.js,production_shape,reference,low,js,936
 30_PRODUCTION_SHAPE_SCAFFOLD/test/data-classification-v105.test.js,production_shape,reference,low,js,787
 30_PRODUCTION_SHAPE_SCAFFOLD/test/data-residency-v108.test.js,production_shape,reference,low,js,779
-30_PRODUCTION_SHAPE_SCAFFOLD/test/migration-safety.test.js,production_shape,reference,low,js,7719
+30_PRODUCTION_SHAPE_SCAFFOLD/test/migration-safety.test.js,production_shape,reference,low,js,7182
 30_PRODUCTION_SHAPE_SCAFFOLD/test/offboarding-export-v113.test.js,production_shape,reference,low,js,979
 30_PRODUCTION_SHAPE_SCAFFOLD/test/onboarding-readiness-v109.test.js,production_shape,reference,low,js,766
 30_PRODUCTION_SHAPE_SCAFFOLD/test/secret-rotation-v111.test.js,production_shape,reference,low,js,1044
@@ -641,6 +641,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/docs/V112_AUDIT_EVIDENCE_PACKAGE.md,platform_build,current,medium,md,224
 40_PLATFORM_FOUNDATION_BUILD/docs/V113_OFFBOARDING_EXPORT.md,platform_build,current,medium,md,235
 40_PLATFORM_FOUNDATION_BUILD/docs/V114_CLOCK_INTEGRITY.md,platform_build,current,medium,md,302
+40_PLATFORM_FOUNDATION_BUILD/docs/V115_TO_FIELD_CLI.md,platform_build,current,medium,md,3663
 40_PLATFORM_FOUNDATION_BUILD/docs/V31_OPERATOR_REVIEW_SURFACE.md,engineering,current,medium,md,915
 40_PLATFORM_FOUNDATION_BUILD/docs/V32_OPERATIONS_COCKPIT.md,engineering,current,medium,md,912
 40_PLATFORM_FOUNDATION_BUILD/docs/V33_HIGH_TECH_COMMAND_CENTRE.md,engineering,current,medium,md,866
@@ -710,7 +711,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/docs/V97_SUPPLY_CHAIN_ATTESTATION.md,platform_build,current,medium,md,796
 40_PLATFORM_FOUNDATION_BUILD/docs/V98_VULNERABILITY_EVIDENCE.md,platform_build,current,medium,md,924
 40_PLATFORM_FOUNDATION_BUILD/docs/V99_DEAD_LETTER_RECOVERY.md,platform_build,current,medium,md,822
-40_PLATFORM_FOUNDATION_BUILD/package.json,engineering,current,high,json,262
+40_PLATFORM_FOUNDATION_BUILD/package.json,engineering,current,high,json,304
 40_PLATFORM_FOUNDATION_BUILD/QUICKSTART_WINDOWS.md,engineering,current,high,md,1096
 40_PLATFORM_FOUNDATION_BUILD/README.md,engineering,current,high,md,33613
 40_PLATFORM_FOUNDATION_BUILD/RESET_LOCAL_APP.bat,engineering,current,high,bat,119
@@ -781,6 +782,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/tenantConfiguration.js,platform_build,current,medium,js,6114
 40_PLATFORM_FOUNDATION_BUILD/src/tenantLifecycle.js,platform_build,current,medium,js,6161
 40_PLATFORM_FOUNDATION_BUILD/src/tenantQuota.js,platform_build,current,medium,js,2993
+40_PLATFORM_FOUNDATION_BUILD/src/toFieldCli.js,platform_build,current,medium,js,4595
 40_PLATFORM_FOUNDATION_BUILD/src/toFieldIntake.js,platform_build,current,medium,js,11998
 40_PLATFORM_FOUNDATION_BUILD/src/toStudy.js,platform_build,current,medium,js,18217
 40_PLATFORM_FOUNDATION_BUILD/src/vulnerabilityEvidence.js,platform_build,current,medium,js,6676
@@ -857,6 +859,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/test/tenantConfigurationV94.test.js,platform_build,current,medium,js,4288
 40_PLATFORM_FOUNDATION_BUILD/test/tenantLifecycleV103.test.js,platform_build,current,medium,js,4444
 40_PLATFORM_FOUNDATION_BUILD/test/tenantQuotaV106.test.js,platform_build,current,medium,js,3319
+40_PLATFORM_FOUNDATION_BUILD/test/toFieldCliV115.test.js,platform_build,current,medium,js,4303
 40_PLATFORM_FOUNDATION_BUILD/test/toFieldIntakeV75.test.js,platform_build,current,medium,js,8224
 40_PLATFORM_FOUNDATION_BUILD/test/toStudyV66.test.js,platform_build,current,medium,js,11450
 40_PLATFORM_FOUNDATION_BUILD/test/validationBoundary.test.js,platform_build,current,medium,js,20948
@@ -881,6 +884,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V102.md,platform_build,current,medium,md,753
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V109.md,platform_build,current,medium,md,1118
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V114.md,platform_build,current,medium,md,1177
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V115.md,platform_build,current,medium,md,1203
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V29.md,engineering,current,high,md,687
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V30.md,engineering,current,high,md,575
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V31.md,engineering,current,medium,md,1385
