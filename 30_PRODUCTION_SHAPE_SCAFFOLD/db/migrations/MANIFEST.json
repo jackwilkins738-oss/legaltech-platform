@@ -240,6 +240,12 @@
       "file": "048_shared_security_controls.sql",
       "sha256": "894c7ca30a29b59fb72e9db64aaecc47f2ba129e61f39cfc5afb3d433fbd626d",
       "destructive": false
+    },
+    {
+      "file": "049_shared_audit_ledger.sql",
+      "sha256": "6c741d941b3b424f6b41f04feb06f652bf4a3f13cb69b371ef185682717ba155",
+      "destructive": true,
+      "destructiveReviewRef": "V120-AUDIT-TRUNCATE-GUARD"
     }
   ]
 }

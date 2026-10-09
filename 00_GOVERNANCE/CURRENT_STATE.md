@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V120 — Shared audit persistence and integrity boundary
+
+V120 adds an asynchronous PostgreSQL append-only audit writer and independent snapshot verifier, stable event-ID replay/conflict handling, per-tenant hash chains and a readiness boundary requiring an independently trusted anchor. Migration 049 adds restrictive audit roles, forced RLS and database-enforced metadata/hash/sequence/head protections. See `40_PLATFORM_FOUNDATION_BUILD/docs/V120_SHARED_AUDIT.md`.
+
+Local suites pass 1,843 platform and 140 scaffold tests, including 23 new audit and two snapshot-boundary regressions. Real PostgreSQL execution is skipped locally; the expanded integration CI job must pass before merging. Migration 049, deployed credentials/composition, external immutable anchor publication/verification and protected-operation audit coverage remain unvalidated here. This is an authorised D-018 security integration exception; the pre-TO freeze and customer-data deployment gate remain in force.
+
 ## V119 — Shared containment and abuse budgets
 
 V119 adds PostgreSQL interlock reader/operator boundaries and shared IP, tenant and actor read budgets with a common key/policy fingerprint. Migration 048 isolates security metadata from domain/session credentials and records interlock transitions atomically. Async document, connector, notification and writeback services now await containment; synchronous reference exports reject remote checks. See `40_PLATFORM_FOUNDATION_BUILD/docs/V119_SHARED_SECURITY_CONTROLS.md`.

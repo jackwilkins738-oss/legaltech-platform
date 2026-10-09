@@ -10,6 +10,7 @@ import {PostgresTenantTransactions} from '../src/postgresTransactions.js';
 import {PostgresServerSessionStore} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSessions.js';
 import {PostgresSecurityInterlock,PostgresSecurityInterlockOperator} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresInterlock.js';
 import {PostgresAbuseLimiter} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresAbuseControl.js';
+import {PostgresAuditWriter,PostgresAuditReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresAudit.js';
 import {createPostgresRuntimeProbe} from '../src/postgresRuntime.js';
 
 const enabled=process.env.LEGALTECH_RUN_POSTGRES_TESTS==='true';
@@ -17,7 +18,7 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
@@ -41,7 +42,7 @@ test('V118/V119 real PostgreSQL shared identity, security and tenant isolation',
   await admin.query(`CREATE ROLE legaltech_runtime_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await admin.query(`CREATE ROLE legaltech_broker_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await admin.query('GRANT legaltech_session_broker TO legaltech_broker_ci');
-  for(const [login,group] of [['legaltech_reader_ci','legaltech_security_reader'],['legaltech_operator_ci','legaltech_security_operator'],['legaltech_limiter_ci','legaltech_rate_limiter']]){
+  for(const [login,group] of [['legaltech_reader_ci','legaltech_security_reader'],['legaltech_operator_ci','legaltech_security_operator'],['legaltech_limiter_ci','legaltech_rate_limiter'],['legaltech_audit_writer_ci','legaltech_audit_writer'],['legaltech_audit_reader_ci','legaltech_audit_reader']]){
     await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
     await admin.query(`GRANT ${group} TO ${login}`);
   }
@@ -57,8 +58,8 @@ test('V118/V119 real PostgreSQL shared identity, security and tenant isolation',
   const one=new PostgresServerSessionStore({...options,brokerPool:brokerOne}),two=new PostgresServerSessionStore({...options,brokerPool:brokerTwo});
   const session=(providerSessionId=`provider-${uuid()}`)=>({tenantId:tenantA,actorId:actorA,capabilities:['matter:read'],roles:[],authContext:{method:'OIDC',mfaVerified:true,authTime:null,expiresAt:new Date(Date.now()+3600000).toISOString(),providerSessionId}});
 
-  await t.test('all 48 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
-    assert.equal(manifest.migrations.length,48);
+  await t.test('all 49 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
+    assert.equal(manifest.migrations.length,49);
     const result=await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({});assert.equal(result.ok,true);
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
@@ -182,6 +183,66 @@ test('V118/V119 real PostgreSQL shared identity, security and tenant isolation',
     finally{await admin.query('ALTER TABLE operational_security.rate_buckets ENABLE TRIGGER protect_rate_bucket');}
     assert.equal(await limitTwo.checkIp(req),true);
     assert.equal(await limitTwo.checkRead({tenantId:tenantA,actorId:actorA},{resource:'documents',count:1,matterIds:['synthetic-new-window']}),true);
+  });
+
+  const auditWriterPool=makePool('legaltech_audit_writer_ci'),auditWriterPoolTwo=makePool('legaltech_audit_writer_ci'),auditReaderPool=makePool('legaltech_audit_reader_ci');
+  const auditOne=new PostgresAuditWriter({pool:auditWriterPool,expectedRole:'legaltech_audit_writer_ci'}),auditTwo=new PostgresAuditWriter({pool:auditWriterPoolTwo,expectedRole:'legaltech_audit_writer_ci'});
+  let trustedAuditAnchor=null;
+  const auditReader=new PostgresAuditReader({pool:auditReaderPool,expectedRole:'legaltech_audit_reader_ci',resolveTrustedAnchor:async()=>trustedAuditAnchor});
+  const auditEvent=()=>({tenantId:tenantA,eventId:uuid(),actorId:actorA,traceId:'v120-synthetic',action:'SYNTHETIC_READ',outcome:'SUCCESS',objectId:'synthetic-object',matterId:'synthetic-matter',reasonCode:'AUTHORIZED'});
+  await t.test('V120 independent writer instances append one serial tenant chain and reader verifies a trusted external prefix',async()=>{
+    const results=await Promise.all(Array.from({length:12},(_,i)=>(i%2?auditOne:auditTwo).append(auditEvent())));
+    const ordered=[...results].sort((a,b)=>a.position-b.position);assert.deepEqual(ordered.map(x=>x.position),Array.from({length:12},(_,i)=>i+1));
+    for(let i=1;i<ordered.length;i++)assert.equal(ordered[i].previousHash,ordered[i-1].entryHash);
+    // This synthetic descriptor is held outside PostgreSQL to model a trusted verifier;
+    // it is not a production immutable external anchor or signature verification test.
+    trustedAuditAnchor={tenantId:tenantA,auditCount:12,headHash:ordered.at(-1).entryHash};
+    assert.equal((await auditReader.verify({tenantId:tenantA})).anchorVerified,true);
+    const other=await auditOne.append({...auditEvent(),tenantId:tenantB});assert.equal(other.position,1);
+    assert.equal((await auditReader.probe(tenantA)).ok,true);
+  });
+  await t.test('V120 cross-instance stable event replay does not duplicate and changed metadata conflicts',async()=>{
+    const event=auditEvent();const result=await auditOne.append(event);const replay=await auditTwo.append(event);assert.equal(replay.replayed,true);assert.equal(replay.entryHash,result.entryHash);
+    await assert.rejects(auditTwo.append({...event,outcome:'FAILED'}),/AUDIT_EVENT_CONFLICT/);
+    assert.equal((await auditReaderPool.query('SELECT event_id FROM audit_security.entries WHERE tenant_id=$1 AND event_id=$2',[tenantA,event.eventId])).rows.length,1);
+  });
+  await t.test('V120 actual audit grants forbid mutation, head regression and domain/identity access',async()=>{
+    for(const pool of [runtime,brokerOne,readerOne,limiterOne])assert.equal(await pool.query('SELECT * FROM audit_security.entries').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await auditWriterPool.query('UPDATE audit_security.entries SET entry_hash=entry_hash').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await auditWriterPool.query('DELETE FROM audit_security.entries').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await auditWriterPool.query('TRUNCATE audit_security.entries').then(()=>false,e=>e.code==='42501'),true);
+    await assert.rejects(auditWriterPool.query('UPDATE audit_security.tenant_heads SET position=0,head_hash=$1 WHERE tenant_id=$2',['0'.repeat(64),tenantA]));
+    assert.equal(await auditReaderPool.query('INSERT INTO audit_security.tenant_heads(tenant_id,position,head_hash) VALUES($1,0,$2)',[uuid(),'0'.repeat(64)]).then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await auditWriterPool.query('SELECT * FROM public.matters').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await auditWriterPool.query('SELECT * FROM identity_security.server_sessions').then(()=>false,e=>e.code==='42501'),true);
+  });
+  await t.test('V120 SQL validates canonical payload, request digest and chain hash before advancing a head',async()=>{
+    const current=await auditReaderPool.query('SELECT * FROM audit_security.tenant_heads WHERE tenant_id=$1',[tenantA]);const count=Number(current.rows[0].position);
+    const last=(await auditReaderPool.query('SELECT * FROM audit_security.entries WHERE tenant_id=$1 AND position=$2',[tenantA,count])).rows[0];
+    const payload=JSON.parse(last.canonical_payload);payload.eventId=uuid();payload.position=count+1;
+    await assert.rejects(auditWriterPool.query(`INSERT INTO audit_security.entries(tenant_id,position,event_id,created_at,request_hash,previous_hash,entry_hash,canonical_payload)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[tenantA,count+1,payload.eventId,last.created_at,last.request_hash,last.entry_hash,'f'.repeat(64),JSON.stringify(payload)]));
+    assert.equal(Number((await auditReaderPool.query('SELECT position FROM audit_security.tenant_heads WHERE tenant_id=$1',[tenantA])).rows[0].position),count);
+  });
+  await t.test('V120 verification uses an actual repeatable-read snapshot while a second connection appends',async()=>{
+    const before=Number((await auditReaderPool.query('SELECT position FROM audit_security.tenant_heads WHERE tenant_id=$1',[tenantA])).rows[0].position);
+    let startAnchor,finishAnchor;const started=new Promise(resolve=>{startAnchor=resolve});
+    const snapshotReader=new PostgresAuditReader({pool:auditReaderPool,expectedRole:'legaltech_audit_reader_ci',resolveTrustedAnchor:async()=>{startAnchor();await new Promise(resolve=>{finishAnchor=resolve});return trustedAuditAnchor}});
+    const pending=snapshotReader.verify({tenantId:tenantA});await started;await auditTwo.append(auditEvent());finishAnchor();assert.equal((await pending).auditCount,before);
+  });
+  await t.test('V120 externally retained synthetic anchor detects a restored shorter but internally valid database',async()=>{
+    const last=await auditOne.append(auditEvent());trustedAuditAnchor={tenantId:tenantA,auditCount:last.position,headHash:last.entryHash};
+    // Simulate a privileged restore in this disposable database only. Runtime has no DELETE.
+    await admin.query('ALTER TABLE audit_security.entries DISABLE TRIGGER USER');
+    await admin.query('ALTER TABLE audit_security.tenant_heads DISABLE TRIGGER USER');
+    try{
+      await admin.query('DELETE FROM audit_security.entries WHERE tenant_id=$1 AND position=$2',[tenantA,last.position]);
+      await admin.query('UPDATE audit_security.tenant_heads SET position=$2,head_hash=$3 WHERE tenant_id=$1',[tenantA,last.position-1,last.previousHash]);
+    }finally{
+      await admin.query('ALTER TABLE audit_security.entries ENABLE TRIGGER USER');await admin.query('ALTER TABLE audit_security.tenant_heads ENABLE TRIGGER USER');
+    }
+    const localReader=new PostgresAuditReader({pool:auditReaderPool,expectedRole:'legaltech_audit_reader_ci'});assert.equal((await localReader.verify({tenantId:tenantA})).ok,true);
+    await assert.rejects(auditReader.verify({tenantId:tenantA}),/AUDIT_INTEGRITY_UNAVAILABLE/);
   });
 
 });

@@ -1,12 +1,31 @@
 import {runPostgresTransaction} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 
-const GROUPS=['legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_session_broker'];
+const GROUPS=['legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_session_broker','legaltech_audit_writer','legaltech_audit_reader'];
+const SCHEMA={legaltech_audit_writer:'audit_security',legaltech_audit_reader:'audit_security'};
 const ALLOWED={
   legaltech_security_reader:['interlocks','interlock_events'],
   legaltech_security_operator:['interlocks','interlock_events'],
   legaltech_rate_limiter:['rate_buckets','read_matters','rate_configuration'],
+  legaltech_audit_writer:['tenant_heads','entries'],
+  legaltech_audit_reader:['tenant_heads','entries'],
 };
 const PRIVILEGES={
+  legaltech_audit_writer:`has_table_privilege(current_user,'audit_security.entries','SELECT')
+    AND has_table_privilege(current_user,'audit_security.entries','INSERT')
+    AND NOT has_table_privilege(current_user,'audit_security.entries','UPDATE,DELETE,TRUNCATE')
+    AND NOT has_any_column_privilege(current_user,'audit_security.entries','UPDATE')
+    AND has_table_privilege(current_user,'audit_security.tenant_heads','SELECT')
+    AND has_table_privilege(current_user,'audit_security.tenant_heads','INSERT')
+    AND has_column_privilege(current_user,'audit_security.tenant_heads','position','UPDATE')
+    AND has_column_privilege(current_user,'audit_security.tenant_heads','head_hash','UPDATE')
+    AND NOT has_column_privilege(current_user,'audit_security.tenant_heads','tenant_id','UPDATE')
+    AND NOT has_table_privilege(current_user,'audit_security.tenant_heads','DELETE,TRUNCATE')`,
+  legaltech_audit_reader:`has_table_privilege(current_user,'audit_security.entries','SELECT')
+    AND has_table_privilege(current_user,'audit_security.tenant_heads','SELECT')
+    AND NOT has_table_privilege(current_user,'audit_security.entries','INSERT,UPDATE,DELETE,TRUNCATE')
+    AND NOT has_any_column_privilege(current_user,'audit_security.entries','INSERT,UPDATE')
+    AND NOT has_table_privilege(current_user,'audit_security.tenant_heads','INSERT,UPDATE,DELETE,TRUNCATE')
+    AND NOT has_any_column_privilege(current_user,'audit_security.tenant_heads','INSERT,UPDATE')`,
   legaltech_security_reader:`has_table_privilege(current_user,'operational_security.interlocks','SELECT')
     AND has_table_privilege(current_user,'operational_security.interlock_events','SELECT')
     AND NOT has_table_privilege(current_user,'operational_security.interlocks','INSERT,UPDATE,DELETE,TRUNCATE')
@@ -46,22 +65,23 @@ export function securityOptions({pool,expectedRole,timeoutMs=5000}={}) {
   if(typeof pool?.connect!=='function'||!/^[a-z_][a-z0-9_]{0,62}$/.test(expectedRole??'')||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>10000)throw new Error('SHARED_SECURITY_CONFIGURATION_INVALID');
   return {pool,expectedRole,timeoutMs};
 }
-export async function securityTransaction(options,group,work,{readOnly=false,signal}={}) {
-  const others=GROUPS.filter(x=>x!==group&&!(group==='legaltech_security_operator'&&x==='legaltech_security_reader'));
-  return runPostgresTransaction({...options,readOnly,signal},async tx=>{
+export async function securityTransaction(options,group,work,{readOnly=false,isolation='READ COMMITTED',signal}={}) {
+  const schema=SCHEMA[group]??'operational_security';
+  const others=GROUPS.filter(x=>x!==group&&!(group==='legaltech_security_operator'&&x==='legaltech_security_reader')&&!(group==='legaltech_audit_writer'&&x==='legaltech_audit_reader'));
+  return runPostgresTransaction({...options,readOnly,isolation,signal},async tx=>{
     const result=await tx.query(`SELECT pg_has_role(current_user,$1,'MEMBER') AS member,
       EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role(current_user,r.oid,'MEMBER') AND
         (r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication
           OR r.rolname=ANY($2::text[]) OR r.rolname IN ('pg_read_all_data','pg_write_all_data','pg_read_server_files','pg_write_server_files','pg_execute_server_program')))
         OR has_database_privilege(current_user,current_database(),'CREATE') AS privileged,
-      EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN ('public','identity_security','operational_security')
+      EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN ('public','identity_security','operational_security','audit_security')
         AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE'))) AS owns_schema,
       EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-        WHERE n.nspname IN ('public','identity_security','operational_security') AND c.relkind IN ('r','p','v','m','f')
+        WHERE n.nspname IN ('public','identity_security','operational_security','audit_security') AND c.relkind IN ('r','p','v','m','f')
           AND (pg_has_role(current_user,c.relowner,'MEMBER') OR
-            ((n.nspname<>'operational_security' OR c.relname<>ALL($3::text[])) AND
+            ((n.nspname<>$4 OR c.relname<>ALL($3::text[])) AND
               (has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
-                OR has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE'))))) AS outside_access`,[group,others,ALLOWED[group]]);
+                OR has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE'))))) AS outside_access`,[group,others,ALLOWED[group],schema]);
     const row=result.rows?.[0];
     if(result.rows?.length!==1||row.member!==true||row.privileged!==false||row.owns_schema!==false||row.outside_access!==false)throw new Error('SHARED_SECURITY_ROLE_UNSAFE');
     const privileges=await tx.query(`SELECT (${PRIVILEGES[group]}) AS grants_safe`);
@@ -70,11 +90,12 @@ export async function securityTransaction(options,group,work,{readOnly=false,sig
   });
 }
 export async function securityProbe(options,group) {
+  const schema=SCHEMA[group]??'operational_security';
   return securityTransaction(options,group,async tx=>{
     const result=await tx.query(`SELECT c.relname,c.relrowsecurity AS enabled,c.relforcerowsecurity AS forced,row_security_active(c.oid) AS active
-      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='operational_security' AND c.relname=ANY($1::text[])`,[ALLOWED[group]]);
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$2 AND c.relname=ANY($1::text[])`,[ALLOWED[group],schema]);
     if(result.rows.length!==ALLOWED[group].length||result.rows.some(x=>x.enabled!==true||x.forced!==true||x.active!==true))throw new Error('SHARED_SECURITY_RLS_UNSAFE');
-    for(const table of ALLOWED[group])await tx.query(`SELECT 1 FROM operational_security.${table} LIMIT 0`);
+    for(const table of ALLOWED[group])await tx.query(`SELECT 1 FROM ${schema}.${table} LIMIT 0`);
     return Object.freeze({ok:true});
   },{readOnly:true});
 }

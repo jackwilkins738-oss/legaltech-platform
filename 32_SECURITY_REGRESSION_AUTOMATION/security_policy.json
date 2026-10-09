@@ -251,6 +251,7 @@
     "clock rollback resistance",
     "V117 production admission regression",
     "V118 shared session regression",
-    "V119 shared security regression"
+    "V119 shared security regression",
+    "V120 shared audit regression"
   ]
 }

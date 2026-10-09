@@ -4,8 +4,8 @@ function unavailable(){return new Error('POSTGRES_TRANSACTION_UNAVAILABLE');}
 
 // Internal driver boundary. The callback is trusted server code, never client SQL.
 // All statements stay on one checked-out connection; no pool.query inside a transaction.
-export async function runPostgresTransaction({pool,expectedRole,timeoutMs=5000,context=null,readOnly=false,signal},work) {
-  if(typeof pool?.connect!=='function'||!ROLE.test(expectedRole??'')||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>10000||typeof work!=='function'||typeof readOnly!=='boolean') throw new Error('POSTGRES_TRANSACTION_CONFIGURATION_INVALID');
+export async function runPostgresTransaction({pool,expectedRole,timeoutMs=5000,context=null,readOnly=false,isolation='READ COMMITTED',signal},work) {
+  if(typeof pool?.connect!=='function'||!ROLE.test(expectedRole??'')||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>10000||typeof work!=='function'||typeof readOnly!=='boolean'||!['READ COMMITTED','REPEATABLE READ'].includes(isolation)) throw new Error('POSTGRES_TRANSACTION_CONFIGURATION_INVALID');
   if(context!==null&&(!UUID.test(context?.tenantId??'')||!UUID.test(context?.actorId??''))) throw new Error('POSTGRES_TRANSACTION_CONTEXT_INVALID');
   let client,released=false,closed=false,succeeded=false,pendingQueries=0,timer,releaseFailed=false,commitStarted=false;
   const controller=new AbortController();
@@ -21,7 +21,7 @@ export async function runPostgresTransaction({pool,expectedRole,timeoutMs=5000,c
   const operation=(async()=>{
     client=await pool.connect();
     if(closed||signal?.aborted){release(true);throw unavailable();}
-    await rawQuery(readOnly?'BEGIN READ ONLY':'BEGIN');
+    await rawQuery(isolation==='REPEATABLE READ'?`BEGIN ISOLATION LEVEL REPEATABLE READ${readOnly?' READ ONLY':''}`:readOnly?'BEGIN READ ONLY':'BEGIN');
     await rawQuery("SELECT set_config('statement_timeout',$1,true),set_config('lock_timeout',$2,true)",[`${timeoutMs}ms`,`${Math.min(timeoutMs,1000)}ms`]);
     await rawQuery('SET LOCAL row_security=on');
     const identity=await rawQuery("SELECT current_user AS effective_role,session_user AS login_role,NULLIF(current_setting('app.tenant_id',true),'') AS tenant_context,NULLIF(current_setting('app.actor_id',true),'') AS actor_context");
