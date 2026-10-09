@@ -69,6 +69,10 @@ export class JitSupportAccessRegistry {
     traceId=id(traceId,'SUPPORT_ACCESS_TRACE_INVALID');const row=this.#active(session,{matterId,scopes:new Set(['MATTER_READ','DIAGNOSTIC_READ'])});const s=normalizeSession(session);
     this.#event({tenantId:s.tenantId,actorId:s.actorId,requestId:row.requestId,scope:row.scope,matterId:row.matterId,documentRefHash:null,traceId,action:'SUPPORT_MATTER_READ',outcome:'SUCCESS'});return clone(row);
   }
+  assertDiagnosticRead(session,{matterId,traceId}){
+    traceId=id(traceId,'SUPPORT_ACCESS_TRACE_INVALID');const row=this.#active(session,{matterId,scopes:new Set(['DIAGNOSTIC_READ'])});const s=normalizeSession(session);
+    this.#event({tenantId:s.tenantId,actorId:s.actorId,requestId:row.requestId,scope:row.scope,matterId:row.matterId,documentRefHash:null,traceId,action:'SUPPORT_DIAGNOSTIC_READ',outcome:'SUCCESS'});return clone(row);
+  }
   assertDocumentRead(session,{matterId,documentRef,traceId}){
     traceId=id(traceId,'SUPPORT_ACCESS_TRACE_INVALID');const row=this.#active(session,{matterId,documentRef,scopes:new Set(['DOCUMENT_READ'])});const s=normalizeSession(session);
     this.#event({tenantId:s.tenantId,actorId:s.actorId,requestId:row.requestId,scope:row.scope,matterId:row.matterId,documentRefHash:sha(documentRef),traceId,action:'SUPPORT_DOCUMENT_READ',outcome:'SUCCESS'});return clone(row);

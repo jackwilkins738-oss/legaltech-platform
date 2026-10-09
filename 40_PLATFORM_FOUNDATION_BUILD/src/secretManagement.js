@@ -95,10 +95,11 @@ export class InMemoryCredentialGenerationStore {
 }
 
 export class ConnectorCredentialBroker {
-  #provider;#clock;#generationStore;#interlock;
-  constructor({provider,generationStore=new InMemoryCredentialGenerationStore(),securityInterlock=null,clock=()=>Date.now()}={}){
+  #provider;#clock;#generationStore;#interlock;#rotationAuthority;
+  constructor({provider,generationStore=new InMemoryCredentialGenerationStore(),securityInterlock=null,rotationAuthority=null,clock=()=>Date.now()}={}){
     if(!provider||typeof provider.resolve!=='function'||!generationStore||typeof generationStore.get!=='function'||typeof generationStore.observe!=='function'||typeof clock!=='function')throw new Error('CREDENTIAL_BROKER_CONFIGURATION_INVALID');
-    if(securityInterlock!==null&&typeof securityInterlock?.assertAllowed!=='function')throw new Error('CREDENTIAL_BROKER_CONFIGURATION_INVALID');this.#provider=provider;this.#generationStore=generationStore;this.#interlock=securityInterlock;this.#clock=clock;
+    if(securityInterlock!==null&&typeof securityInterlock?.assertAllowed!=='function')throw new Error('CREDENTIAL_BROKER_CONFIGURATION_INVALID');
+    if(rotationAuthority!==null&&typeof rotationAuthority?.assertUsable!=='function')throw new Error('CREDENTIAL_BROKER_CONFIGURATION_INVALID');this.#provider=provider;this.#generationStore=generationStore;this.#interlock=securityInterlock;this.#rotationAuthority=rotationAuthority;this.#clock=clock;
   }
   async withCredential({tenantId,kind,credentialRef,purpose,capabilities=[]}={},consumer){
     if(!id(tenantId,200)||!CONNECTOR_KINDS.has(kind)||!id(purpose,128)||!Array.isArray(capabilities)||capabilities.length<1||capabilities.length>64||capabilities.some(x=>!id(x,128))||!capabilities.includes(purpose)||typeof consumer!=='function')throw invalid();
@@ -110,6 +111,7 @@ export class ConnectorCredentialBroker {
     if(checked.tenantId!==tenantId||checked.kind!==kind){try{checked.bytes.fill(0);}catch{}throw invalid();}
     const key=bindingKey(tenantId,kind,parsed.canonical);let highest,observed;
     try{highest=await this.#generationStore.get(key);if(!Number.isSafeInteger(highest)||highest<0)throw new Error();if(checked.generation<highest)throw new Error();observed=await this.#generationStore.observe(key,checked.generation);if(!Number.isSafeInteger(observed)||observed<checked.generation||observed>checked.generation)throw new Error();}catch{checked.bytes.fill(0);throw invalid();}
+    try{this.#rotationAuthority?.assertUsable({tenantId,purpose,secretRef:parsed.canonical,generation:checked.generation});}catch{checked.bytes.fill(0);throw invalid();}
     const lease=Buffer.from(checked.bytes);checked.bytes.fill(0);
     const descriptor=publicDescriptor({tenantId,kind,ref:parsed.canonical,generation:checked.generation,expiresAt:new Date(checked.expiry).toISOString(),purpose});
     try{

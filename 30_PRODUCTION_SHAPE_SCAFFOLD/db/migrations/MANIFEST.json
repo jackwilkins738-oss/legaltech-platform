@@ -200,6 +200,31 @@
       "file": "040_onboarding_readiness.sql",
       "sha256": "5efd18b526aa0cd53432cddd435f0e56b4c22168f8811123683aa64d94386c75",
       "destructive": false
+    },
+    {
+      "file": "041_support_diagnostics.sql",
+      "sha256": "300cb40035932bc2d06e9120c5370f1b3f2e16cd312d1848107273c577f9a1bc",
+      "destructive": false
+    },
+    {
+      "file": "042_secret_rotation.sql",
+      "sha256": "f21c7792d472fc1c891e37116e10009fba62904857034a15eda06f80926e49e8",
+      "destructive": false
+    },
+    {
+      "file": "043_audit_evidence_package.sql",
+      "sha256": "6766742003acbbc621d812fd4929a35ee71893e4a10fbbcd067588a3d69b8730",
+      "destructive": false
+    },
+    {
+      "file": "044_offboarding_export.sql",
+      "sha256": "f7546c83c43c9b6c1610c90bd10360403a266cf36a130dd6ea0f1fd3a459f172",
+      "destructive": false
+    },
+    {
+      "file": "045_clock_integrity.sql",
+      "sha256": "98e5bedbd62253fc75198dc52d6b6db2684780f3b1e89942567b51890b6f959f",
+      "destructive": false
     }
   ]
 }

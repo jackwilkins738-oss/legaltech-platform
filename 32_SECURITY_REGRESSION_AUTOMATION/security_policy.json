@@ -236,6 +236,18 @@
     "tenant scoped admission quota",
     "aggregate service level evidence",
     "tenant pinned data residency",
-    "tenant activation readiness hash"
+    "tenant activation readiness hash",
+    "jit redacted support diagnostic",
+    "support diagnostic hash evidence",
+    "secret rotation generation fingerprint",
+    "secret rotation dual control",
+    "secret revocation evidence",
+    "audit evidence checkpoint manifest",
+    "audit evidence contiguous range",
+    "offboarding export required class manifest",
+    "offboarding export exact version certification",
+    "trusted monotonic clock",
+    "clock skew readiness",
+    "clock rollback resistance"
   ]
 }

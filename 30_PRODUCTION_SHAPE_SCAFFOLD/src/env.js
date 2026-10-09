@@ -170,6 +170,19 @@ export function validateEnv(env) {
     if (env.RESIDENCY_EVIDENCE_MODE !== 'provider-hash-bound') throw new Error('INSECURE_RESIDENCY_EVIDENCE_MODE');
     if (env.ONBOARDING_READINESS_MODE !== 'required-control-set') throw new Error('INSECURE_ONBOARDING_READINESS_MODE');
     if (env.TENANT_ACTIVATION_MODE !== 'readiness-hash-bound') throw new Error('INSECURE_TENANT_ACTIVATION_MODE');
+    if (env.SUPPORT_DIAGNOSTIC_MODE !== 'jit-redacted-bounded') throw new Error('INSECURE_SUPPORT_DIAGNOSTIC_MODE');
+    if (env.SUPPORT_DIAGNOSTIC_EVIDENCE_MODE !== 'append-only-hash-only') throw new Error('INSECURE_SUPPORT_DIAGNOSTIC_EVIDENCE_MODE');
+    if (env.SECRET_ROTATION_EVIDENCE_MODE !== 'generation-fingerprint') throw new Error('INSECURE_SECRET_ROTATION_EVIDENCE_MODE');
+    if (env.SECRET_ROTATION_ACTIVATION_MODE !== 'dual-control') throw new Error('INSECURE_SECRET_ROTATION_ACTIVATION_MODE');
+    if (env.SECRET_REVOCATION_EVIDENCE_MODE !== 'required') throw new Error('INSECURE_SECRET_REVOCATION_EVIDENCE_MODE');
+    if (env.AUDIT_EVIDENCE_PACKAGE_MODE !== 'checkpoint-hash-manifest') throw new Error('INSECURE_AUDIT_EVIDENCE_PACKAGE_MODE');
+    if (env.AUDIT_EVIDENCE_RANGE_MODE !== 'bounded-contiguous') throw new Error('INSECURE_AUDIT_EVIDENCE_RANGE_MODE');
+    if (env.OFFBOARDING_EXPORT_MANIFEST_MODE !== 'required-class-hash-manifest') throw new Error('INSECURE_OFFBOARDING_EXPORT_MANIFEST_MODE');
+    if (env.OFFBOARDING_EXPORT_CERTIFICATION_MODE !== 'exact-version') throw new Error('INSECURE_OFFBOARDING_EXPORT_CERTIFICATION_MODE');
+    if (env.CLOCK_INTEGRITY_MODE !== 'trusted-monotonic') throw new Error('INSECURE_CLOCK_INTEGRITY_MODE');
+    if (env.CLOCK_SOURCE_MODE !== 'external-verified') throw new Error('INSECURE_CLOCK_SOURCE_MODE');
+    if (!integerInRange(env.CLOCK_MAX_SKEW_SECONDS,1,300)) throw new Error('INVALID_CLOCK_MAX_SKEW_SECONDS');
+    if (!integerInRange(env.CLOCK_SAMPLE_MAX_AGE_SECONDS,10,3600)) throw new Error('INVALID_CLOCK_SAMPLE_MAX_AGE_SECONDS');
     if (localModes.has(String(env.OBJECT_STORAGE_MODE).toLowerCase())) throw new Error('INSECURE_OBJECT_STORAGE_MODE');
     if (localModes.has(String(env.QUEUE_MODE).toLowerCase())) throw new Error('INSECURE_QUEUE_MODE');
     if (localModes.has(String(env.SESSION_STORE_MODE).toLowerCase())) throw new Error('INSECURE_SESSION_STORE_MODE');
@@ -256,6 +269,11 @@ export function validateEnv(env) {
       SLO_VALIDATION_STATUS: 'PASS',
       DATA_RESIDENCY_VALIDATION_STATUS: 'PASS',
       ONBOARDING_READINESS_VALIDATION_STATUS: 'PASS',
+      SUPPORT_DIAGNOSTIC_VALIDATION_STATUS: 'PASS',
+      SECRET_ROTATION_VALIDATION_STATUS: 'PASS',
+      AUDIT_EVIDENCE_PACKAGE_VALIDATION_STATUS: 'PASS',
+      OFFBOARDING_EXPORT_VALIDATION_STATUS: 'PASS',
+      CLOCK_INTEGRITY_VALIDATION_STATUS: 'PASS',
     };
     for (const [key,expected] of Object.entries(gates)) if (String(env[key] ?? '') !== expected) throw new Error(`REAL_CLIENT_DATA_GATE_${key}`);
   }
