@@ -28,7 +28,7 @@ path,domain,status,authority,type,bytes
 .gitignore,governance,current,high,file,649
 00_GOVERNANCE/COMPANY_OPERATING_MODEL.md,governance,reference,medium,md,1703
 00_GOVERNANCE/CONSOLIDATION_NOTES.md,governance,reference,medium,md,1106
-00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,67736
+00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,68761
 00_GOVERNANCE/DECISION_GATES.md,governance,reference,medium,md,1121
 00_GOVERNANCE/DECISIONS.md,governance,reference,high,md,3857
 00_GOVERNANCE/FILE_PRIORITY_BUILD_ORDER.md,governance,reference,medium,md,1298
@@ -450,8 +450,9 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/db/migrations/047_shared_identity_sessions.sql,production_shape,reference,low,sql,4419
 30_PRODUCTION_SHAPE_SCAFFOLD/db/migrations/048_shared_security_controls.sql,production_shape,reference,low,sql,9722
 30_PRODUCTION_SHAPE_SCAFFOLD/db/migrations/049_shared_audit_ledger.sql,production_shape,reference,low,sql,7635
-30_PRODUCTION_SHAPE_SCAFFOLD/db/migrations/MANIFEST.json,production_shape,reference,low,json,8350
-30_PRODUCTION_SHAPE_SCAFFOLD/db/verification/runtime_security.sql,production_shape,reference,low,sql,6542
+30_PRODUCTION_SHAPE_SCAFFOLD/db/migrations/050_shared_job_queue.sql,production_shape,reference,low,sql,8021
+30_PRODUCTION_SHAPE_SCAFFOLD/db/migrations/MANIFEST.json,production_shape,reference,low,json,8516
+30_PRODUCTION_SHAPE_SCAFFOLD/db/verification/runtime_security.sql,production_shape,reference,low,sql,6619
 30_PRODUCTION_SHAPE_SCAFFOLD/db/verification/setup_rls_fixtures.sql,production_shape,reference,low,sql,2870
 30_PRODUCTION_SHAPE_SCAFFOLD/db/verification/verify_rls_isolation.sql,production_shape,reference,low,sql,4491
 30_PRODUCTION_SHAPE_SCAFFOLD/db/verification/verify_runtime.sql,production_shape,reference,low,sql,390
@@ -484,11 +485,11 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/test/clock-integrity-v114.test.js,production_shape,reference,low,js,936
 30_PRODUCTION_SHAPE_SCAFFOLD/test/data-classification-v105.test.js,production_shape,reference,low,js,787
 30_PRODUCTION_SHAPE_SCAFFOLD/test/data-residency-v108.test.js,production_shape,reference,low,js,779
-30_PRODUCTION_SHAPE_SCAFFOLD/test/migration-safety.test.js,production_shape,reference,low,js,7190
+30_PRODUCTION_SHAPE_SCAFFOLD/test/migration-safety.test.js,production_shape,reference,low,js,7184
 30_PRODUCTION_SHAPE_SCAFFOLD/test/offboarding-export-v113.test.js,production_shape,reference,low,js,979
 30_PRODUCTION_SHAPE_SCAFFOLD/test/onboarding-readiness-v109.test.js,production_shape,reference,low,js,766
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresRuntimeV117.test.js,production_shape,reference,low,js,4603
-30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,26265
+30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,34673
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresTransactionsV118.test.js,production_shape,reference,low,js,7779
 30_PRODUCTION_SHAPE_SCAFFOLD/test/secret-rotation-v111.test.js,production_shape,reference,low,js,1044
 30_PRODUCTION_SHAPE_SCAFFOLD/test/security-contract.test.js,engineering,reference,medium,js,228816
@@ -519,9 +520,9 @@ path,domain,status,authority,type,bytes
 32_SECURITY_REGRESSION_AUTOMATION/dependency_review.md,engineering,reference,medium,md,429
 32_SECURITY_REGRESSION_AUTOMATION/run_security_policy_tests.py,engineering,reference,medium,py,526
 32_SECURITY_REGRESSION_AUTOMATION/schema_drift_policy.md,engineering,reference,medium,md,400
-32_SECURITY_REGRESSION_AUTOMATION/security_policy.json,engineering,reference,medium,json,8265
+32_SECURITY_REGRESSION_AUTOMATION/security_policy.json,engineering,reference,medium,json,8301
 32_SECURITY_REGRESSION_AUTOMATION/security_regression_scan.py,engineering,reference,medium,py,5772
-32_SECURITY_REGRESSION_AUTOMATION/security_test_manifest.json,engineering,reference,medium,json,4934
+32_SECURITY_REGRESSION_AUTOMATION/security_test_manifest.json,engineering,reference,medium,json,5061
 32_SECURITY_REGRESSION_AUTOMATION/TEST_RESULTS.md,engineering,reference,medium,md,546
 32_SECURITY_REGRESSION_AUTOMATION/test_security_policy.py,engineering,reference,medium,py,9171
 33_PRE_TO_FINAL_AUDIT_AND_LOCK/00_PRE_TO_COMMAND_CENTRE.md,evidence,reference,high,md,2275
@@ -662,6 +663,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/docs/V118_SHARED_IDENTITY.md,platform_build,current,medium,md,8821
 40_PLATFORM_FOUNDATION_BUILD/docs/V119_SHARED_SECURITY_CONTROLS.md,platform_build,current,medium,md,9326
 40_PLATFORM_FOUNDATION_BUILD/docs/V120_SHARED_AUDIT.md,platform_build,current,medium,md,9309
+40_PLATFORM_FOUNDATION_BUILD/docs/V121_SHARED_QUEUE.md,platform_build,current,medium,md,9870
 40_PLATFORM_FOUNDATION_BUILD/docs/V31_OPERATOR_REVIEW_SURFACE.md,engineering,current,medium,md,915
 40_PLATFORM_FOUNDATION_BUILD/docs/V32_OPERATIONS_COCKPIT.md,engineering,current,medium,md,912
 40_PLATFORM_FOUNDATION_BUILD/docs/V33_HIGH_TECH_COMMAND_CENTRE.md,engineering,current,medium,md,866
@@ -787,9 +789,10 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/postgresAudit.js,platform_build,current,medium,js,11394
 40_PLATFORM_FOUNDATION_BUILD/src/postgresIdentityBoundary.js,platform_build,current,medium,js,1164
 40_PLATFORM_FOUNDATION_BUILD/src/postgresInterlock.js,platform_build,current,medium,js,6375
+40_PLATFORM_FOUNDATION_BUILD/src/postgresJobs.js,platform_build,current,medium,js,17242
 40_PLATFORM_FOUNDATION_BUILD/src/postgresOperationalSecurity.js,platform_build,current,medium,js,956
-40_PLATFORM_FOUNDATION_BUILD/src/postgresSecurityBoundary.js,platform_build,current,medium,js,8962
-40_PLATFORM_FOUNDATION_BUILD/src/postgresSessions.js,platform_build,current,medium,js,10960
+40_PLATFORM_FOUNDATION_BUILD/src/postgresSecurityBoundary.js,platform_build,current,medium,js,10692
+40_PLATFORM_FOUNDATION_BUILD/src/postgresSessions.js,platform_build,current,medium,js,11054
 40_PLATFORM_FOUNDATION_BUILD/src/processingEvidence.js,platform_build,current,medium,js,1292
 40_PLATFORM_FOUNDATION_BUILD/src/proclaimValidation.js,platform_build,current,medium,js,6588
 40_PLATFORM_FOUNDATION_BUILD/src/productionAdmission.js,platform_build,current,medium,js,2397
@@ -883,6 +886,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/test/securityMonitoringV62.test.js,platform_build,current,medium,js,6371
 40_PLATFORM_FOUNDATION_BUILD/test/serviceLevelV107.test.js,platform_build,current,medium,js,2452
 40_PLATFORM_FOUNDATION_BUILD/test/sharedAuditV120.test.js,platform_build,current,medium,js,14630
+40_PLATFORM_FOUNDATION_BUILD/test/sharedQueueV121.test.js,platform_build,current,medium,js,14916
 40_PLATFORM_FOUNDATION_BUILD/test/sharedSecurityV119.test.js,platform_build,current,medium,js,20025
 40_PLATFORM_FOUNDATION_BUILD/test/sharedSessionsV118.test.js,platform_build,current,medium,js,12133
 40_PLATFORM_FOUNDATION_BUILD/test/storageBoundary.test.js,platform_build,current,medium,js,15066
@@ -924,6 +928,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V118.md,platform_build,current,medium,md,1897
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V119.md,platform_build,current,medium,md,2465
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V120.md,platform_build,current,medium,md,2515
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V121.md,platform_build,current,medium,md,2499
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V29.md,engineering,current,high,md,687
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V30.md,engineering,current,high,md,575
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V31.md,engineering,current,medium,md,1385
