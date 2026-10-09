@@ -16,6 +16,8 @@ import {PostgresDomainOutbox,PostgresOutboxRelay} from '../../40_PLATFORM_FOUNDA
 import {prepareJobIntent,intentHash} from '../../40_PLATFORM_FOUNDATION_BUILD/src/jobIntent.js';
 import {canonicalAuditPayload} from '../../40_PLATFORM_FOUNDATION_BUILD/src/securityMonitoring.js';
 import {createPostgresDomainPipeline} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresDomainPipeline.js';
+import {createPostgresWorkerPipeline} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerPipeline.js';
+import {PostgresWorkerDomainLoader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerDomain.js';
 import {DeploymentDrainController} from '../../40_PLATFORM_FOUNDATION_BUILD/src/deploymentDrain.js';
 import {createPostgresRuntimeProbe} from '../src/postgresRuntime.js';
 
@@ -24,7 +26,7 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119/V120/V121/V122/V123 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120/V121/V122/V123/V124 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
@@ -48,7 +50,7 @@ test('V118/V119/V120/V121/V122/V123 real PostgreSQL shared identity, security an
   await admin.query(`CREATE ROLE legaltech_runtime_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await admin.query(`CREATE ROLE legaltech_broker_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await admin.query('GRANT legaltech_session_broker TO legaltech_broker_ci');
-  for(const [login,group] of [['legaltech_reader_ci','legaltech_security_reader'],['legaltech_operator_ci','legaltech_security_operator'],['legaltech_limiter_ci','legaltech_rate_limiter'],['legaltech_audit_writer_ci','legaltech_audit_writer'],['legaltech_audit_reader_ci','legaltech_audit_reader'],['legaltech_queue_producer_ci','legaltech_queue_producer'],['legaltech_queue_worker_ci','legaltech_queue_worker'],['legaltech_queue_reader_ci','legaltech_queue_reader'],['legaltech_outbox_relay_ci','legaltech_outbox_relay']]){
+  for(const [login,group] of [['legaltech_reader_ci','legaltech_security_reader'],['legaltech_operator_ci','legaltech_security_operator'],['legaltech_limiter_ci','legaltech_rate_limiter'],['legaltech_audit_writer_ci','legaltech_audit_writer'],['legaltech_audit_reader_ci','legaltech_audit_reader'],['legaltech_queue_producer_ci','legaltech_queue_producer'],['legaltech_queue_worker_ci','legaltech_queue_worker'],['legaltech_queue_reader_ci','legaltech_queue_reader'],['legaltech_outbox_relay_ci','legaltech_outbox_relay'],['legaltech_job_domain_reader_ci','legaltech_job_domain_reader']]){
     await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
     await admin.query(`GRANT ${group} TO ${login}`);
   }
@@ -67,8 +69,8 @@ test('V118/V119/V120/V121/V122/V123 real PostgreSQL shared identity, security an
   const one=new PostgresServerSessionStore({...options,brokerPool:brokerOne}),two=new PostgresServerSessionStore({...options,brokerPool:brokerTwo});
   const session=(providerSessionId=`provider-${uuid()}`)=>({tenantId:tenantA,actorId:actorA,capabilities:['matter:read'],roles:[],authContext:{method:'OIDC',mfaVerified:true,authTime:null,expiresAt:new Date(Date.now()+3600000).toISOString(),providerSessionId}});
 
-  await t.test('all 52 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
-    assert.equal(manifest.migrations.length,52);
+  await t.test('all 53 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
+    assert.equal(manifest.migrations.length,53);
     const result=await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({});assert.equal(result.ok,true);
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
@@ -457,6 +459,94 @@ test('V118/V119/V120/V121/V122/V123 real PostgreSQL shared identity, security an
     await admin.query("UPDATE public.actors SET status='ACTIVE' WHERE id=$1",[serviceActor]);
     pipeline.supervisor.start();await waitReceipt(input.jobId);assert.equal((await pipeline.supervisor.stop()).drained,true);
     assert.equal((await admin.query('SELECT job_id FROM queue_security.jobs WHERE job_id=$1',[input.jobId])).rows.length,1);
+  });
+
+  // Drain earlier synthetic queued examples before worker execution tests.
+  for(const kind of ['PROCESS_INBOUND','POLICY_EVALUATION']){
+    for(let i=0;i<100;i++){const claim=await queueWorker.claimNext({tenantId:tenantA,kind});if(!claim)break;await queueWorker.fail(claim,{errorCode:'CI_FIXTURE_SETTLED',retryable:false});}
+  }
+  const domainReaderPool=makePool('legaltech_job_domain_reader_ci');
+  const bytes=Buffer.from('synthetic V124 artifact'),artifactHash=crypto.createHash('sha256').update(bytes).digest('hex'),resultHash=crypto.createHash('sha256').update('synthetic output').digest('hex');
+  let artifactOverride=null,executionAllowed=true,processed=0;
+  const workerOptions={workerPool:queueWorkerPool,expectedWorkerRole:'legaltech_queue_worker_ci',domainReaderPool,expectedDomainReaderRole:'legaltech_job_domain_reader_ci',workerId:uuid(),
+    authorizeWorker:async()=>true,authorizeDomainRead:async()=>true,authorizeExecution:async()=>executionAllowed,
+    loadPayload:async b=>({tenantId:b.tenantId,id:b.payloadId,hash:b.payloadHash,state:'PROCESSING_ALLOWED',bytes:artifactOverride??bytes}),
+    loadPolicy:async b=>({tenantId:b.tenantId,id:b.policyVersionId,hash:b.policyVersionHash,state:'PUBLISHED',bytes}),
+    processInbound:async c=>{await c.checkpoint();processed++;return {resultCode:'CLASSIFIED',resultHash};},evaluatePolicy:async()=>({resultCode:'EVALUATED',resultHash}),
+    getScopes:async()=>[relayScope],authorizeScope,drain:pipelineOptions.drain,executionTimeoutMs:2000,heartbeatIntervalMs:100,pollIntervalMs:100,cycleTimeoutMs:10000};
+  const workerPipeline=createPostgresWorkerPipeline(workerOptions);supervisors.push(workerPipeline.supervisor);
+  const createInbound=async()=>{const input={...command(),payloadHash:artifactHash};await pipeline.handlers.registerInbound(input);await relay.relay(outboxScope);return input;};
+  const runInbound=()=>workerPipeline.runtime.processNext({tenantId:tenantA,serviceActorId:serviceActor,kind:'PROCESS_INBOUND'});
+  const domainLoader=new PostgresWorkerDomainLoader({pool:domainReaderPool,expectedRole:'legaltech_job_domain_reader_ci',authorizeRead:async()=>true});
+  await t.test('V124 verified inbound execution commits one immutable result with successful queue status',async()=>{
+    const input=await createInbound(),result=await runInbound();assert.equal(result.jobId,input.jobId);assert.equal(result.status,'SUCCEEDED');assert.equal(processed,1);
+    const receipt=await queueReader.getResult({tenantId:tenantA,jobId:input.jobId});assert.equal(receipt.commandId,input.commandId);assert.equal(receipt.artifactHash,artifactHash);assert.equal(receipt.resultHash,resultHash);assert.equal(receipt.tokenHash,undefined);
+    assert.equal((await queueReader.get({tenantId:tenantA,jobId:input.jobId})).status,'SUCCEEDED');assert.equal(await runInbound(),null);
+    assert.equal((await domainLoader.probe()).ok,true);
+  });
+  await t.test('V124 real result ledger rejects receipt-only transactions and rolls back the insert',async()=>{
+    const input=await createInbound(),claim=await queueWorker.claimNext({tenantId:tenantA,kind:'PROCESS_INBOUND'});
+    const row=(await admin.query('SELECT request_hash FROM public.domain_job_commands WHERE job_id=$1',[input.jobId])).rows[0];
+    const client=await queueWorkerPool.connect();try{
+      await client.query('BEGIN');await client.query(`INSERT INTO queue_security.job_results(tenant_id,job_id,kind,object_id,command_id,command_hash,artifact_hash,result_hash,result_code,attempt,worker_id,token_hash)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,'CLASSIFIED',$9,$10,$11)`,[tenantA,input.jobId,claim.kind,claim.objectId,input.commandId,row.request_hash,artifactHash,resultHash,claim.attempt,claim.workerId,crypto.createHash('sha256').update(claim.token).digest('hex')]);
+      await assert.rejects(client.query('COMMIT'),/atomic completion/);
+    }finally{await client.query('ROLLBACK');client.release();}
+    assert.equal((await admin.query('SELECT job_id FROM queue_security.job_results WHERE job_id=$1',[input.jobId])).rows.length,0);
+    const metadata={commandId:input.commandId,commandHash:row.request_hash,artifactHash,resultHash,resultCode:'CLASSIFIED'};
+    assert.equal((await queueWorker.completeWithResult(claim,metadata)).jobId,input.jobId);assert.equal((await queueWorker.completeWithResult(claim,metadata)).jobId,input.jobId);
+    await assert.rejects(queueWorker.completeWithResult(claim,{...metadata,resultHash:'c'.repeat(64)}),/UNAVAILABLE/);
+  });
+  await t.test('V124 stale claim token or fence cannot insert results or settle a current job',async()=>{
+    const input=await createInbound(),claim=await queueWorker.claimNext({tenantId:tenantA,kind:'PROCESS_INBOUND'});
+    const row=(await admin.query('SELECT request_hash FROM public.domain_job_commands WHERE job_id=$1',[input.jobId])).rows[0];
+    const metadata={commandId:input.commandId,commandHash:row.request_hash,artifactHash,resultHash,resultCode:'CLASSIFIED'};
+    assert.equal(await queueWorker.completeWithResult({...claim,attempt:claim.attempt+1},metadata),false);
+    assert.equal(await queueWorker.completeWithResult({...claim,token:crypto.randomBytes(32).toString('base64url')},metadata),false);
+    await assert.rejects(queueWorkerPool.query(`INSERT INTO queue_security.job_results(tenant_id,job_id,kind,object_id,command_id,command_hash,artifact_hash,result_hash,result_code,attempt,worker_id,token_hash)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,'CLASSIFIED',$9,$10,$11)`,[tenantA,input.jobId,claim.kind,claim.objectId,input.commandId,row.request_hash,artifactHash,resultHash,claim.attempt,claim.workerId,'0'.repeat(64)]),/current claim/);
+    assert.equal(await queueReader.getResult({tenantId:tenantA,jobId:input.jobId}),null);await queueWorker.fail(claim,{errorCode:'CI_FIXTURE_SETTLED',retryable:false});
+  });
+  await t.test('V124 result ledger and read-only domain credentials cannot cross principal boundaries',async()=>{
+    for(const pool of [runtime,domainReaderPool,brokerOne,relayPool])assert.equal(await pool.query('SELECT * FROM queue_security.job_results').then(()=>false,e=>e.code==='42501'),true);
+    for(const sql of ['UPDATE queue_security.job_results SET result_hash=result_hash','DELETE FROM queue_security.job_results','TRUNCATE queue_security.job_results'])assert.equal(await queueWorkerPool.query(sql).then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await domainReaderPool.query('UPDATE public.inbound_events SET status=status').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await queueWorkerPool.query('SELECT * FROM public.domain_job_commands').then(()=>false,e=>e.code==='42501'),true);
+    await admin.query('GRANT legaltech_job_domain_reader TO legaltech_runtime_ci');
+    try{assert.equal((await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({})).ok,false);}finally{await admin.query('REVOKE legaltech_job_domain_reader FROM legaltech_runtime_ci');}
+    const scoped=new PostgresTenantTransactions({pool:domainReaderPool,expectedRole:'legaltech_job_domain_reader_ci'});
+    assert.equal((await scoped.run({tenantId:tenantB,actorId:actorB},tx=>tx.query('SELECT * FROM public.domain_job_commands'))).rows.length,0);
+    await admin.query('GRANT legaltech_job_domain_reader TO legaltech_queue_worker_ci');
+    try{await assert.rejects(queueWorker.probe(),/UNAVAILABLE/);}finally{await admin.query('REVOKE legaltech_job_domain_reader FROM legaltech_queue_worker_ci');}
+  });
+  await t.test('V124 tampered provider bytes fail without processing or persisting results',async()=>{
+    const input=await createInbound();artifactOverride=Buffer.from('tampered');try{assert.equal((await runInbound()).errorCode,'WORKER_ARTIFACT_INVALID');}finally{artifactOverride=null;}
+    assert.equal((await queueReader.get({tenantId:tenantA,jobId:input.jobId})).status,'DEAD');assert.equal(await queueReader.getResult({tenantId:tenantA,jobId:input.jobId}),null);assert.equal(processed,1);
+  });
+  await t.test('V124 withdrawn current execution permission denies a still-valid queue claim',async()=>{
+    const input=await createInbound();executionAllowed=false;try{assert.equal((await runInbound()).errorCode,'WORKER_AUTHORIZATION_DENIED');}finally{executionAllowed=true;}
+    assert.equal(await queueReader.getResult({tenantId:tenantA,jobId:input.jobId}),null);assert.equal(processed,1);
+  });
+  await t.test('V124 disabled service and original author are denied by actual tenant-scoped domain loading',async()=>{
+    const input=await createInbound(),claim=await queueWorker.claimNext({tenantId:tenantA,kind:'PROCESS_INBOUND'});
+    for(const id of [serviceActor,actorA]){await admin.query("UPDATE public.actors SET status='DISABLED' WHERE id=$1",[id]);try{await assert.rejects(domainLoader.load(claim,{serviceActorId:serviceActor}),/FORBIDDEN/);}finally{await admin.query("UPDATE public.actors SET status='ACTIVE' WHERE id=$1",[id]);}}
+    await queueWorker.fail(claim,{errorCode:'CI_FIXTURE_SETTLED',retryable:false});assert.equal(await queueReader.getResult({tenantId:tenantA,jobId:input.jobId}),null);
+  });
+  await t.test('V124 disabled result triggers deny producer and worker health and settlement',async()=>{
+    await admin.query('ALTER TABLE queue_security.job_results DISABLE TRIGGER worker_result_completion');
+    try{await assert.rejects(queueWorker.probe(),/UNAVAILABLE/);await assert.rejects(queueProducer.probe(),/UNAVAILABLE/);}finally{await admin.query('ALTER TABLE queue_security.job_results ENABLE TRIGGER worker_result_completion');}
+  });
+  await t.test('V124 published policy version is verified before atomic evaluation receipt',async()=>{
+    const matterId=uuid();await admin.query('INSERT INTO public.matters(id,tenant_id,display_reference) VALUES($1,$2,$3)',[matterId,tenantA,`v124-policy-${matterId}`]);
+    const input={tenantId:tenantA,actorId:actorA,commandId:uuid(),jobId:uuid(),matterId,policyVersionId:uuid(),policyVersionHash:artifactHash,traceId:'v124-policy'};
+    await pipeline.handlers.requestPolicyEvaluation(input);await relay.relay(outboxScope);const result=await workerPipeline.runtime.processNext({tenantId:tenantA,serviceActorId:serviceActor,kind:'POLICY_EVALUATION'});
+    assert.equal(result.status,'SUCCEEDED');assert.equal(result.jobId,input.jobId);assert.equal((await queueReader.getResult({tenantId:tenantA,jobId:input.jobId})).artifactHash,artifactHash);
+  });
+  await t.test('V124 supervised worker cycle completes the connected domain-relay-worker path and drains',async()=>{
+    const input=await createInbound();workerPipeline.supervisor.start();const end=Date.now()+5000;
+    while(!(await admin.query('SELECT job_id FROM queue_security.job_results WHERE job_id=$1',[input.jobId])).rows.length&&Date.now()<end)await new Promise(r=>setTimeout(r,10));
+    assert.equal((await workerPipeline.supervisor.stop()).drained,true);assert.equal((await queueReader.getResult({tenantId:tenantA,jobId:input.jobId})).commandId,input.commandId);
+    assert.equal(workerPipeline.supervisor.status().inFlight,false);
   });
 
 });

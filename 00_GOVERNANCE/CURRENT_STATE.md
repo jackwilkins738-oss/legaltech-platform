@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V124 — Verified worker execution and lifecycle batch
+
+V124 connects tenant-scoped immutable commands to exact payload/published-policy bytes, current execution authorization, serialized heartbeats, live-claim checkpoints and atomic metadata-only result receipts. Migration 053 adds an isolated read-only domain principal and database-enforced receipt/claim/completion linkage. Worker supervision performs bounded recovery and alternating internal-job batches; explicit five-pool composition preserves actual-settlement drain semantics. See `40_PLATFORM_FOUNDATION_BUILD/docs/V124_WORKER_EXECUTION_BATCH.md`.
+
+Local suites pass 1,963 platform and 140 scaffold tests, including 48 new V124 regressions. Ten enabled PostgreSQL CI cases are added; PostgreSQL is skipped locally and must pass in CI before merge. Real artifact/authorization providers, application-specific processors and output adoption, production HTTP wiring, managed shared drain, canaries and deployment remain outstanding. Result receipts do not prove exactly-once external execution or legal outcomes. This is an authorised D-018 security integration exception; the pre-TO freeze and customer-data deployment gate remain in force.
+
 ## V123 — Concrete domain handlers and supervised relay
 
 V123 adds PostgreSQL inbound-registration and policy-evaluation request handlers, immutable actor/object/content-version command bindings and a connected three-pool outbox/queue composition. Migration 052 forces tenant RLS and defers exact command/outbox foreign-key verification to commit. The relay supervisor refreshes authorized scopes, acquires deployment drain leases, prevents overlapping cycles and refuses optimistic shutdown/restart after deadlines or uncertain drain release. See `40_PLATFORM_FOUNDATION_BUILD/docs/V123_DOMAIN_PIPELINE.md`.
