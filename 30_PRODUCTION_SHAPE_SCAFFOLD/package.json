@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test",
     "check:sql": "node test/sql-contract.test.js",
-    "check:security": "node test/security-contract.test.js"
+    "check:security": "node test/security-contract.test.js",
+    "check:migrations": "node --test test/migration-safety.test.js"
   },
   "engines": {
     "node": ">=22"
