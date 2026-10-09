@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V124-VERIFIED-WORKER",
+      "concept": "V124 verified worker execution",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V123-DOMAIN-PIPELINE",
       "concept": "V123 domain pipeline regression",
       "severity": "BLOCKER"

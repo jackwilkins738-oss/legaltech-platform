@@ -255,6 +255,7 @@
     "V120 shared audit regression",
     "V121 shared queue regression",
     "V122 transactional outbox regression",
-    "V123 domain pipeline regression"
+    "V123 domain pipeline regression",
+    "V124 verified worker execution"
   ]
 }
