@@ -23,7 +23,7 @@ export class JitSupportAccessRegistry {
     if(typeof now!=='function'||typeof auditEvent!=='function'||!Number.isInteger(ttlSeconds)||ttlSeconds<60||ttlSeconds>900)throw new Error('SUPPORT_ACCESS_CONFIGURATION_INVALID');
     this.#now=now;this.#ttlMs=ttlSeconds*1000;this.#audit=auditEvent;
   }
-  #event(row){const event=Object.freeze({id:`sae_${crypto.randomUUID()}`,at:new Date(this.#now()).toISOString(),...row});this.#events.push(event);this.#audit(event);return event;}
+  #event(row){const event=Object.freeze({id:`sae_${crypto.randomUUID()}`,at:new Date(this.#now()).toISOString(),...row});const result=this.#audit(event);if(result&&typeof result.then==='function'){Promise.resolve(result).catch(()=>{});throw new Error('SUPPORT_ACCESS_SYNC_AUDIT_REQUIRED');}this.#events.push(event);return event;}
   #key(tenantId,requestId){return `${tenantId}\0${requestId}`;}
   request({session,scope,matterId,documentRef=null,ticketRef,purpose,traceId}){
     const s=normalizeSession(session);requireCapability(s,'support:access:request');requireRecentStepUp(s,{now:this.#now()});
@@ -34,8 +34,8 @@ export class JitSupportAccessRegistry {
     const ticket=text(ticketRef,'SUPPORT_ACCESS_TICKET_INVALID',{min:3,max:200}),why=text(purpose,'SUPPORT_ACCESS_PURPOSE_INVALID');
     const createdAt=new Date(this.#now()).toISOString(),expiresAt=new Date(this.#now()+this.#ttlMs).toISOString(),requestId=`sar_${crypto.randomUUID()}`;
     const row=Object.freeze({requestId,tenantId:s.tenantId,requesterId:s.actorId,scope,matterId,documentRef,createdAt,expiresAt,ticketRefHash:sha(ticket),purposeHash:sha(why),traceId});
-    this.#requests.set(this.#key(s.tenantId,requestId),row);
     this.#event({tenantId:s.tenantId,actorId:s.actorId,requestId,scope,matterId,documentRefHash:documentRef?sha(documentRef):null,traceId,action:'SUPPORT_ACCESS_REQUESTED',outcome:'SUCCESS'});
+    this.#requests.set(this.#key(s.tenantId,requestId),row);
     return clone(row);
   }
   approve({session,requestId,traceId}){
@@ -44,8 +44,10 @@ export class JitSupportAccessRegistry {
     if(row.requesterId===s.actorId)throw new Error('SUPPORT_ACCESS_DUAL_CONTROL_REQUIRED');
     if(this.#now()>=Date.parse(row.expiresAt))throw new Error('SUPPORT_ACCESS_REQUEST_EXPIRED');
     if(this.#approvals.has(key))throw new Error('SUPPORT_ACCESS_ALREADY_APPROVED');
-    const approval=Object.freeze({approvalId:`saa_${crypto.randomUUID()}`,tenantId:s.tenantId,requestId,approverId:s.actorId,approvedAt:new Date(this.#now()).toISOString(),traceId});this.#approvals.set(key,approval);
+    const approval=Object.freeze({approvalId:`saa_${crypto.randomUUID()}`,tenantId:s.tenantId,requestId,approverId:s.actorId,approvedAt:new Date(this.#now()).toISOString(),traceId});
     this.#event({tenantId:s.tenantId,actorId:s.actorId,requestId,scope:row.scope,matterId:row.matterId,documentRefHash:row.documentRef?sha(row.documentRef):null,traceId,action:'SUPPORT_ACCESS_APPROVED',outcome:'SUCCESS'});
+    if(this.#revocations.has(key)||this.#now()>=Date.parse(row.expiresAt))throw new Error('SUPPORT_ACCESS_UNAVAILABLE');
+    this.#approvals.set(key,approval);
     return Object.freeze({...clone(row),approvalId:approval.approvalId,approverId:approval.approverId,approvedAt:approval.approvedAt,status:'ACTIVE'});
   }
   revoke({session,requestId,traceId,reason}){
@@ -66,7 +68,7 @@ export class JitSupportAccessRegistry {
     throw new Error('SUPPORT_ACCESS_UNAVAILABLE');
   }
   assertMatterRead(session,{matterId,traceId}){
-    traceId=id(traceId,'SUPPORT_ACCESS_TRACE_INVALID');const row=this.#active(session,{matterId,scopes:new Set(['MATTER_READ','DIAGNOSTIC_READ'])});const s=normalizeSession(session);
+    traceId=id(traceId,'SUPPORT_ACCESS_TRACE_INVALID');const row=this.#active(session,{matterId,scopes:new Set(['MATTER_READ'])});const s=normalizeSession(session);
     this.#event({tenantId:s.tenantId,actorId:s.actorId,requestId:row.requestId,scope:row.scope,matterId:row.matterId,documentRefHash:null,traceId,action:'SUPPORT_MATTER_READ',outcome:'SUCCESS'});return clone(row);
   }
   assertDiagnosticRead(session,{matterId,traceId}){

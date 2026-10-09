@@ -43,7 +43,14 @@ function boundedLimit(url,{name='limit',fallback=50,max=200}={}) {
 }
 function linkedMatterIds(event) {
   if(!event||typeof event!=='object') return [];
-  return [...new Set([event.approvedMatterId,event.match?.matterId].filter(value=>typeof value==='string'&&value))];
+  const candidates=[event.match?.candidates,event.candidates].filter(value=>value!==undefined);
+  const ids=[event.approvedMatterId,event.match?.matterId].filter(value=>value!=null);
+  for(const list of candidates){
+    if(!Array.isArray(list)||list.length>1000)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+    for(const candidate of list){if(!candidate||typeof candidate.matterId!=='string'||!candidate.matterId)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});ids.push(candidate.matterId);}
+  }
+  if(ids.some(value=>typeof value!=='string'||!value))throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+  return [...new Set(ids)];
 }
 function assertEventMatterAccess(session,platform,event) {
   for(const matterId of linkedMatterIds(event)) {
@@ -293,7 +300,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         const limit=boundedLimit(url,{fallback:100,max:200});
         const items=platform.listExceptions(session.tenantId,limit).filter(ex=>{
           const event=platform.getEvent(session.tenantId,ex.eventId);
-          return event&&eventVisible(session,platform,event);
+          return event&&eventVisible(session,platform,{...event,candidates:ex.candidates});
         });
         accountRead(session,traceId,'exceptions',items.length,items.map(ex=>platform.getEvent(session.tenantId,ex.eventId)).filter(Boolean).flatMap(linkedMatterIds));
         return send(res, 200, {items, next_cursor: null}, traceId);
@@ -312,7 +319,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
           if(!ex) throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
           const event=platform.getEvent(session.tenantId,ex.eventId);
           if(!event) throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
-          assertEventMatterAccess(session,platform,event);
+          assertEventMatterAccess(session,platform,{...event,candidates:ex.candidates});
           if(body.matterId!=null&&typeof platform.getMatter==='function'){const matter=platform.getMatter(session.tenantId,body.matterId);if(!matter)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});assertMatterAccess(session,matter);}
         }
         const result = platform.resolveException({tenantId: session.tenantId, exceptionId: routeId(exceptionMatch[1]), resolution: body.resolution, matterId: body.matterId ?? null, notes: body.notes ?? null, actorId: session.actorId, idempotencyKey: idempotencyKey(req)});

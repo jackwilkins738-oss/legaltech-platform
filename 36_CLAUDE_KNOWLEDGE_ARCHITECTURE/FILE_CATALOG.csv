@@ -28,7 +28,7 @@ path,domain,status,authority,type,bytes
 .gitignore,governance,current,high,file,649
 00_GOVERNANCE/COMPANY_OPERATING_MODEL.md,governance,reference,medium,md,1703
 00_GOVERNANCE/CONSOLIDATION_NOTES.md,governance,reference,medium,md,1106
-00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,63115
+00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,63879
 00_GOVERNANCE/DECISION_GATES.md,governance,reference,medium,md,1121
 00_GOVERNANCE/DECISIONS.md,governance,reference,high,md,3857
 00_GOVERNANCE/FILE_PRIORITY_BUILD_ORDER.md,governance,reference,medium,md,1298
@@ -506,7 +506,7 @@ path,domain,status,authority,type,bytes
 32_SECURITY_REGRESSION_AUTOMATION/schema_drift_policy.md,engineering,reference,medium,md,400
 32_SECURITY_REGRESSION_AUTOMATION/security_policy.json,engineering,reference,medium,json,8108
 32_SECURITY_REGRESSION_AUTOMATION/security_regression_scan.py,engineering,reference,medium,py,5772
-32_SECURITY_REGRESSION_AUTOMATION/security_test_manifest.json,engineering,reference,medium,json,4284
+32_SECURITY_REGRESSION_AUTOMATION/security_test_manifest.json,engineering,reference,medium,json,4410
 32_SECURITY_REGRESSION_AUTOMATION/TEST_RESULTS.md,engineering,reference,medium,md,546
 32_SECURITY_REGRESSION_AUTOMATION/test_security_policy.py,engineering,reference,medium,py,9171
 33_PRE_TO_FINAL_AUDIT_AND_LOCK/00_PRE_TO_COMMAND_CENTRE.md,evidence,reference,high,md,2275
@@ -642,6 +642,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/docs/V113_OFFBOARDING_EXPORT.md,platform_build,current,medium,md,235
 40_PLATFORM_FOUNDATION_BUILD/docs/V114_CLOCK_INTEGRITY.md,platform_build,current,medium,md,302
 40_PLATFORM_FOUNDATION_BUILD/docs/V115_TO_FIELD_CLI.md,platform_build,current,medium,md,3663
+40_PLATFORM_FOUNDATION_BUILD/docs/V116_SECURITY_DEFECT_FIXES.md,platform_build,current,medium,md,4282
 40_PLATFORM_FOUNDATION_BUILD/docs/V31_OPERATOR_REVIEW_SURFACE.md,engineering,current,medium,md,915
 40_PLATFORM_FOUNDATION_BUILD/docs/V32_OPERATIONS_COCKPIT.md,engineering,current,medium,md,912
 40_PLATFORM_FOUNDATION_BUILD/docs/V33_HIGH_TECH_COMMAND_CENTRE.md,engineering,current,medium,md,866
@@ -736,18 +737,18 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/dependencyProtection.js,platform_build,current,medium,js,4420
 40_PLATFORM_FOUNDATION_BUILD/src/deploymentDrain.js,platform_build,current,medium,js,3579
 40_PLATFORM_FOUNDATION_BUILD/src/devServer.js,engineering,current,high,js,3997
-40_PLATFORM_FOUNDATION_BUILD/src/documentDelivery.js,platform_build,current,medium,js,7523
+40_PLATFORM_FOUNDATION_BUILD/src/documentDelivery.js,platform_build,current,medium,js,7916
 40_PLATFORM_FOUNDATION_BUILD/src/documentSecurity.js,platform_build,current,medium,js,12968
-40_PLATFORM_FOUNDATION_BUILD/src/egressPolicy.js,platform_build,current,medium,js,3997
+40_PLATFORM_FOUNDATION_BUILD/src/egressPolicy.js,platform_build,current,medium,js,4378
 40_PLATFORM_FOUNDATION_BUILD/src/errors.js,engineering,current,high,js,714
-40_PLATFORM_FOUNDATION_BUILD/src/exportSafety.js,platform_build,current,medium,js,10227
+40_PLATFORM_FOUNDATION_BUILD/src/exportSafety.js,platform_build,current,medium,js,11218
 40_PLATFORM_FOUNDATION_BUILD/src/fileSafety.js,engineering,current,high,js,2940
 40_PLATFORM_FOUNDATION_BUILD/src/graphDeltaRecovery.js,platform_build,current,medium,js,9540
 40_PLATFORM_FOUNDATION_BUILD/src/graphHarness.js,platform_build,current,medium,js,9508
 40_PLATFORM_FOUNDATION_BUILD/src/graphSubscriptionLifecycle.js,platform_build,current,medium,js,13377
 40_PLATFORM_FOUNDATION_BUILD/src/graphWebhookIngress.js,platform_build,current,medium,js,8212
 40_PLATFORM_FOUNDATION_BUILD/src/graphWebhookQueue.js,platform_build,current,medium,js,6742
-40_PLATFORM_FOUNDATION_BUILD/src/httpApi.js,engineering,current,high,js,27700
+40_PLATFORM_FOUNDATION_BUILD/src/httpApi.js,engineering,current,high,js,28337
 40_PLATFORM_FOUNDATION_BUILD/src/inboundJobEvidence.js,platform_build,current,medium,js,4350
 40_PLATFORM_FOUNDATION_BUILD/src/inboundRecovery.js,platform_build,current,medium,js,5462
 40_PLATFORM_FOUNDATION_BUILD/src/inboundRequest.js,platform_build,current,medium,js,3453
@@ -764,7 +765,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/platform.js,engineering,current,high,js,27287
 40_PLATFORM_FOUNDATION_BUILD/src/processingEvidence.js,platform_build,current,medium,js,1292
 40_PLATFORM_FOUNDATION_BUILD/src/proclaimValidation.js,platform_build,current,medium,js,6588
-40_PLATFORM_FOUNDATION_BUILD/src/productionIdentity.js,platform_build,current,medium,js,15281
+40_PLATFORM_FOUNDATION_BUILD/src/productionIdentity.js,platform_build,current,medium,js,16586
 40_PLATFORM_FOUNDATION_BUILD/src/readiness.js,platform_build,current,medium,js,4209
 40_PLATFORM_FOUNDATION_BUILD/src/recoverySafety.js,platform_build,current,medium,js,10843
 40_PLATFORM_FOUNDATION_BUILD/src/releaseProvenance.js,platform_build,current,medium,js,7596
@@ -777,7 +778,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/serviceLevel.js,platform_build,current,medium,js,3677
 40_PLATFORM_FOUNDATION_BUILD/src/store.js,engineering,current,high,js,59307
 40_PLATFORM_FOUNDATION_BUILD/src/supplyChainAttestation.js,platform_build,current,medium,js,4717
-40_PLATFORM_FOUNDATION_BUILD/src/supportAccess.js,platform_build,current,medium,js,8226
+40_PLATFORM_FOUNDATION_BUILD/src/supportAccess.js,platform_build,current,medium,js,8484
 40_PLATFORM_FOUNDATION_BUILD/src/supportDiagnostics.js,platform_build,current,medium,js,5360
 40_PLATFORM_FOUNDATION_BUILD/src/tenantConfiguration.js,platform_build,current,medium,js,6114
 40_PLATFORM_FOUNDATION_BUILD/src/tenantLifecycle.js,platform_build,current,medium,js,6161
@@ -847,6 +848,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/test/reviewRequestSafety.test.js,platform_build,current,medium,js,8354
 40_PLATFORM_FOUNDATION_BUILD/test/secretManagementV61.test.js,platform_build,current,medium,js,6706
 40_PLATFORM_FOUNDATION_BUILD/test/secretRotationV111.test.js,platform_build,current,medium,js,3863
+40_PLATFORM_FOUNDATION_BUILD/test/securityFixesV116.test.js,platform_build,current,medium,js,14167
 40_PLATFORM_FOUNDATION_BUILD/test/securityHardeningV58.test.js,platform_build,current,medium,js,6239
 40_PLATFORM_FOUNDATION_BUILD/test/securityInterlockV82.test.js,platform_build,current,medium,js,9685
 40_PLATFORM_FOUNDATION_BUILD/test/securityMonitoringV62.test.js,platform_build,current,medium,js,6371
@@ -885,6 +887,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V109.md,platform_build,current,medium,md,1118
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V114.md,platform_build,current,medium,md,1177
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V115.md,platform_build,current,medium,md,1203
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V116.md,platform_build,current,medium,md,1037
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V29.md,engineering,current,high,md,687
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V30.md,engineering,current,high,md,575
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V31.md,engineering,current,medium,md,1385
