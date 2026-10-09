@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V121 — Shared queue and fenced worker claims
+
+V121 adds separate PostgreSQL producer/worker/reader roles, a durable metadata-only queue, current authorisation callbacks, hashed claim credentials, attempt fencing, bounded heartbeat/retry policy and tenant-scoped crash recovery. Expired or failed external-effect jobs enter reconciliation. Migration 050 and the expanded real PostgreSQL CI tests cover the shared path. See `40_PLATFORM_FOUNDATION_BUILD/docs/V121_SHARED_QUEUE.md`.
+
+Local suites pass 1,869 platform and 140 scaffold tests, including 26 new V121 regressions. PostgreSQL execution is skipped locally; the integration CI job must pass before merge. Migration 050, actual service identity/domain authorisation, worker/outbox wiring, external idempotency/reconciliation and deployed operations remain unvalidated. Queue fencing does not guarantee exactly-once external execution. This is an authorised D-018 security integration exception; the pre-TO freeze and customer-data deployment gate remain in force.
+
 ## V120 — Shared audit persistence and integrity boundary
 
 V120 adds an asynchronous PostgreSQL append-only audit writer and independent snapshot verifier, stable event-ID replay/conflict handling, per-tenant hash chains and a readiness boundary requiring an independently trusted anchor. Migration 049 adds restrictive audit roles, forced RLS and database-enforced metadata/hash/sequence/head protections. See `40_PLATFORM_FOUNDATION_BUILD/docs/V120_SHARED_AUDIT.md`.

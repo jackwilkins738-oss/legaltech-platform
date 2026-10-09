@@ -246,6 +246,11 @@
       "sha256": "6c741d941b3b424f6b41f04feb06f652bf4a3f13cb69b371ef185682717ba155",
       "destructive": true,
       "destructiveReviewRef": "V120-AUDIT-TRUNCATE-GUARD"
+    },
+    {
+      "file": "050_shared_job_queue.sql",
+      "sha256": "b45c2a40110b5184c6133da0e16c4fa3a0825893d94f61a9392cb238ef7c5988",
+      "destructive": false
     }
   ]
 }

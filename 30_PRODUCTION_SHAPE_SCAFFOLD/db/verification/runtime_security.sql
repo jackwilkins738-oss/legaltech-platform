@@ -13,7 +13,7 @@ BEGIN
   IF current_setting('row_security') <> 'on' THEN
     RAISE EXCEPTION 'RUNTIME_ROW_SECURITY_REQUIRED';
   END IF;
-  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname IN ('legaltech_session_broker','legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_audit_writer','legaltech_audit_reader')
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname IN ('legaltech_session_broker','legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader')
     AND pg_catalog.pg_has_role(current_user,r.oid,'MEMBER')) THEN
     RAISE EXCEPTION 'RUNTIME_SESSION_BROKER_ROLE_FORBIDDEN';
   END IF;

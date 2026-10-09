@@ -11,6 +11,7 @@ import {PostgresServerSessionStore} from '../../40_PLATFORM_FOUNDATION_BUILD/src
 import {PostgresSecurityInterlock,PostgresSecurityInterlockOperator} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresInterlock.js';
 import {PostgresAbuseLimiter} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresAbuseControl.js';
 import {PostgresAuditWriter,PostgresAuditReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresAudit.js';
+import {PostgresJobProducer,PostgresJobWorker,PostgresJobReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresJobs.js';
 import {createPostgresRuntimeProbe} from '../src/postgresRuntime.js';
 
 const enabled=process.env.LEGALTECH_RUN_POSTGRES_TESTS==='true';
@@ -18,7 +19,7 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119/V120 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120/V121 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
@@ -42,7 +43,7 @@ test('V118/V119/V120 real PostgreSQL shared identity, security and tenant isolat
   await admin.query(`CREATE ROLE legaltech_runtime_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await admin.query(`CREATE ROLE legaltech_broker_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await admin.query('GRANT legaltech_session_broker TO legaltech_broker_ci');
-  for(const [login,group] of [['legaltech_reader_ci','legaltech_security_reader'],['legaltech_operator_ci','legaltech_security_operator'],['legaltech_limiter_ci','legaltech_rate_limiter'],['legaltech_audit_writer_ci','legaltech_audit_writer'],['legaltech_audit_reader_ci','legaltech_audit_reader']]){
+  for(const [login,group] of [['legaltech_reader_ci','legaltech_security_reader'],['legaltech_operator_ci','legaltech_security_operator'],['legaltech_limiter_ci','legaltech_rate_limiter'],['legaltech_audit_writer_ci','legaltech_audit_writer'],['legaltech_audit_reader_ci','legaltech_audit_reader'],['legaltech_queue_producer_ci','legaltech_queue_producer'],['legaltech_queue_worker_ci','legaltech_queue_worker'],['legaltech_queue_reader_ci','legaltech_queue_reader']]){
     await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
     await admin.query(`GRANT ${group} TO ${login}`);
   }
@@ -58,8 +59,8 @@ test('V118/V119/V120 real PostgreSQL shared identity, security and tenant isolat
   const one=new PostgresServerSessionStore({...options,brokerPool:brokerOne}),two=new PostgresServerSessionStore({...options,brokerPool:brokerTwo});
   const session=(providerSessionId=`provider-${uuid()}`)=>({tenantId:tenantA,actorId:actorA,capabilities:['matter:read'],roles:[],authContext:{method:'OIDC',mfaVerified:true,authTime:null,expiresAt:new Date(Date.now()+3600000).toISOString(),providerSessionId}});
 
-  await t.test('all 49 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
-    assert.equal(manifest.migrations.length,49);
+  await t.test('all 50 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
+    assert.equal(manifest.migrations.length,50);
     const result=await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({});assert.equal(result.ok,true);
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
@@ -243,6 +244,77 @@ test('V118/V119/V120 real PostgreSQL shared identity, security and tenant isolat
     }
     const localReader=new PostgresAuditReader({pool:auditReaderPool,expectedRole:'legaltech_audit_reader_ci'});assert.equal((await localReader.verify({tenantId:tenantA})).ok,true);
     await assert.rejects(auditReader.verify({tenantId:tenantA}),/AUDIT_INTEGRITY_UNAVAILABLE/);
+  });
+
+  const queueProducerPool=makePool('legaltech_queue_producer_ci'),queueWorkerPool=makePool('legaltech_queue_worker_ci'),queueWorkerPoolTwo=makePool('legaltech_queue_worker_ci'),queueReaderPool=makePool('legaltech_queue_reader_ci');
+  const queueProducer=new PostgresJobProducer({pool:queueProducerPool,expectedRole:'legaltech_queue_producer_ci',authorizeEnqueue:async()=>true});
+  let queueAuthority=true;
+  const queueWorker=new PostgresJobWorker({pool:queueWorkerPool,expectedRole:'legaltech_queue_worker_ci',workerId:uuid(),authorizeWorker:async()=>queueAuthority});
+  const queueWorkerTwo=new PostgresJobWorker({pool:queueWorkerPoolTwo,expectedRole:'legaltech_queue_worker_ci',workerId:uuid(),authorizeWorker:async()=>queueAuthority});
+  const queueReader=new PostgresJobReader({pool:queueReaderPool,expectedRole:'legaltech_queue_reader_ci',authorizeRead:async()=>true});
+  const queued=(type='POLICY_EVALUATION',extra={})=>({tenantId:tenantA,jobId:uuid(),kind:type,objectId:uuid(),traceId:'v121-ci',idempotencyKey:`v121-${uuid()}`,leaseMs:5000,maxRunMs:10000,maxAttempts:2,...extra});
+  await t.test('V121 producer replay is immutable and queue roles cannot rewrite bindings or read domain/security data',async()=>{
+    const event=queued();const first=await queueProducer.enqueue(event);assert.equal(first.status,'QUEUED');assert.equal((await queueProducer.enqueue(event)).replayed,true);
+    await assert.rejects(queueProducer.enqueue({...event,objectId:uuid()}),/ENQUEUE_CONFLICT/);
+    assert.equal((await queueProducer.probe()).ok,true);assert.equal((await queueWorker.probe()).ok,true);
+    assert.equal(await queueProducerPool.query('UPDATE queue_security.jobs SET status=status').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await queueWorkerPool.query('UPDATE queue_security.jobs SET object_id=object_id').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await queueWorkerPool.query('DELETE FROM queue_security.jobs').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await queueReaderPool.query('UPDATE queue_security.jobs SET status=status').then(()=>false,e=>e.code==='42501'),true);
+    for(const pool of [queueProducerPool,queueWorkerPool])assert.equal(await pool.query('SELECT * FROM public.matters').then(()=>false,e=>e.code==='42501'),true);
+    for(const pool of [runtime,brokerOne,readerOne,auditReaderPool])assert.equal(await pool.query('SELECT * FROM queue_security.jobs').then(()=>false,e=>e.code==='42501'),true);
+  });
+  await t.test('V121 two connections claim distinct due jobs and cannot cross tenant boundaries',async()=>{
+    for(let i=0;i<7;i++)await queueProducer.enqueue(queued());
+    const claims=await Promise.all(Array.from({length:8},(_,i)=>(i%2?queueWorker:queueWorkerTwo).claimNext({tenantId:tenantA,kind:'POLICY_EVALUATION'})));
+    assert.ok(claims.every(Boolean));assert.equal(new Set(claims.map(x=>x.jobId)).size,8);
+    assert.equal(await queueWorker.claimNext({tenantId:tenantB,kind:'POLICY_EVALUATION'}),null);
+    for(const claim of claims){
+      const found=await queueWorkerPool.query('SELECT lease_token_hash FROM queue_security.jobs WHERE tenant_id=$1 AND job_id=$2',[tenantA,claim.jobId]);
+      assert.notEqual(found.rows[0].lease_token_hash,claim.token);assert.equal(found.rows[0].lease_token_hash,crypto.createHash('sha256').update(claim.token).digest('hex'));
+    }
+  });
+  let recoveredClaim;
+  await t.test('V121 expiry, recovery and reclaim advance the fence and reject old worker renew/complete',async()=>{
+    const event=queued('PROCESS_INBOUND');await queueProducer.enqueue(event);const first=await queueWorker.claimNext({tenantId:tenantA,kind:'PROCESS_INBOUND'});
+    assert.equal(await queueWorker.renew(first),true);assert.equal(await queueWorker.assertCurrent(first),true);
+    await admin.query('ALTER TABLE queue_security.jobs DISABLE TRIGGER protect_shared_job_transition');
+    try{await admin.query("UPDATE queue_security.jobs SET started_at=clock_timestamp()-interval '10 seconds',lease_until=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND job_id=$2",[tenantA,event.jobId]);}
+    finally{await admin.query('ALTER TABLE queue_security.jobs ENABLE TRIGGER protect_shared_job_transition');}
+    assert.equal(await queueWorker.complete(first),false);
+    const recovered=await queueWorkerTwo.recoverExpired({tenantId:tenantA,kind:'PROCESS_INBOUND'});assert.equal(recovered.length,1);assert.equal(recovered[0].status,'QUEUED');
+    await new Promise(resolve=>setTimeout(resolve,1100));
+    const second=await queueWorkerTwo.claimNext({tenantId:tenantA,kind:'PROCESS_INBOUND'});assert.equal(second.attempt,first.attempt+1);assert.notEqual(second.token,first.token);recoveredClaim=second;
+    assert.equal(await queueWorker.renew(first),false);assert.equal(await queueWorker.complete(first),false);
+    await assert.rejects(queueWorker.assertCurrent(first),/UNAVAILABLE/);
+    assert.equal(await queueWorkerTwo.complete(second),true);assert.equal(await queueWorkerTwo.complete(second),true);
+    assert.equal((await queueReader.get({tenantId:tenantA,jobId:event.jobId})).status,'SUCCEEDED');
+  });
+  await t.test('V121 asynchronous authorisation withdrawal denies even current claim settlement',async()=>{
+    queueAuthority=false;try{await assert.rejects(queueWorkerTwo.complete(recoveredClaim),/FORBIDDEN/);}finally{queueAuthority=true;}
+  });
+  await t.test('V121 expired external side effects enter reconciliation and never become automatic retry candidates',async()=>{
+    const event=queued('PROCLAIM_WRITEBACK');await queueProducer.enqueue(event);const claim=await queueWorker.claimNext({tenantId:tenantA,kind:'PROCLAIM_WRITEBACK'});
+    await admin.query('ALTER TABLE queue_security.jobs DISABLE TRIGGER protect_shared_job_transition');
+    try{await admin.query("UPDATE queue_security.jobs SET started_at=clock_timestamp()-interval '10 seconds',lease_until=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND job_id=$2",[tenantA,event.jobId]);}
+    finally{await admin.query('ALTER TABLE queue_security.jobs ENABLE TRIGGER protect_shared_job_transition');}
+    const recovered=await queueWorkerTwo.recoverExpired({tenantId:tenantA,kind:'PROCLAIM_WRITEBACK'});assert.equal(recovered[0].status,'RECONCILE');
+    assert.equal(await queueWorker.claimNext({tenantId:tenantA,kind:'PROCLAIM_WRITEBACK'}),null);assert.equal(await queueWorker.complete(claim),false);
+    const notification=queued('NOTIFICATION_DELIVERY');await queueProducer.enqueue(notification);const sending=await queueWorker.claimNext({tenantId:tenantA,kind:'NOTIFICATION_DELIVERY'});
+    assert.equal(await queueWorker.fail(sending,{errorCode:'OUTCOME_UNKNOWN',retryable:true}),true);
+    assert.equal((await queueReader.get({tenantId:tenantA,jobId:notification.jobId})).status,'RECONCILE');
+    assert.equal(await queueWorker.claimNext({tenantId:tenantA,kind:'NOTIFICATION_DELIVERY'}),null);
+  });
+  await t.test('V121 bounded retries end in dead state and locked candidates are skipped on another connection',async()=>{
+    const dead=queued('PROCESS_INBOUND',{maxAttempts:1});await queueProducer.enqueue(dead);const claim=await queueWorker.claimNext({tenantId:tenantA,kind:'PROCESS_INBOUND'});assert.equal(await queueWorker.fail(claim,{errorCode:'FAILED',retryable:true}),true);
+    assert.equal((await queueReader.get({tenantId:tenantA,jobId:dead.jobId})).status,'DEAD');
+    const locked=queued('PROCESS_INBOUND'),other=queued('PROCESS_INBOUND');await queueProducer.enqueue(locked);await queueProducer.enqueue(other);
+    const connection=await queueWorkerPool.connect();try{
+      await connection.query('BEGIN');await connection.query('SELECT job_id FROM queue_security.jobs WHERE tenant_id=$1 AND job_id=$2 FOR UPDATE',[tenantA,locked.jobId]);
+      const available=await queueWorkerTwo.claimNext({tenantId:tenantA,kind:'PROCESS_INBOUND'});assert.equal(available.jobId,other.jobId);
+      await connection.query('ROLLBACK');
+    }finally{connection.release();}
+    const later=await queueWorker.claimNext({tenantId:tenantA,kind:'PROCESS_INBOUND'});assert.equal(later.jobId,locked.jobId);
   });
 
 });

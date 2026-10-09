@@ -1,15 +1,30 @@
 import {runPostgresTransaction} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 
-const GROUPS=['legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_session_broker','legaltech_audit_writer','legaltech_audit_reader'];
-const SCHEMA={legaltech_audit_writer:'audit_security',legaltech_audit_reader:'audit_security'};
+const GROUPS=['legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_session_broker','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader'];
+const SCHEMA={legaltech_audit_writer:'audit_security',legaltech_audit_reader:'audit_security',legaltech_queue_producer:'queue_security',legaltech_queue_worker:'queue_security',legaltech_queue_reader:'queue_security'};
 const ALLOWED={
   legaltech_security_reader:['interlocks','interlock_events'],
   legaltech_security_operator:['interlocks','interlock_events'],
   legaltech_rate_limiter:['rate_buckets','read_matters','rate_configuration'],
   legaltech_audit_writer:['tenant_heads','entries'],
   legaltech_audit_reader:['tenant_heads','entries'],
+  legaltech_queue_producer:['jobs'],
+  legaltech_queue_worker:['jobs'],
+  legaltech_queue_reader:['jobs'],
 };
 const PRIVILEGES={
+  legaltech_queue_producer:`has_table_privilege(current_user,'queue_security.jobs','SELECT')
+    AND has_table_privilege(current_user,'queue_security.jobs','INSERT')
+    AND NOT has_table_privilege(current_user,'queue_security.jobs','UPDATE,DELETE,TRUNCATE')
+    AND NOT has_any_column_privilege(current_user,'queue_security.jobs','UPDATE')`,
+  legaltech_queue_reader:`has_table_privilege(current_user,'queue_security.jobs','SELECT')
+    AND NOT has_table_privilege(current_user,'queue_security.jobs','INSERT,UPDATE,DELETE,TRUNCATE')
+    AND NOT has_any_column_privilege(current_user,'queue_security.jobs','INSERT,UPDATE')`,
+  legaltech_queue_worker:`has_table_privilege(current_user,'queue_security.jobs','SELECT')
+    AND NOT has_table_privilege(current_user,'queue_security.jobs','INSERT,DELETE,TRUNCATE')
+    AND NOT has_any_column_privilege(current_user,'queue_security.jobs','INSERT')
+    AND NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid='queue_security.jobs'::regclass AND a.attnum>0 AND NOT a.attisdropped
+      AND has_column_privilege(current_user,a.attrelid,a.attnum,'UPDATE')<>(a.attname=ANY(ARRAY['status','attempts','worker_id','lease_token_hash','lease_until','run_until','started_at','available_at','last_error_code','result_code','updated_at']::name[])))`,
   legaltech_audit_writer:`has_table_privilege(current_user,'audit_security.entries','SELECT')
     AND has_table_privilege(current_user,'audit_security.entries','INSERT')
     AND NOT has_table_privilege(current_user,'audit_security.entries','UPDATE,DELETE,TRUNCATE')
@@ -67,17 +82,17 @@ export function securityOptions({pool,expectedRole,timeoutMs=5000}={}) {
 }
 export async function securityTransaction(options,group,work,{readOnly=false,isolation='READ COMMITTED',signal}={}) {
   const schema=SCHEMA[group]??'operational_security';
-  const others=GROUPS.filter(x=>x!==group&&!(group==='legaltech_security_operator'&&x==='legaltech_security_reader')&&!(group==='legaltech_audit_writer'&&x==='legaltech_audit_reader'));
+  const others=GROUPS.filter(x=>x!==group&&!(group==='legaltech_security_operator'&&x==='legaltech_security_reader')&&!(group==='legaltech_audit_writer'&&x==='legaltech_audit_reader')&&!(['legaltech_queue_producer','legaltech_queue_worker'].includes(group)&&x==='legaltech_queue_reader'));
   return runPostgresTransaction({...options,readOnly,isolation,signal},async tx=>{
     const result=await tx.query(`SELECT pg_has_role(current_user,$1,'MEMBER') AS member,
       EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role(current_user,r.oid,'MEMBER') AND
         (r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication
           OR r.rolname=ANY($2::text[]) OR r.rolname IN ('pg_read_all_data','pg_write_all_data','pg_read_server_files','pg_write_server_files','pg_execute_server_program')))
         OR has_database_privilege(current_user,current_database(),'CREATE') AS privileged,
-      EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN ('public','identity_security','operational_security','audit_security')
+      EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN ('public','identity_security','operational_security','audit_security','queue_security')
         AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE'))) AS owns_schema,
       EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-        WHERE n.nspname IN ('public','identity_security','operational_security','audit_security') AND c.relkind IN ('r','p','v','m','f')
+        WHERE n.nspname IN ('public','identity_security','operational_security','audit_security','queue_security') AND c.relkind IN ('r','p','v','m','f')
           AND (pg_has_role(current_user,c.relowner,'MEMBER') OR
             ((n.nspname<>$4 OR c.relname<>ALL($3::text[])) AND
               (has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
