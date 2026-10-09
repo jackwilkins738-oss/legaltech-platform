@@ -249,6 +249,7 @@
     "trusted monotonic clock",
     "clock skew readiness",
     "clock rollback resistance",
-    "V117 production admission regression"
+    "V117 production admission regression",
+    "V118 shared session regression"
   ]
 }

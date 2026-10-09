@@ -12,6 +12,7 @@ import {boundedReadinessStatus,isProductionReadiness} from './productionAdmissio
 import {Platform} from './platform.js';
 import {PlatformStore} from './store.js';
 import {LocalObjectStorage} from './objectStorage.js';
+import {usesReferenceSessionStore} from './productionIdentity.js';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const STATIC_FILES = new Map([
@@ -155,7 +156,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
   const production=productionMode||process.env.NODE_ENV==='production';
   if(production) {
     if(!isProductionReadiness(readiness)) throw new Error('PRODUCTION_READINESS_REQUIRED');
-    if(devWorkers||platform instanceof Platform||platform?.store instanceof PlatformStore||platform?.objectStorage instanceof LocalObjectStorage||authProvider instanceof StaticAuthProvider||abuseLimiter instanceof InMemoryAbuseLimiter) throw new Error('PRODUCTION_REFERENCE_ADAPTER_FORBIDDEN');
+    if(devWorkers||platform instanceof Platform||platform?.store instanceof PlatformStore||platform?.objectStorage instanceof LocalObjectStorage||authProvider instanceof StaticAuthProvider||abuseLimiter instanceof InMemoryAbuseLimiter||usesReferenceSessionStore(authProvider)||usesReferenceSessionStore(identitySessionService)) throw new Error('PRODUCTION_REFERENCE_ADAPTER_FORBIDDEN');
     if(typeof authProvider?.authenticate!=='function'||['checkIp','checkTenant','checkRead'].some(method=>typeof abuseLimiter?.[method]!=='function')) throw new Error('PRODUCTION_API_ADAPTER_REQUIRED');
   }
   async function admitted(res,traceId) {
@@ -202,7 +203,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         return send(res,200,{status:'AUTHENTICATED',expiresAt:exchanged.expiresAt},traceId,{'set-cookie':exchanged.setCookie});
       }
       if (identitySessionService && req.method === 'POST' && url.pathname === '/api/v1/auth/logout') {
-        const loggedOut=identitySessionService.logout(req.headers);
+        const loggedOut=await identitySessionService.logout(req.headers);
         return send(res,200,{status:'SIGNED_OUT'},traceId,{'set-cookie':loggedOut.setCookie});
       }
 

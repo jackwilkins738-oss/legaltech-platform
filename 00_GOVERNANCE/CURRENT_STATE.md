@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V118 — Shared identity and tenant transaction foundation
+
+V118 adds a PostgreSQL session/revocation store, separate identity-broker role, current-permission refresh and asynchronous cookie exchange/logout wiring. The domain transaction boundary binds UUID tenant/actor context to one connection and discards failed, timed-out or contaminated backends. Migration 047 and a dedicated real PostgreSQL CI integration check cover the shared path. See `40_PLATFORM_FOUNDATION_BUILD/docs/V118_SHARED_IDENTITY.md`.
+
+Local suites pass 1,791 platform and 138 scaffold tests; the real PostgreSQL integration test is skipped here because PostgreSQL is unavailable. Its new PR job must pass before merge. Actual deployed role/provider validation, remaining shared security adapters and full production composition remain outstanding. This is an authorised D-018 security/integration exception; the customer-data deployment gate and pre-TO freeze remain in force.
+
 ## V117 — Enforced production admission and executable database checks
 
 V117 closes the readiness/data-route bypass, prevents stale healthy probes restoring admission after invalidation, awaits HTTP rate/monitor/audit callbacks, and blocks built-in synthetic adapters in production mode. Production readiness requires all 13 critical provider/control probes. Migration 046 forces RLS on six incident/configuration tables; runnable direct-runtime PostgreSQL catalog and synthetic isolation checks were added. See `40_PLATFORM_FOUNDATION_BUILD/docs/V117_PRODUCTION_ADMISSION.md`.

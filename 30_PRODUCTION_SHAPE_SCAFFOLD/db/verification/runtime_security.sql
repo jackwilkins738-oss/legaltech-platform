@@ -13,6 +13,10 @@ BEGIN
   IF current_setting('row_security') <> 'on' THEN
     RAISE EXCEPTION 'RUNTIME_ROW_SECURITY_REQUIRED';
   END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname='legaltech_session_broker'
+    AND pg_catalog.pg_has_role(current_user,r.oid,'MEMBER')) THEN
+    RAISE EXCEPTION 'RUNTIME_SESSION_BROKER_ROLE_FORBIDDEN';
+  END IF;
   IF EXISTS (
     SELECT 1 FROM pg_catalog.pg_roles r
     WHERE pg_catalog.pg_has_role(current_user,r.oid,'MEMBER')

@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V118-SHARED-IDENTITY",
+      "concept": "V118 shared session regression",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V117-ADMISSION",
       "concept": "V117 production admission regression",
       "severity": "BLOCKER"

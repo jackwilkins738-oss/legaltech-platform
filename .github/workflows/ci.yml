@@ -60,3 +60,39 @@ jobs:
         run: python 32_SECURITY_REGRESSION_AUTOMATION/security_regression_scan.py .
       - name: Claude knowledge lint
         run: python 36_CLAUDE_KNOWLEDGE_ARCHITECTURE/scripts/knowledge_lint.py
+
+  postgres-security-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: legaltech_security_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d legaltech_security_ci"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGDATABASE: legaltech_security_ci
+      PGUSER: postgres
+      PGPASSWORD: synthetic-ci-only
+      LEGALTECH_RUN_POSTGRES_TESTS: 'true'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Install isolated PostgreSQL test driver
+        working-directory: 30_PRODUCTION_SHAPE_SCAFFOLD
+        run: npm install --no-save --package-lock=false --ignore-scripts pg@8.23.0
+      - name: Execute migrations and shared security integration tests
+        working-directory: 30_PRODUCTION_SHAPE_SCAFFOLD
+        run: node --test test/postgresSharedSessions.integration.test.js
