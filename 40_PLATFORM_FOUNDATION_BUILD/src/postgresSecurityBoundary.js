@@ -1,19 +1,24 @@
 import {runPostgresTransaction} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 
-const GROUPS=['legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_session_broker','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_writer','legaltech_outbox_relay','legaltech_domain_commands'];
-const SCHEMA={legaltech_outbox_relay:'public',legaltech_audit_writer:'audit_security',legaltech_audit_reader:'audit_security',legaltech_queue_producer:'queue_security',legaltech_queue_worker:'queue_security',legaltech_queue_reader:'queue_security'};
+const GROUPS=['legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_session_broker','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_writer','legaltech_outbox_relay','legaltech_domain_commands','legaltech_job_domain_reader','legaltech_domain_result_writer'];
+const SCHEMA={legaltech_job_domain_reader:'public',legaltech_outbox_relay:'public',legaltech_audit_writer:'audit_security',legaltech_audit_reader:'audit_security',legaltech_queue_producer:'queue_security',legaltech_queue_worker:'queue_security',legaltech_queue_reader:'queue_security'};
 const ALLOWED={
+  legaltech_job_domain_reader:['tenants','actors','matters','inbound_events','domain_job_commands','domain_outbox_events','matter_actor_access','matter_break_glass_grants','actor_security_zones'],
   legaltech_outbox_relay:['domain_outbox_events','domain_outbox_receipts'],
   legaltech_security_reader:['interlocks','interlock_events'],
   legaltech_security_operator:['interlocks','interlock_events'],
   legaltech_rate_limiter:['rate_buckets','read_matters','rate_configuration'],
   legaltech_audit_writer:['tenant_heads','entries'],
   legaltech_audit_reader:['tenant_heads','entries'],
-  legaltech_queue_producer:['jobs'],
-  legaltech_queue_worker:['jobs'],
-  legaltech_queue_reader:['jobs'],
+  legaltech_queue_producer:['jobs','job_results'],
+  legaltech_queue_worker:['jobs','job_results'],
+  legaltech_queue_reader:['jobs','job_results'],
 };
 const PRIVILEGES={
+  legaltech_job_domain_reader:`NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relname=ANY(ARRAY['tenants','actors','matters','inbound_events','domain_job_commands','domain_outbox_events','matter_actor_access','matter_break_glass_grants','actor_security_zones'])
+      AND (NOT has_table_privilege(current_user,c.oid,'SELECT') OR has_table_privilege(current_user,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        OR has_any_column_privilege(current_user,c.oid,'INSERT,UPDATE')))`,
   legaltech_outbox_relay:`has_table_privilege(current_user,'public.domain_outbox_events','SELECT')
     AND NOT has_table_privilege(current_user,'public.domain_outbox_events','INSERT,UPDATE,DELETE,TRUNCATE')
     AND NOT has_any_column_privilege(current_user,'public.domain_outbox_events','INSERT,UPDATE')
@@ -25,15 +30,28 @@ const PRIVILEGES={
   legaltech_queue_producer:`has_table_privilege(current_user,'queue_security.jobs','SELECT')
     AND has_table_privilege(current_user,'queue_security.jobs','INSERT')
     AND NOT has_table_privilege(current_user,'queue_security.jobs','UPDATE,DELETE,TRUNCATE')
-    AND NOT has_any_column_privilege(current_user,'queue_security.jobs','UPDATE')`,
+    AND NOT has_any_column_privilege(current_user,'queue_security.jobs','UPDATE')
+    AND has_table_privilege(current_user,'queue_security.job_results','SELECT')
+    AND NOT has_table_privilege(current_user,'queue_security.job_results','UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    AND NOT has_any_column_privilege(current_user,'queue_security.job_results','UPDATE')
+    AND NOT has_any_column_privilege(current_user,'queue_security.job_results','INSERT')`,
   legaltech_queue_reader:`has_table_privilege(current_user,'queue_security.jobs','SELECT')
     AND NOT has_table_privilege(current_user,'queue_security.jobs','INSERT,UPDATE,DELETE,TRUNCATE')
-    AND NOT has_any_column_privilege(current_user,'queue_security.jobs','INSERT,UPDATE')`,
+    AND NOT has_any_column_privilege(current_user,'queue_security.jobs','INSERT,UPDATE')
+    AND has_table_privilege(current_user,'queue_security.job_results','SELECT')
+    AND NOT has_table_privilege(current_user,'queue_security.job_results','UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    AND NOT has_any_column_privilege(current_user,'queue_security.job_results','UPDATE')
+    AND NOT has_any_column_privilege(current_user,'queue_security.job_results','INSERT')`,
   legaltech_queue_worker:`has_table_privilege(current_user,'queue_security.jobs','SELECT')
     AND NOT has_table_privilege(current_user,'queue_security.jobs','INSERT,DELETE,TRUNCATE')
     AND NOT has_any_column_privilege(current_user,'queue_security.jobs','INSERT')
     AND NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid='queue_security.jobs'::regclass AND a.attnum>0 AND NOT a.attisdropped
-      AND has_column_privilege(current_user,a.attrelid,a.attnum,'UPDATE')<>(a.attname=ANY(ARRAY['status','attempts','worker_id','lease_token_hash','lease_until','run_until','started_at','available_at','last_error_code','result_code','updated_at']::name[])))`,
+      AND has_column_privilege(current_user,a.attrelid,a.attnum,'UPDATE')<>(a.attname=ANY(ARRAY['status','attempts','worker_id','lease_token_hash','lease_until','run_until','started_at','available_at','last_error_code','result_code','updated_at']::name[])))
+    AND has_table_privilege(current_user,'queue_security.job_results','SELECT')
+    AND NOT has_table_privilege(current_user,'queue_security.job_results','UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    AND NOT has_any_column_privilege(current_user,'queue_security.job_results','UPDATE')
+    AND NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid='queue_security.job_results'::regclass AND a.attnum>0 AND NOT a.attisdropped
+      AND has_column_privilege(current_user,a.attrelid,a.attnum,'INSERT')<>(a.attname=ANY(ARRAY['tenant_id','job_id','kind','object_id','command_id','command_hash','artifact_hash','result_hash','result_code','attempt','worker_id','token_hash']::name[])))`,
   legaltech_audit_writer:`has_table_privilege(current_user,'audit_security.entries','SELECT')
     AND has_table_privilege(current_user,'audit_security.entries','INSERT')
     AND NOT has_table_privilege(current_user,'audit_security.entries','UPDATE,DELETE,TRUNCATE')

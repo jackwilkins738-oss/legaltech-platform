@@ -16,6 +16,7 @@ function driver({member=true,grants=true,role='runtime',privileged=false,owns_sc
     if(sql.startsWith("SELECT NULLIF(current_setting('app.tenant_id'"))return {rows:[{tenant_context:null,actor_context:null}]};
     if(sql.includes('AS member,'))return {rows:[{member,privileged,owns_schema,outside_access}]};
     if(sql.endsWith('AS grants_safe'))return {rows:[{grants_safe:grants}]};
+    if(sql.includes('FROM pg_trigger')&&sql.includes("c.relname='job_results'"))return {rows:trigger?[{tgname:'worker_result_claim',tgenabled:'O'},{tgname:'worker_result_completion',tgenabled:'O',tgdeferrable:true,tginitdeferred:true}]:[]};
     if(sql.includes('FROM pg_trigger'))return {rows:trigger?[{tgenabled:'O'}]:[]};
     if(sql.startsWith('SELECT c.relname'))return {rows:values[0].map(relname=>({relname,enabled:true,forced:true,active:true}))};
     if(sql==='COMMIT'&&failCommit)throw new Error('SECRET_DATABASE_DETAILS');
