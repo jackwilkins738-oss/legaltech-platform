@@ -139,6 +139,31 @@
       "id": "SEC-TENANT-ONBOARDING",
       "concept": "tenant activation readiness hash",
       "severity": "HIGH"
+    },
+    {
+      "id": "SEC-SUPPORT-DIAGNOSTICS",
+      "concept": "JIT redacted support diagnostics with hash-only evidence",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-SECRET-ROTATION-LIFECYCLE",
+      "concept": "managed secret generation dual-control rotation and revocation evidence",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-AUDIT-EVIDENCE-PACKAGE",
+      "concept": "checkpoint-bound contiguous audit evidence hash manifest",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-OFFBOARD-EXPORT",
+      "concept": "exact-version offboarding export inventory certification",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-CLOCK-INTEGRITY",
+      "concept": "trusted monotonic clock skew and rollback resistance",
+      "severity": "HIGH"
     }
   ]
 }
