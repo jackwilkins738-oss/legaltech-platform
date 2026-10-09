@@ -253,6 +253,7 @@
     "V118 shared session regression",
     "V119 shared security regression",
     "V120 shared audit regression",
-    "V121 shared queue regression"
+    "V121 shared queue regression",
+    "V122 transactional outbox regression"
   ]
 }

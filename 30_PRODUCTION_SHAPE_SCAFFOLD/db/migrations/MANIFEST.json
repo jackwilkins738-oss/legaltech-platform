@@ -251,6 +251,11 @@
       "file": "050_shared_job_queue.sql",
       "sha256": "b45c2a40110b5184c6133da0e16c4fa3a0825893d94f61a9392cb238ef7c5988",
       "destructive": false
+    },
+    {
+      "file": "051_transactional_outbox.sql",
+      "sha256": "34439289dea2bd98c6fde94942653fb02a0a40c0a62ccc375543b8c65a7daa52",
+      "destructive": false
     }
   ]
 }

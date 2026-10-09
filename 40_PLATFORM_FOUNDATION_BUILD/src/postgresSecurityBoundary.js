@@ -1,8 +1,9 @@
 import {runPostgresTransaction} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 
-const GROUPS=['legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_session_broker','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader'];
-const SCHEMA={legaltech_audit_writer:'audit_security',legaltech_audit_reader:'audit_security',legaltech_queue_producer:'queue_security',legaltech_queue_worker:'queue_security',legaltech_queue_reader:'queue_security'};
+const GROUPS=['legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_session_broker','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_writer','legaltech_outbox_relay'];
+const SCHEMA={legaltech_outbox_relay:'public',legaltech_audit_writer:'audit_security',legaltech_audit_reader:'audit_security',legaltech_queue_producer:'queue_security',legaltech_queue_worker:'queue_security',legaltech_queue_reader:'queue_security'};
 const ALLOWED={
+  legaltech_outbox_relay:['domain_outbox_events','domain_outbox_receipts'],
   legaltech_security_reader:['interlocks','interlock_events'],
   legaltech_security_operator:['interlocks','interlock_events'],
   legaltech_rate_limiter:['rate_buckets','read_matters','rate_configuration'],
@@ -13,6 +14,14 @@ const ALLOWED={
   legaltech_queue_reader:['jobs'],
 };
 const PRIVILEGES={
+  legaltech_outbox_relay:`has_table_privilege(current_user,'public.domain_outbox_events','SELECT')
+    AND NOT has_table_privilege(current_user,'public.domain_outbox_events','INSERT,UPDATE,DELETE,TRUNCATE')
+    AND NOT has_any_column_privilege(current_user,'public.domain_outbox_events','INSERT,UPDATE')
+    AND has_table_privilege(current_user,'public.domain_outbox_receipts','SELECT')
+    AND NOT has_table_privilege(current_user,'public.domain_outbox_receipts','UPDATE,DELETE,TRUNCATE')
+    AND NOT has_any_column_privilege(current_user,'public.domain_outbox_receipts','UPDATE')
+    AND NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid='public.domain_outbox_receipts'::regclass AND a.attnum>0 AND NOT a.attisdropped
+      AND has_column_privilege(current_user,a.attrelid,a.attnum,'INSERT')<>(a.attname=ANY(ARRAY['tenant_id','job_id','request_hash']::name[])))`,
   legaltech_queue_producer:`has_table_privilege(current_user,'queue_security.jobs','SELECT')
     AND has_table_privilege(current_user,'queue_security.jobs','INSERT')
     AND NOT has_table_privilege(current_user,'queue_security.jobs','UPDATE,DELETE,TRUNCATE')
@@ -80,10 +89,10 @@ export function securityOptions({pool,expectedRole,timeoutMs=5000}={}) {
   if(typeof pool?.connect!=='function'||!/^[a-z_][a-z0-9_]{0,62}$/.test(expectedRole??'')||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>10000)throw new Error('SHARED_SECURITY_CONFIGURATION_INVALID');
   return {pool,expectedRole,timeoutMs};
 }
-export async function securityTransaction(options,group,work,{readOnly=false,isolation='READ COMMITTED',signal}={}) {
+export async function securityTransaction(options,group,work,{readOnly=false,isolation='READ COMMITTED',context=null,signal}={}) {
   const schema=SCHEMA[group]??'operational_security';
   const others=GROUPS.filter(x=>x!==group&&!(group==='legaltech_security_operator'&&x==='legaltech_security_reader')&&!(group==='legaltech_audit_writer'&&x==='legaltech_audit_reader')&&!(['legaltech_queue_producer','legaltech_queue_worker'].includes(group)&&x==='legaltech_queue_reader'));
-  return runPostgresTransaction({...options,readOnly,isolation,signal},async tx=>{
+  return runPostgresTransaction({...options,readOnly,isolation,context,signal},async tx=>{
     const result=await tx.query(`SELECT pg_has_role(current_user,$1,'MEMBER') AS member,
       EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role(current_user,r.oid,'MEMBER') AND
         (r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication

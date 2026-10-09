@@ -1,10 +1,11 @@
 import crypto from 'node:crypto';
 import {canonicalAuditPayload} from './securityMonitoring.js';
 import {securityOptions,securityTransaction,securityProbe} from './postgresSecurityBoundary.js';
+import {prepareJobIntent,validateJobIntent} from './jobIntent.js';
 
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i,HEX=/^[a-f0-9]{64}$/;
 const KINDS=new Set(['PROCESS_INBOUND','POLICY_EVALUATION','PROCLAIM_WRITEBACK','NOTIFICATION_DELIVERY']);
-const CODE=/^[A-Z][A-Z0-9_]{0,63}$/,ID=/^[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,255}$/;
+const CODE=/^[A-Z][A-Z0-9_]{0,63}$/;
 const producer='legaltech_queue_producer',worker='legaltech_queue_worker',reader='legaltech_queue_reader';
 const sha=v=>crypto.createHash('sha256').update(v).digest('hex');
 const unavailable=()=>new Error('QUEUE_STORE_UNAVAILABLE');
@@ -12,7 +13,6 @@ function uuid(v){if(typeof v!=='string'||!UUID.test(v))throw new Error('QUEUE_IN
 function kind(v){if(!KINDS.has(v))throw new Error('QUEUE_INPUT_INVALID');return v;}
 function integer(v,min,max){if(!Number.isInteger(v)||v<min||v>max)throw new Error('QUEUE_INPUT_INVALID');return v;}
 function code(v){if(typeof v!=='string'||!CODE.test(v))throw new Error('QUEUE_INPUT_INVALID');return v;}
-function shape(v,keys){if(!v||Object.getPrototypeOf(v)!==Object.prototype||Reflect.ownKeys(v).some(k=>!keys.includes(k)))throw new Error('QUEUE_INPUT_INVALID');}
 const date=v=>v===null?null:new Date(v).toISOString();
 function view(row){
   if(!row||!UUID.test(row.tenant_id)||!UUID.test(row.job_id)||!UUID.test(row.object_id)||!KINDS.has(row.kind)
@@ -45,11 +45,11 @@ export class PostgresJobProducer {
   #options;#authorize;
   constructor({authorizeEnqueue,...options}={}){if(typeof authorizeEnqueue!=='function')throw new Error('SHARED_QUEUE_CONFIGURATION_INVALID');this.#options=securityOptions(options);this.#authorize=authorizeEnqueue;}
   async enqueue(input,{signal}={}) {
-    shape(input,['tenantId','jobId','kind','objectId','traceId','idempotencyKey','maxAttempts','leaseMs','maxRunMs','delayMs','retryDelayMs']);
-    const tenantId=uuid(input.tenantId),jobId=uuid(input.jobId),type=kind(input.kind),objectId=uuid(input.objectId);
-    if(typeof input.traceId!=='string'||!ID.test(input.traceId)||typeof input.idempotencyKey!=='string'||!ID.test(input.idempotencyKey))throw new Error('QUEUE_INPUT_INVALID');
-    const leaseMs=integer(input.leaseMs??60000,5000,300000),maxRunMs=integer(input.maxRunMs??900000,leaseMs,3600000);
-    const base={tenantId,jobId,kind:type,objectId,traceHash:sha(input.traceId),keyHash:sha(input.idempotencyKey),maxAttempts:integer(input.maxAttempts??5,1,10),leaseMs,maxRunMs,delayMs:integer(input.delayMs??0,0,86400000),retryDelayMs:integer(input.retryDelayMs??1000,1000,3600000)};
+    return this.enqueueIntent(prepareJobIntent(input),{signal});
+  }
+  async enqueueIntent(input,{signal}={}) {
+    const base=validateJobIntent(input);
+    const {tenantId,jobId,kind:type,objectId,leaseMs,maxRunMs}=base;
     const requestHash=sha(canonicalAuditPayload(base));let conflict=false;
     try{return await run(this.#options,producer,this.#authorize,{...base,operation:'ENQUEUE'},async tx=>{
       await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[JSON.stringify(['queue-enqueue-v121',tenantId])]);

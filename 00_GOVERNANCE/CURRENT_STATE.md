@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V122 — Transactional domain outbox
+
+V122 adds a PostgreSQL domain/outbox wrapper using one tenant transaction and a separate bounded relay with immutable queue replay and append-only delivery receipts. Migration 051 adds metadata-only intents, exact canonical field/hash validation, forced tenant RLS and narrow writer/relay grants. Domain roles cannot access private control-plane tables or acknowledge queue delivery; relay and queue credentials remain separated. See `40_PLATFORM_FOUNDATION_BUILD/docs/V122_TRANSACTIONAL_OUTBOX.md`.
+
+Local suites pass 1,889 platform and 140 scaffold tests, including 20 new V122 regressions. The real PostgreSQL integration suite is skipped locally; its six new outbox cases must pass in CI before merge. Real domain-handler adoption, supervised relay scheduling, current service/object authorization, production canaries and deployment remain outstanding. Queue insertion receipts do not prove external execution. This is an authorised D-018 security integration exception; the pre-TO freeze and customer-data deployment gate remain in force.
+
 ## V121 — Shared queue and fenced worker claims
 
 V121 adds separate PostgreSQL producer/worker/reader roles, a durable metadata-only queue, current authorisation callbacks, hashed claim credentials, attempt fencing, bounded heartbeat/retry policy and tenant-scoped crash recovery. Expired or failed external-effect jobs enter reconciliation. Migration 050 and the expanded real PostgreSQL CI tests cover the shared path. See `40_PLATFORM_FOUNDATION_BUILD/docs/V121_SHARED_QUEUE.md`.
