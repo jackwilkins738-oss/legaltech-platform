@@ -153,6 +153,23 @@ export function validateEnv(env) {
     if (env.DEPLOYMENT_DRAIN_MODE !== 'managed-shared') throw new Error('INSECURE_DEPLOYMENT_DRAIN_MODE');
     if (env.DEPLOYMENT_DRAIN_READINESS_MODE !== 'unready') throw new Error('INSECURE_DEPLOYMENT_DRAIN_READINESS_MODE');
     if (env.DEPLOYMENT_DRAIN_SHUTDOWN_MODE !== 'bounded-graceful') throw new Error('INSECURE_DEPLOYMENT_DRAIN_SHUTDOWN_MODE');
+    if (env.TENANT_LIFECYCLE_MODE !== 'managed-state-machine') throw new Error('INSECURE_TENANT_LIFECYCLE_MODE');
+    if (env.TENANT_OFFBOARDING_MODE !== 'evidence-gated-no-auto-delete') throw new Error('INSECURE_TENANT_OFFBOARDING_MODE');
+    if (env.ACCESS_REVIEW_MODE !== 'hash-snapshot-dual-control') throw new Error('INSECURE_ACCESS_REVIEW_MODE');
+    if (env.ACCESS_REVIEW_ACTION_MODE !== 'explicit-revocation') throw new Error('INSECURE_ACCESS_REVIEW_ACTION_MODE');
+    if (env.DATA_CLASSIFICATION_MODE !== 'explicit-field') throw new Error('INSECURE_DATA_CLASSIFICATION_MODE');
+    if (env.UNCLASSIFIED_DATA_MODE !== 'deny') throw new Error('INSECURE_UNCLASSIFIED_DATA_MODE');
+    if (env.RESTRICTED_EGRESS_MODE !== 'policy-enforced') throw new Error('INSECURE_RESTRICTED_EGRESS_MODE');
+    if (env.TENANT_QUOTA_MODE !== 'managed-shared-admission') throw new Error('INSECURE_TENANT_QUOTA_MODE');
+    if (env.TENANT_QUOTA_POLICY_MODE !== 'server-configured-no-default') throw new Error('INSECURE_TENANT_QUOTA_POLICY_MODE');
+    if (env.SLO_MODE !== 'managed-aggregate') throw new Error('INSECURE_SLO_MODE');
+    if (env.SLO_DATA_MODE !== 'metrics-only') throw new Error('INSECURE_SLO_DATA_MODE');
+    if (env.SLO_ALERT_MODE !== 'intent-only') throw new Error('INSECURE_SLO_ALERT_MODE');
+    if (env.DATA_RESIDENCY_MODE !== 'tenant-pinned-allowlist') throw new Error('INSECURE_DATA_RESIDENCY_MODE');
+    if (env.CROSS_REGION_REPLICATION_MODE !== 'policy-controlled') throw new Error('INSECURE_CROSS_REGION_REPLICATION_MODE');
+    if (env.RESIDENCY_EVIDENCE_MODE !== 'provider-hash-bound') throw new Error('INSECURE_RESIDENCY_EVIDENCE_MODE');
+    if (env.ONBOARDING_READINESS_MODE !== 'required-control-set') throw new Error('INSECURE_ONBOARDING_READINESS_MODE');
+    if (env.TENANT_ACTIVATION_MODE !== 'readiness-hash-bound') throw new Error('INSECURE_TENANT_ACTIVATION_MODE');
     if (localModes.has(String(env.OBJECT_STORAGE_MODE).toLowerCase())) throw new Error('INSECURE_OBJECT_STORAGE_MODE');
     if (localModes.has(String(env.QUEUE_MODE).toLowerCase())) throw new Error('INSECURE_QUEUE_MODE');
     if (localModes.has(String(env.SESSION_STORE_MODE).toLowerCase())) throw new Error('INSECURE_SESSION_STORE_MODE');
@@ -232,6 +249,13 @@ export function validateEnv(env) {
       EGRESS_POLICY_VALIDATION_STATUS: 'PASS',
       DEPENDENCY_PROTECTION_VALIDATION_STATUS: 'PASS',
       DEPLOYMENT_DRAIN_VALIDATION_STATUS: 'PASS',
+      TENANT_LIFECYCLE_VALIDATION_STATUS: 'PASS',
+      ACCESS_REVIEW_VALIDATION_STATUS: 'PASS',
+      DATA_CLASSIFICATION_VALIDATION_STATUS: 'PASS',
+      TENANT_QUOTA_VALIDATION_STATUS: 'PASS',
+      SLO_VALIDATION_STATUS: 'PASS',
+      DATA_RESIDENCY_VALIDATION_STATUS: 'PASS',
+      ONBOARDING_READINESS_VALIDATION_STATUS: 'PASS',
     };
     for (const [key,expected] of Object.entries(gates)) if (String(env[key] ?? '') !== expected) throw new Error(`REAL_CLIENT_DATA_GATE_${key}`);
   }

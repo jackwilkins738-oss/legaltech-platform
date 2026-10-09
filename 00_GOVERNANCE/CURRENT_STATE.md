@@ -534,3 +534,17 @@ V97 adds a CycloneDX 1.7 SBOM shape and external-verifier attestation boundary o
 ## V102 — Graceful deployment drain
 - New ingress/background/side-effect work stops immediately during drain while existing leases complete.
 - Readiness remains unready until an authorized resume; production requires shared managed drain state.
+
+V103 adds a generic tenant lifecycle/offboarding boundary. New tenants begin PROVISIONING; ACTIVE tenants can be suspended without deleting evidence; OFFBOARDING blocks new ingress/background/side effects while preserving bounded read/support plus audit/recovery; OFFBOARDED preserves only audit/recovery. Completion requires externally evidenced export/retention readiness and no automatic deletion is introduced. No firm-specific offboarding or retention rule is encoded.
+
+V104 adds workflow-agnostic access recertification evidence. Campaigns are bound to exact hashed membership snapshots, reviewer and closer duties are separated, every item receives an explicit RETAIN/REVOKE decision, and revoke candidates are surfaced for deliberate directory action rather than automatic access mutation. Review freshness is policy-driven with no hard-coded cadence.
+
+V105 adds explicit field-level data classification/handling policy with deny-by-default sink projection. Unclassified fields fail closed; missing sink rules deny; and RESTRICTED values cannot be configured for raw logging or notification delivery. Policies are tenant-scoped/versioned and do not infer a firm-specific legal data taxonomy.
+
+V106 adds tenant/resource admission quotas with no hard-coded business limit. Shared production enforcement is required; reservations prevent concurrent overcommit; failed operations release reservations; and idempotent work replay does not consume additional capacity. Generic work creation is the first consumer, providing noisy-neighbour containment without encoding TO-derived productivity thresholds.
+
+V107 adds tenant-scoped service-level objectives/evaluations using aggregate good/total metrics only. Target ratio, window and minimum sample volume are explicitly configured with no platform default; insufficient volume reports NO_DATA rather than false health. Breaches create bounded alert intents and do not automatically change workflow or customer behavior.
+
+V108 adds tenant-pinned data-residency policy/evidence without assuming any geography. Each tenant explicitly defines its primary/allowed regions; resource primary/replica placement must be externally attested inside that allowlist; policy changes make prior placement evidence stale until re-attested. Provider resource identifiers/actors are hashed in the bounded evidence view.
+
+V109 adds exact required-control onboarding readiness certification and connects it to the optional V103 tenant-activation verifier. Every required control must carry current PASS evidence; changing the required control set invalidates older readiness hashes. The platform defines no universal customer checklist, so deployment/customer requirements remain externally configured.
