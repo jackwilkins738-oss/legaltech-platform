@@ -5,9 +5,13 @@ import path from 'node:path';
 import {appError,publicError} from './errors.js';
 import {isUtf8} from 'node:buffer';
 import {decodeInboundBody} from './inboundRequest.js';
-import {requireCapability,normalizeSession,assertMatterAccess,matterAccessAllowed} from './auth.js';
+import {requireCapability,normalizeSession,assertMatterAccess,matterAccessAllowed,StaticAuthProvider} from './auth.js';
 import {InMemoryAbuseLimiter} from './abuseControl.js';
 import {redactPublicIntegrationData} from './secretManagement.js';
+import {boundedReadinessStatus,isProductionReadiness} from './productionAdmission.js';
+import {Platform} from './platform.js';
+import {PlatformStore} from './store.js';
+import {LocalObjectStorage} from './objectStorage.js';
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const STATIC_FILES = new Map([
@@ -146,42 +150,55 @@ function assertBodyTenant(body, session) {
   }
 }
 
-export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter(), identitySessionService = null, workApi = null, readiness = null}) {
-  function accountRead(session,traceId,resource,count,matterIds=[]){
+export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter(), identitySessionService = null, workApi = null, readiness = null, productionMode = false, readinessTimeoutMs = 1500}) {
+  if(typeof productionMode!=='boolean'||!Number.isInteger(readinessTimeoutMs)||readinessTimeoutMs<100||readinessTimeoutMs>6000) throw new Error('API_ADMISSION_CONFIGURATION_INVALID');
+  const production=productionMode||process.env.NODE_ENV==='production';
+  if(production) {
+    if(!isProductionReadiness(readiness)) throw new Error('PRODUCTION_READINESS_REQUIRED');
+    if(devWorkers||platform instanceof Platform||platform?.store instanceof PlatformStore||platform?.objectStorage instanceof LocalObjectStorage||authProvider instanceof StaticAuthProvider||abuseLimiter instanceof InMemoryAbuseLimiter) throw new Error('PRODUCTION_REFERENCE_ADAPTER_FORBIDDEN');
+    if(typeof authProvider?.authenticate!=='function'||['checkIp','checkTenant','checkRead'].some(method=>typeof abuseLimiter?.[method]!=='function')) throw new Error('PRODUCTION_API_ADAPTER_REQUIRED');
+  }
+  async function admitted(res,traceId) {
+    if(!production&&readiness===null) return true; // Explicit synthetic compatibility.
+    if(await boundedReadinessStatus(readiness,readinessTimeoutMs)!=='NOT_READY') return true;
+    send(res,503,{status:'NOT_READY'},traceId,{'retry-after':'1'});
+    return false;
+  }
+  async function accountRead(session,traceId,resource,count,matterIds=[]){
     const unique=[...new Set((matterIds??[]).filter(Boolean))];
-    platform.securityMonitor?.observeRead({session,traceId,resource,count,matterIds:unique});
-    abuseLimiter.checkRead?.(session,{resource,count,matterIds:unique});
+    await platform.securityMonitor?.observeRead({session,traceId,resource,count,matterIds:unique});
+    await abuseLimiter.checkRead?.(session,{resource,count,matterIds:unique});
   }
   async function integrationMutation(session, traceId, action, objectId, run) {
     const entry = {tenantId: session.tenantId, actorId: session.actorId, traceId, action, objectId: /^(?:sub|del)_[a-f0-9-]{36}$/.test(objectId) ? objectId : ['MICROSOFT_GRAPH', 'PROCLAIM'].includes(objectId) ? objectId : 'MICROSOFT_GRAPH'};
     // Fail closed before changing connector state if the audit store is unavailable.
-    platform.store.audit({...entry, outcome: 'ATTEMPT'});
+    await platform.store.audit({...entry, outcome: 'ATTEMPT'});
     try {
       const result = await run();
-      platform.store.audit({...entry, objectId: /^(?:sub|del)_[a-f0-9-]{36}$/.test(result?.id) ? result.id : entry.objectId, outcome: 'SUCCESS'});
+      await platform.store.audit({...entry, objectId: /^(?:sub|del)_[a-f0-9-]{36}$/.test(result?.id) ? result.id : entry.objectId, outcome: 'SUCCESS'});
       return result;
     } catch (error) {
-      platform.store.audit({...entry, outcome: 'FAILED', reason: publicError(error).code});
+      await platform.store.audit({...entry, outcome: 'FAILED', reason: publicError(error).code});
       throw error;
     }
   }
   return http.createServer(async (req, res) => {
     const traceId = serverTraceId();
     try {
-      abuseLimiter.checkIp(req);
       assertSingleSecurityHeaders(req);
       const url = requestUrl(req.url);
-      if (req.method === 'GET' && serveStatic(res, uiRoot, url.pathname)) return;
+      const operationalProbe=req.method==='GET'&&['/api/v1/health','/api/v1/ready'].includes(url.pathname);
+      if(!production||!operationalProbe) await abuseLimiter.checkIp(req);
       if (req.method === 'GET' && url.pathname === '/api/v1/health') return send(res, 200, {status: 'ok'}, traceId);
       if (req.method === 'GET' && url.pathname === '/api/v1/ready') {
-        if(!readiness||typeof readiness.publicStatus!=='function') return send(res,503,{status:'NOT_READY'},traceId);
-        let state;
-        try { state=await readiness.publicStatus(); } catch { state={status:'NOT_READY'}; }
-        const status=['READY','DEGRADED'].includes(state?.status)?200:503;
-        return send(res,status,{status:status===200?state.status:'NOT_READY'},traceId);
+        const state=await boundedReadinessStatus(readiness,readinessTimeoutMs);
+        return send(res,state==='NOT_READY'?503:200,{status:state},traceId);
       }
+      if(!await admitted(res,traceId)) return;
+      if (req.method === 'GET' && serveStatic(res, uiRoot, url.pathname)) return;
       if (identitySessionService && req.method === 'POST' && url.pathname === '/api/v1/auth/session') {
         const exchanged=await identitySessionService.exchange(req.headers);
+        if(!await admitted(res,traceId)) return;
         return send(res,200,{status:'AUTHENTICATED',expiresAt:exchanged.expiresAt},traceId,{'set-cookie':exchanged.setCookie});
       }
       if (identitySessionService && req.method === 'POST' && url.pathname === '/api/v1/auth/logout') {
@@ -190,8 +207,10 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       }
 
       const session = normalizeSession(await authProvider.authenticate(req.headers,{method:req.method,url:url.pathname}));
-      abuseLimiter.checkTenant(session);
-      platform.securityMonitor?.observeRequest({session,req,traceId});
+      if(production&&!['OIDC','SERVER_SESSION'].includes(session.authContext.method)) throw appError('authentication required',{status:401,code:'AUTH_REQUIRED'});
+      await abuseLimiter.checkTenant(session);
+      await platform.securityMonitor?.observeRequest({session,req,traceId});
+      if(!await admitted(res,traceId)) return;
       if (integrations && (url.pathname === '/api/v1/integrations' || url.pathname.startsWith('/api/v1/integrations/'))) {
         requireCapability(session, req.method === 'GET' ? 'integration:read' : 'integration:manage');
         // A shared harness is bound to one tenant. Never trust capability possession alone.
@@ -206,7 +225,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'matter:read');
         const limit=boundedLimit(url,{fallback:100,max:200});
         const items=platform.listMatters(session.tenantId,limit).filter(matter=>matterAccessAllowed(session,matter));
-        accountRead(session,traceId,'matters',items.length,items.map(x=>x.id));
+        await accountRead(session,traceId,'matters',items.length,items.map(x=>x.id));
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -216,14 +235,14 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         const matter = platform.getMatter(session.tenantId, routeId(matterMatch[1]));
         if (!matter) throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
         assertMatterAccess(session,matter);
-        accountRead(session,traceId,'matter',1,[matter.id]);
+        await accountRead(session,traceId,'matter',1,[matter.id]);
         return send(res, 200, {matter}, traceId);
       }
 
       if (workApi && req.method === 'GET' && url.pathname === '/api/v1/work') {
         const limit=boundedLimit(url,{fallback:50,max:100}),owner=workOwnerQuery(url),states=csvParam(url,'states'),types=csvParam(url,'types'),matterId=url.searchParams.get('matter_id'),cursor=cursorParam(url);
         const result=workApi.list({session,owner,states,types,matterId,limit,cursor});
-        accountRead(session,traceId,'work',result.items.length,result.items.map(x=>x.matterId));
+        await accountRead(session,traceId,'work',result.items.length,result.items.map(x=>x.matterId));
         return send(res,200,{items:result.items,next_cursor:result.nextCursor},traceId);
       }
 
@@ -234,7 +253,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       }
 
       const workEventMatch=url.pathname.match(/^\/api\/v1\/work\/([^/]+)\/events$/);
-      if(workApi&&req.method==='GET'&&workEventMatch){const workId=routeId(workEventMatch[1]),limit=boundedLimit(url,{fallback:100,max:200});const work=workApi.get({session,workId});const items=workApi.events({session,workId,limit});accountRead(session,traceId,'work-events',items.length,work.matterId?[work.matterId]:[]);return send(res,200,{items,next_cursor:null},traceId);}
+      if(workApi&&req.method==='GET'&&workEventMatch){const workId=routeId(workEventMatch[1]),limit=boundedLimit(url,{fallback:100,max:200});const work=workApi.get({session,workId});const items=workApi.events({session,workId,limit});await accountRead(session,traceId,'work-events',items.length,work.matterId?[work.matterId]:[]);return send(res,200,{items,next_cursor:null},traceId);}
 
       const workStateMatch=url.pathname.match(/^\/api\/v1\/work\/([^/]+)\/state$/);
       if(workApi&&req.method==='POST'&&workStateMatch){const body=await readJson(req);assertBodyTenant(body,session);assertBodyKeys(body,new Set(['tenantId','to','expectedVersion','reason']));const item=workApi.transition({session,workId:routeId(workStateMatch[1]),input:body,traceId});return send(res,200,{work:item},traceId);}
@@ -246,13 +265,13 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       if(workApi&&req.method==='POST'&&workAssignMatch){const body=await readJson(req);assertBodyTenant(body,session);assertBodyKeys(body,new Set(['tenantId','expectedVersion','owner','reason']));const item=workApi.assign({session,workId:routeId(workAssignMatch[1]),input:body,traceId});return send(res,200,{work:item},traceId);}
 
       const workMatch=url.pathname.match(/^\/api\/v1\/work\/([^/]+)$/);
-      if(workApi&&req.method==='GET'&&workMatch){const item=workApi.get({session,workId:routeId(workMatch[1])});accountRead(session,traceId,'work',1,item.matterId?[item.matterId]:[]);return send(res,200,{work:item},traceId);}
+      if(workApi&&req.method==='GET'&&workMatch){const item=workApi.get({session,workId:routeId(workMatch[1])});await accountRead(session,traceId,'work',1,item.matterId?[item.matterId]:[]);return send(res,200,{work:item},traceId);}
 
       if (req.method === 'GET' && url.pathname === '/api/v1/inbound-events') {
         requireCapability(session, 'inbound:read');
         const limit=boundedLimit(url,{fallback:50,max:200});
         const items=platform.listEvents(session.tenantId,limit).filter(event=>eventVisible(session,platform,event));
-        accountRead(session,traceId,'inbound-events',items.length,items.flatMap(linkedMatterIds));
+        await accountRead(session,traceId,'inbound-events',items.length,items.flatMap(linkedMatterIds));
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -262,7 +281,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         const event = platform.getEvent(session.tenantId, routeId(eventMatch[1]));
         if (!event) throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
         assertEventMatterAccess(session,platform,event);
-        accountRead(session,traceId,'inbound-event',1,linkedMatterIds(event));
+        await accountRead(session,traceId,'inbound-event',1,linkedMatterIds(event));
         return send(res, 200, {event}, traceId);
       }
 
@@ -302,7 +321,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
           const event=platform.getEvent(session.tenantId,ex.eventId);
           return event&&eventVisible(session,platform,{...event,candidates:ex.candidates});
         });
-        accountRead(session,traceId,'exceptions',items.length,items.map(ex=>platform.getEvent(session.tenantId,ex.eventId)).filter(Boolean).flatMap(linkedMatterIds));
+        await accountRead(session,traceId,'exceptions',items.length,items.map(ex=>platform.getEvent(session.tenantId,ex.eventId)).filter(Boolean).flatMap(linkedMatterIds));
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -334,7 +353,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
           const matter=platform.getMatter(session.tenantId,item.matterId);
           return matter&&matterAccessAllowed(session,matter);
         });
-        accountRead(session,traceId,'audit',items.length,items.map(x=>x.matterId).filter(Boolean));
+        await accountRead(session,traceId,'audit',items.length,items.map(x=>x.matterId).filter(Boolean));
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -342,7 +361,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'security:read');
         const limit=boundedLimit(url,{fallback:50,max:200});
         const items=platform.securityAlerts(session.tenantId,limit);
-        accountRead(session,traceId,'security-alerts',items.length);
+        await accountRead(session,traceId,'security-alerts',items.length);
         return send(res,200,{items,next_cursor:null},traceId);
       }
 

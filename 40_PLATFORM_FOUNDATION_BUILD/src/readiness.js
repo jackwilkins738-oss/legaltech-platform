@@ -54,25 +54,31 @@ export class ReadinessCoordinator {
     this.now=now;
     this.cached=null;
     this.inFlight=null;
+    this.generation=0;
   }
   async evaluate({force=false}={}) {
     const at=this.now();
     if(!force&&this.cached&&at<this.cached.expiresAt) return this.cached.result;
-    if(!force&&this.inFlight) return this.inFlight;
+    if(!force&&this.inFlight) {
+      const generation=this.generation;
+      const result=await this.inFlight;
+      return generation===this.generation?result:this.evaluate();
+    }
+    const generation=this.generation;
     const run=(async()=>{
       const checks=await Promise.all(this.checks.map(check=>runBounded(check,this.probeTimeoutMs)));
       const status=checks.some(check=>check.critical&&!check.ok)?'NOT_READY':checks.some(check=>!check.ok)?'DEGRADED':'READY';
       const result=freezeResult({status,checks});
-      this.cached={expiresAt:this.now()+this.cacheTtlMs,result};
+      if(generation===this.generation) this.cached={expiresAt:this.now()+this.cacheTtlMs,result};
       return result;
     })();
     if(!force) this.inFlight=run;
-    try { return await run; }
+    try { const result=await run; return generation===this.generation?result:this.evaluate(); }
     finally { if(this.inFlight===run) this.inFlight=null; }
   }
   async publicStatus() {
     const result=await this.evaluate();
     return Object.freeze({status:result.status});
   }
-  invalidate() { this.cached=null; }
+  invalidate() { this.generation++; this.cached=null; this.inFlight=null; }
 }

@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V117 — Enforced production admission and executable database checks
+
+V117 closes the readiness/data-route bypass, prevents stale healthy probes restoring admission after invalidation, awaits HTTP rate/monitor/audit callbacks, and blocks built-in synthetic adapters in production mode. Production readiness requires all 13 critical provider/control probes. Migration 046 forces RLS on six incident/configuration tables; runnable direct-runtime PostgreSQL catalog and synthetic isolation checks were added. See `40_PLATFORM_FOUNDATION_BUILD/docs/V117_PRODUCTION_ADMISSION.md`.
+
+This is an authorised D-018 security-defect exception. Shared production adapters/composition, actual PostgreSQL execution and live operational validation remain outstanding. No live database check has been completed here. Pre-TO freeze and the customer-data deployment gate remain in force.
+
 ## V116 — Confirmed security defect fixes
 
 V116 fixes restricted matter-candidate disclosure, support scope separation, failed-audit support activation, expanded IPv6 egress classification, asynchronous document-redemption races, export permission freshness and signing-key refresh abuse. Nineteen counterexample regressions were added; the full platform suite passes 1,758 tests. This is a defect-fix exception under D-018, not speculative feature expansion. See `40_PLATFORM_FOUNDATION_BUILD/docs/V116_SECURITY_DEFECT_FIXES.md`.
