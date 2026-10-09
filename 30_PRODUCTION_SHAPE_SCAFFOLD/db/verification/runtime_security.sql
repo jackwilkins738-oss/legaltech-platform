@@ -69,7 +69,7 @@ BEGIN
   FOREACH required_name IN ARRAY ARRAY[
     'actors','matters','external_mappings','inbound_events','exceptions','idempotency_records',
     'audit_events','jobs','security_zones','actor_security_zones','matter_actor_access',
-    'matter_break_glass_grants','document_security','document_actor_access','domain_outbox_events','domain_outbox_receipts'
+    'matter_break_glass_grants','document_security','document_actor_access','domain_outbox_events','domain_outbox_receipts','domain_job_commands'
   ] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace

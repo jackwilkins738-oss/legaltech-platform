@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V123 — Concrete domain handlers and supervised relay
+
+V123 adds PostgreSQL inbound-registration and policy-evaluation request handlers, immutable actor/object/content-version command bindings and a connected three-pool outbox/queue composition. Migration 052 forces tenant RLS and defers exact command/outbox foreign-key verification to commit. The relay supervisor refreshes authorized scopes, acquires deployment drain leases, prevents overlapping cycles and refuses optimistic shutdown/restart after deadlines or uncertain drain release. See `40_PLATFORM_FOUNDATION_BUILD/docs/V123_DOMAIN_PIPELINE.md`.
+
+Local suites pass 1,915 platform and 140 scaffold tests, including 26 new V123 regressions. Six connected domain/supervisor PostgreSQL CI cases are added; actual PostgreSQL execution is skipped locally and must pass before merge. Production HTTP adoption, real object/version/provider authorization, managed drain, worker execution and end-to-end readiness canaries remain outstanding. This is an authorised D-018 security integration exception; the pre-TO freeze and customer-data deployment gate remain in force.
+
 ## V122 — Transactional domain outbox
 
 V122 adds a PostgreSQL domain/outbox wrapper using one tenant transaction and a separate bounded relay with immutable queue replay and append-only delivery receipts. Migration 051 adds metadata-only intents, exact canonical field/hash validation, forced tenant RLS and narrow writer/relay grants. Domain roles cannot access private control-plane tables or acknowledge queue delivery; relay and queue credentials remain separated. See `40_PLATFORM_FOUNDATION_BUILD/docs/V122_TRANSACTIONAL_OUTBOX.md`.
