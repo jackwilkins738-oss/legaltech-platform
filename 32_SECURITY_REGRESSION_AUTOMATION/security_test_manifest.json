@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V122-TRANSACTIONAL-OUTBOX",
+      "concept": "V122 transactional outbox regression",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V121-SHARED-QUEUE",
       "concept": "V121 shared queue regression",
       "severity": "BLOCKER"

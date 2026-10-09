@@ -12,6 +12,9 @@ import {PostgresSecurityInterlock,PostgresSecurityInterlockOperator} from '../..
 import {PostgresAbuseLimiter} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresAbuseControl.js';
 import {PostgresAuditWriter,PostgresAuditReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresAudit.js';
 import {PostgresJobProducer,PostgresJobWorker,PostgresJobReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresJobs.js';
+import {PostgresDomainOutbox,PostgresOutboxRelay} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresOutbox.js';
+import {prepareJobIntent,intentHash} from '../../40_PLATFORM_FOUNDATION_BUILD/src/jobIntent.js';
+import {canonicalAuditPayload} from '../../40_PLATFORM_FOUNDATION_BUILD/src/securityMonitoring.js';
 import {createPostgresRuntimeProbe} from '../src/postgresRuntime.js';
 
 const enabled=process.env.LEGALTECH_RUN_POSTGRES_TESTS==='true';
@@ -19,7 +22,7 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119/V120/V121 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120/V121/V122 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
@@ -43,12 +46,13 @@ test('V118/V119/V120/V121 real PostgreSQL shared identity, security and tenant i
   await admin.query(`CREATE ROLE legaltech_runtime_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await admin.query(`CREATE ROLE legaltech_broker_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await admin.query('GRANT legaltech_session_broker TO legaltech_broker_ci');
-  for(const [login,group] of [['legaltech_reader_ci','legaltech_security_reader'],['legaltech_operator_ci','legaltech_security_operator'],['legaltech_limiter_ci','legaltech_rate_limiter'],['legaltech_audit_writer_ci','legaltech_audit_writer'],['legaltech_audit_reader_ci','legaltech_audit_reader'],['legaltech_queue_producer_ci','legaltech_queue_producer'],['legaltech_queue_worker_ci','legaltech_queue_worker'],['legaltech_queue_reader_ci','legaltech_queue_reader']]){
+  for(const [login,group] of [['legaltech_reader_ci','legaltech_security_reader'],['legaltech_operator_ci','legaltech_security_operator'],['legaltech_limiter_ci','legaltech_rate_limiter'],['legaltech_audit_writer_ci','legaltech_audit_writer'],['legaltech_audit_reader_ci','legaltech_audit_reader'],['legaltech_queue_producer_ci','legaltech_queue_producer'],['legaltech_queue_worker_ci','legaltech_queue_worker'],['legaltech_queue_reader_ci','legaltech_queue_reader'],['legaltech_outbox_relay_ci','legaltech_outbox_relay']]){
     await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
     await admin.query(`GRANT ${group} TO ${login}`);
   }
   await admin.query('REVOKE CREATE ON SCHEMA public FROM PUBLIC');
   await admin.query('GRANT USAGE ON SCHEMA public TO legaltech_runtime_ci');
+  await admin.query('GRANT legaltech_outbox_writer TO legaltech_runtime_ci');
   await admin.query('GRANT SELECT,INSERT,UPDATE ON public.matters TO legaltech_runtime_ci');
   await admin.query('GRANT SELECT ON public.matter_actor_access,public.matter_break_glass_grants,public.actor_security_zones TO legaltech_runtime_ci');
   const makePool=(user,max=1)=>{const pool=new Pool({...base,user,password,max});pool.on('error',()=>{});pools.push(pool);return pool};
@@ -59,8 +63,8 @@ test('V118/V119/V120/V121 real PostgreSQL shared identity, security and tenant i
   const one=new PostgresServerSessionStore({...options,brokerPool:brokerOne}),two=new PostgresServerSessionStore({...options,brokerPool:brokerTwo});
   const session=(providerSessionId=`provider-${uuid()}`)=>({tenantId:tenantA,actorId:actorA,capabilities:['matter:read'],roles:[],authContext:{method:'OIDC',mfaVerified:true,authTime:null,expiresAt:new Date(Date.now()+3600000).toISOString(),providerSessionId}});
 
-  await t.test('all 50 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
-    assert.equal(manifest.migrations.length,50);
+  await t.test('all 51 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
+    assert.equal(manifest.migrations.length,51);
     const result=await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({});assert.equal(result.ok,true);
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
@@ -315,6 +319,69 @@ test('V118/V119/V120/V121 real PostgreSQL shared identity, security and tenant i
       await connection.query('ROLLBACK');
     }finally{connection.release();}
     const later=await queueWorker.claimNext({tenantId:tenantA,kind:'PROCESS_INBOUND'});assert.equal(later.jobId,locked.jobId);
+  });
+
+  const outbox=new PostgresDomainOutbox({pool:runtime,expectedRole:'legaltech_runtime_ci',authorizeAppend:async()=>true});
+  const relayPool=makePool('legaltech_outbox_relay_ci'),relayPoolTwo=makePool('legaltech_outbox_relay_ci');
+  const relayOptions={expectedRole:'legaltech_outbox_relay_ci',jobProducer:queueProducer,authorizeRelay:async()=>true};
+  const relay=new PostgresOutboxRelay({...relayOptions,pool:relayPool}),relayTwo=new PostgresOutboxRelay({...relayOptions,pool:relayPoolTwo});
+  const outboxScope={tenantId:tenantA,actorId:actorA};
+  const appendOutbox=event=>outbox.run(outboxScope,async tx=>{
+    await tx.query('INSERT INTO public.matters(id,tenant_id,display_reference) VALUES($1,$2,$3)',[event.objectId,tenantA,`outbox-${event.objectId}`]);
+    return tx.enqueue(event);
+  });
+  await t.test('V122 actual domain rollback removes both matter and outbox intent',async()=>{
+    const event=queued();await assert.rejects(outbox.run(outboxScope,async tx=>{
+      await tx.query('INSERT INTO public.matters(id,tenant_id,display_reference) VALUES($1,$2,$3)',[event.objectId,tenantA,`rollback-${event.objectId}`]);
+      await tx.enqueue(event);throw new Error('intentional rollback');
+    }),/OUTBOX_STORE_UNAVAILABLE/);
+    assert.equal((await admin.query('SELECT id FROM public.matters WHERE id=$1',[event.objectId])).rows.length,0);
+    assert.equal((await admin.query('SELECT job_id FROM public.domain_outbox_events WHERE job_id=$1',[event.jobId])).rows.length,0);
+  });
+  await t.test('V122 domain commit, immutable replay and concurrent relays produce one queued job and receipt',async()=>{
+    const event=queued();await appendOutbox(event);
+    assert.equal((await outbox.run(outboxScope,tx=>tx.enqueue(event))).replayed,true);
+    await assert.rejects(outbox.run(outboxScope,tx=>tx.enqueue({...event,maxAttempts:3})),/OUTBOX_APPEND_CONFLICT/);
+    await Promise.all([relay.relay(outboxScope),relayTwo.relay(outboxScope)]);
+    assert.equal((await admin.query('SELECT job_id FROM queue_security.jobs WHERE tenant_id=$1 AND job_id=$2',[tenantA,event.jobId])).rows.length,1);
+    assert.equal((await admin.query('SELECT job_id FROM public.domain_outbox_receipts WHERE tenant_id=$1 AND job_id=$2',[tenantA,event.jobId])).rows.length,1);
+  });
+  await t.test('V122 committed queue insert before relay crash replays without duplicate job',async()=>{
+    const event=queued();await appendOutbox(event);await queueProducer.enqueue(event);
+    assert.equal((await admin.query('SELECT job_id FROM public.domain_outbox_receipts WHERE job_id=$1',[event.jobId])).rows.length,0);
+    assert.equal((await relay.relay(outboxScope)).delivered,1);
+    assert.equal((await admin.query('SELECT job_id FROM queue_security.jobs WHERE job_id=$1',[event.jobId])).rows.length,1);
+  });
+  await t.test('V122 outbox RLS and narrow grants isolate domain, relay and queue roles',async()=>{
+    const event=queued();await appendOutbox(event);
+    assert.equal((await relay.relay({tenantId:tenantB,actorId:actorB})).scanned,0);
+    const hidden=await outbox.run({tenantId:tenantB,actorId:actorB},tx=>tx.query('SELECT job_id FROM public.domain_outbox_events WHERE job_id=$1',[event.jobId]));assert.equal(hidden.rows.length,0);
+    for(const pool of [runtime,relayPool]){
+      for(const sql of ['UPDATE public.domain_outbox_events SET intent=intent','DELETE FROM public.domain_outbox_events','TRUNCATE public.domain_outbox_events'])assert.equal(await pool.query(sql).then(()=>false,e=>e.code==='42501'),true);
+    }
+    assert.equal(await relayPool.query('SELECT * FROM public.matters').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await relayPool.query('SELECT * FROM queue_security.jobs').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await queueProducerPool.query('SELECT * FROM public.domain_outbox_events').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await runtime.query('INSERT INTO public.domain_outbox_receipts(tenant_id,job_id,request_hash) VALUES($1,$2,$3)',[tenantA,event.jobId,'0'.repeat(64)]).then(()=>false,e=>e.code==='42501'),true);
+    await admin.query('GRANT SELECT ON queue_security.jobs TO legaltech_runtime_ci');
+    try{assert.equal((await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})()).ok,false);}
+    finally{await admin.query('REVOKE SELECT ON queue_security.jobs FROM legaltech_runtime_ci');}
+    await relay.relay(outboxScope);
+  });
+  await t.test('V122 database rejects arbitrary content, JSON nulls and malformed policy in intents',async()=>{
+    for(const change of [{payload:'synthetic-sensitive'},{traceHash:null},{kind:null},{maxAttempts:null},{leaseMs:1},{delayMs:-1}]){
+      const event=queued(),intent={...prepareJobIntent(event),...change},body=canonicalAuditPayload(intent),hash=intentHash(intent);
+      const result=await admin.query('SELECT public.valid_job_intent($1,$2) AS valid',[body,hash]);assert.equal(result.rows[0].valid,false);
+      await assert.rejects(transactions.run(outboxScope,tx=>tx.query('INSERT INTO public.domain_outbox_events(tenant_id,job_id,kind,object_id,key_hash,request_hash,intent) VALUES($1,$2,$3,$4,$5,$6,$7)',[tenantA,event.jobId,event.kind,event.objectId,intent.keyHash,hash,body])),/UNAVAILABLE/);
+    }
+  });
+  await t.test('V122 authorization withdrawal after queue commit leaves an intent replayable',async()=>{
+    const event=queued();await appendOutbox(event);
+    const withdrawn=new PostgresOutboxRelay({...relayOptions,pool:relayPool,authorizeRelay:async b=>b.operation!=='RELAY_ACK'});
+    await assert.rejects(withdrawn.relay(outboxScope),/OUTBOX_FORBIDDEN/);
+    assert.equal((await admin.query('SELECT job_id FROM queue_security.jobs WHERE job_id=$1',[event.jobId])).rows.length,1);
+    assert.equal((await admin.query('SELECT job_id FROM public.domain_outbox_receipts WHERE job_id=$1',[event.jobId])).rows.length,0);
+    assert.equal((await relay.relay(outboxScope)).delivered,1);
   });
 
 });
