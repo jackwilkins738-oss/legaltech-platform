@@ -104,7 +104,7 @@ export class ConnectorCredentialBroker {
   async withCredential({tenantId,kind,credentialRef,purpose,capabilities=[]}={},consumer){
     if(!id(tenantId,200)||!CONNECTOR_KINDS.has(kind)||!id(purpose,128)||!Array.isArray(capabilities)||capabilities.length<1||capabilities.length>64||capabilities.some(x=>!id(x,128))||!capabilities.includes(purpose)||typeof consumer!=='function')throw invalid();
     let parsed;try{parsed=parseManagedSecretRef(credentialRef);}catch{throw invalid();}
-    this.#interlock?.assertAllowed({tenantId,operation:'CONNECTOR_USE'});
+    await this.#interlock?.assertAllowed({tenantId,operation:'CONNECTOR_USE'});
     let resolved;
     try{resolved=await this.#provider.resolve(Object.freeze({tenantId,kind,credentialRef:parsed.canonical,purpose}));}catch{throw invalid();}
     const checked=credentialResult(resolved,this.#clock);
@@ -112,6 +112,7 @@ export class ConnectorCredentialBroker {
     const key=bindingKey(tenantId,kind,parsed.canonical);let highest,observed;
     try{highest=await this.#generationStore.get(key);if(!Number.isSafeInteger(highest)||highest<0)throw new Error();if(checked.generation<highest)throw new Error();observed=await this.#generationStore.observe(key,checked.generation);if(!Number.isSafeInteger(observed)||observed<checked.generation||observed>checked.generation)throw new Error();}catch{checked.bytes.fill(0);throw invalid();}
     try{this.#rotationAuthority?.assertUsable({tenantId,purpose,secretRef:parsed.canonical,generation:checked.generation});}catch{checked.bytes.fill(0);throw invalid();}
+    try{await this.#interlock?.assertAllowed({tenantId,operation:'CONNECTOR_USE'});}catch(error){checked.bytes.fill(0);throw error;}
     const lease=Buffer.from(checked.bytes);checked.bytes.fill(0);
     const descriptor=publicDescriptor({tenantId,kind,ref:parsed.canonical,generation:checked.generation,expiresAt:new Date(checked.expiry).toISOString(),purpose});
     try{
