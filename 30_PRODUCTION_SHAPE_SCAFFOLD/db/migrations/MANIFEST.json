@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "migrations": [
+    {
+      "file": "001_core.sql",
+      "sha256": "29826a115d1f0b2bc7ec3291547346170df76f8d6aaad3d00940f27e84c7e2e9",
+      "destructive": false
+    },
+    {
+      "file": "002_jobs.sql",
+      "sha256": "9aa42d8e09828b416f0329925e41345a7c2dfa208813178ab4477c8248e0cc6c",
+      "destructive": false
+    },
+    {
+      "file": "003_security_zones.sql",
+      "sha256": "3137f454e130d399a8dd483081f7bdc586eca83875099f3f6d57d0806ebdaf55",
+      "destructive": false
+    },
+    {
+      "file": "004_rls.sql",
+      "sha256": "806837e1bf7e2aca16baa5305d528961538795bfb47c5a07354571db7c52f86a",
+      "destructive": false
+    },
+    {
+      "file": "005_indexes.sql",
+      "sha256": "b00fd2a9cdb7d9485419f621b722d538e28f5be4cbde13e2aae758a8fb377178",
+      "destructive": false
+    },
+    {
+      "file": "006_security_hardening.sql",
+      "sha256": "8ed2475053e8a67a2d0695d03ea6a5456f0249de35e3482cf8f4015418c218e3",
+      "destructive": false
+    },
+    {
+      "file": "007_security_monitoring.sql",
+      "sha256": "b9796eaf97feba6a44542c4c968bee80dc241625e949579da6459dfdc434ef34",
+      "destructive": false
+    },
+    {
+      "file": "008_recovery_resilience.sql",
+      "sha256": "bbf95ce296f327f9a72348e521b092ea38459e267fb0ec36494a7410caff35d0",
+      "destructive": false
+    },
+    {
+      "file": "009_work_orchestration.sql",
+      "sha256": "bcfcdc63b95ef3c8eb2ac45f6be0bcc0012c5b45258d9b5ca1439fc2ad25c80c",
+      "destructive": false
+    },
+    {
+      "file": "010_workflow_runtime.sql",
+      "sha256": "c1f82972a7e865c2e44df0a57a258db870c34868d573da0f16afffc9de864728",
+      "destructive": false
+    },
+    {
+      "file": "011_to_evidence.sql",
+      "sha256": "3fcedc1b95ab2d6460933d57e73c49f671784ee214411892501a0598959e6db6",
+      "destructive": false
+    },
+    {
+      "file": "012_work_flow_intelligence.sql",
+      "sha256": "e097cc1a6f2a3a8a21b23493bccce3f7b820a780b14272c09cfa48d3a635f3e1",
+      "destructive": false
+    },
+    {
+      "file": "013_work_response_escalation.sql",
+      "sha256": "4d510d63e1cc5265eb9a1014632e60953abcda34643dfa2d5bf6c106d01c074a",
+      "destructive": false
+    },
+    {
+      "file": "014_organization_directory.sql",
+      "sha256": "84b2907596928cd0561953c767f7d9ed033b9d2aa1208a2e015c8eb73d522d69",
+      "destructive": false
+    },
+    {
+      "file": "015_notification_delivery.sql",
+      "sha256": "a943658df0dcd1fb3e06e7eb666302569862df1b1be0a16401802a679051bbe3",
+      "destructive": false
+    },
+    {
+      "file": "016_work_queue_read_model.sql",
+      "sha256": "6bc44843340f6e4000b2103cd2abaaca0d5dc68eb160490faed17f1d8763fada",
+      "destructive": false
+    },
+    {
+      "file": "017_data_lifecycle.sql",
+      "sha256": "b15cbe695165531a77af689a3d3ed47eb41f490a6635fd3c6d8e2ad483d02543",
+      "destructive": false
+    },
+    {
+      "file": "018_controlled_export.sql",
+      "sha256": "ca4cf8d31ffe5de3897c09fd329fe29ec4045887f1c28cc32fb2dd8b3b58724a",
+      "destructive": false
+    },
+    {
+      "file": "019_security_interlocks.sql",
+      "sha256": "9b3e3ece6b3f295bb88d100f147da9ba8e887b636ed4ba8bb317822010fd6668",
+      "destructive": false
+    },
+    {
+      "file": "020_production_change_control.sql",
+      "sha256": "6ab3de2f6a2443f362d2b5d362140b26f686a43bd5432a832d525c18f4635f24",
+      "destructive": false
+    },
+    {
+      "file": "021_worker_execution_identity.sql",
+      "sha256": "204f80332d512d75c1ada3929ba845e92c50efc1d3daeda2b2b814e04002b286",
+      "destructive": false
+    },
+    {
+      "file": "022_audit_checkpoint_anchor.sql",
+      "sha256": "06c22b6643e0a19664f8d212fcd2dadef081c61f867de7f6a2b3637670f7af82",
+      "destructive": false
+    },
+    {
+      "file": "023_document_delivery.sql",
+      "sha256": "bb16206acf7cf9a1bdc71e3230f3783599890a3a504afa00b834cf63a65316e4",
+      "destructive": false
+    },
+    {
+      "file": "024_key_lifecycle.sql",
+      "sha256": "19adbe8a05578e3bc746963cc2476db4f95e605cad07da244a77bad0b6c49e6e",
+      "destructive": false
+    },
+    {
+      "file": "025_jit_support_access.sql",
+      "sha256": "ba18660d759e572a5debc57554e415ce9ae4eeef04ad27c403c893e7cfa59fb8",
+      "destructive": false
+    },
+    {
+      "file": "026_graph_webhook_ingress.sql",
+      "sha256": "f5f7273a58cf8a0f98e04b0457fe269b0a983d0a7e0974a9f324fd7c86207e32",
+      "destructive": false
+    },
+    {
+      "file": "027_graph_subscription_lifecycle.sql",
+      "sha256": "800b5a91f47bb71851c3df7b8f92873b6f9c6b8c749b0a6a2bf067d7e4edc266",
+      "destructive": false
+    },
+    {
+      "file": "028_graph_delta_recovery.sql",
+      "sha256": "b1cc0029287a41a82d09105648e8d5bfeeb73aa10f91a00be16da2355ef556f6",
+      "destructive": false
+    }
+  ]
+}

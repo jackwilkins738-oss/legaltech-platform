@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 
 const ALERT_TYPES=new Set(['PRIVILEGED_ACTION','BREAK_GLASS_USED','BULK_READ','CROSS_MATTER_ACCESS','SESSION_CONTEXT_CHANGED','CONNECTOR_FAILURE_BURST']);
 const SEVERITIES=new Set(['INFO','MEDIUM','HIGH','CRITICAL']);
-const privilegedPrefixes=['GRAPH_','PROCLAIM_'];
+const privilegedPrefixes=['GRAPH_','PROCLAIM_','RECOVERY_','BACKUP_','EXPORT_','SUPPORT_'];
 const privilegedActions=new Set(['INBOUND_APPROVED','INBOUND_REJECTED','PROCLAIM_RECONCILIATION_REQUESTED']);
 const safeId=value=>typeof value==='string'&&value.length>0&&value.length<=256&&!/[\u0000-\u001f\u007f]/.test(value);
 const sha=value=>crypto.createHash('sha256').update(String(value)).digest('hex');

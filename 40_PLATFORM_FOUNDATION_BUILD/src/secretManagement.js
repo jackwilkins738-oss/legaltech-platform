@@ -95,14 +95,15 @@ export class InMemoryCredentialGenerationStore {
 }
 
 export class ConnectorCredentialBroker {
-  #provider;#clock;#generationStore;
-  constructor({provider,generationStore=new InMemoryCredentialGenerationStore(),clock=()=>Date.now()}={}){
+  #provider;#clock;#generationStore;#interlock;
+  constructor({provider,generationStore=new InMemoryCredentialGenerationStore(),securityInterlock=null,clock=()=>Date.now()}={}){
     if(!provider||typeof provider.resolve!=='function'||!generationStore||typeof generationStore.get!=='function'||typeof generationStore.observe!=='function'||typeof clock!=='function')throw new Error('CREDENTIAL_BROKER_CONFIGURATION_INVALID');
-    this.#provider=provider;this.#generationStore=generationStore;this.#clock=clock;
+    if(securityInterlock!==null&&typeof securityInterlock?.assertAllowed!=='function')throw new Error('CREDENTIAL_BROKER_CONFIGURATION_INVALID');this.#provider=provider;this.#generationStore=generationStore;this.#interlock=securityInterlock;this.#clock=clock;
   }
   async withCredential({tenantId,kind,credentialRef,purpose,capabilities=[]}={},consumer){
     if(!id(tenantId,200)||!CONNECTOR_KINDS.has(kind)||!id(purpose,128)||!Array.isArray(capabilities)||capabilities.length<1||capabilities.length>64||capabilities.some(x=>!id(x,128))||!capabilities.includes(purpose)||typeof consumer!=='function')throw invalid();
     let parsed;try{parsed=parseManagedSecretRef(credentialRef);}catch{throw invalid();}
+    this.#interlock?.assertAllowed({tenantId,operation:'CONNECTOR_USE'});
     let resolved;
     try{resolved=await this.#provider.resolve(Object.freeze({tenantId,kind,credentialRef:parsed.canonical,purpose}));}catch{throw invalid();}
     const checked=credentialResult(resolved,this.#clock);

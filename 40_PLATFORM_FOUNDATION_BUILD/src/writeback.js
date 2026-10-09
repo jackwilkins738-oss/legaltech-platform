@@ -29,9 +29,11 @@ export function newWritebackCommand({tenantId, event, matter, key, jobId}) {
 
 // Synthetic adapter contract: durable intent before I/O; uncertainty never permits another write.
 export class WritebackWorker {
-  constructor({store, proclaim, maxWrites = 3, maxReads = 3}) {
+  constructor({store, proclaim, maxWrites = 3, maxReads = 3, securityInterlock = null, executionBoundary = null}) {
     if (![maxWrites,maxReads].every(value=>Number.isSafeInteger(value)&&value>=1&&value<=100)) throw new Error('invalid worker budget');
-    Object.assign(this, {store, proclaim, maxWrites, maxReads});
+    if(securityInterlock!==null&&typeof securityInterlock?.assertAllowed!=='function')throw new Error('invalid security interlock');
+    if(executionBoundary!==null&&(!executionBoundary||typeof executionBoundary.locate!=='function'||typeof executionBoundary.authorize!=='function'))throw new Error('invalid worker execution boundary');
+    Object.assign(this, {store, proclaim, maxWrites, maxReads, securityInterlock, executionBoundary});
   }
   #assertClaim(job) {
     if (!this.store.isCurrentClaim(job)) throw new SupersededClaim();
@@ -161,13 +163,19 @@ export class WritebackWorker {
     if (!this.store.failClaimedJob(job,command.errorCode || 'WRITEBACK_UNVERIFIED',{retry})) throw new SupersededClaim();
     return {jobId: job.id, eventId: command.eventId, status: 'FAILED', error: command.errorCode || 'WRITEBACK_UNVERIFIED', result: view(command)};
   }
-  async processNext({tenantId = null, eventId = null} = {}) {
+  async processNext({tenantId = null, eventId = null, executionToken = null} = {}) {
     this.store.recoverExpiredWritebackJobs({tenantId, eventId});
-    const job = this.store.claimNext('PROCLAIM_WRITEBACK', tenantId, {eventId});
+    let job,execution=null;
+    if(this.executionBoundary){if(typeof tenantId!=='string'||!tenantId)throw new Error('WORKER_EXECUTION_TENANT_REQUIRED');const locator=this.executionBoundary.locate(executionToken),candidate=this.store.getJob(locator.objectId);if(!candidate||candidate.tenantId!==tenantId||candidate.type!=='PROCLAIM_WRITEBACK'||eventId!==null&&candidate.payload?.eventId!==eventId)return null;execution=this.executionBoundary.authorize({token:executionToken,tenantId,workerType:'PROCLAIM_WRITEBACK',objectType:'JOB',objectId:candidate.id,traceId:candidate.traceId});job=this.store.claimJobById(candidate.id,'PROCLAIM_WRITEBACK',tenantId,{eventId});}
+    else job = this.store.claimNext('PROCLAIM_WRITEBACK', tenantId, {eventId});
     if (!job) return null;
     try {
       let command = this.#load(job);
       if (command.state === 'RECONCILED') return this.#finish(job, command);
+      if(this.securityInterlock&&!job.payload.reconcileOnly&&(command.state==='PENDING'||command.state==='FAILED_KNOWN')){
+        try{this.securityInterlock.assertAllowed({tenantId:job.tenantId,operation:'PROCLAIM_WRITE'});}
+        catch(error){if(error?.message!=='SECURITY_INTERLOCK_ACTIVE')throw error;if(!this.store.failClaimedJob(job,'SECURITY_INTERLOCK_ACTIVE',{retry:true,delayMs:60_000}))throw new SupersededClaim();this.store.audit({tenantId:job.tenantId,traceId:job.traceId,actorId:'system:writeback',action:'PROCLAIM_WRITE_SECURITY_INTERLOCK',objectId:job.payload.eventId,outcome:'BLOCKED',reason:'SECURITY_INTERLOCK_ACTIVE'});return {jobId:job.id,eventId:job.payload.eventId,status:'DEFERRED',error:'SECURITY_INTERLOCK_ACTIVE'};}
+      }
       const attempt = this.store.transaction(() => {
         this.#assertClaim(job);
         const latest = this.store.getIdempotent(writebackScope(job.tenantId, command.key));

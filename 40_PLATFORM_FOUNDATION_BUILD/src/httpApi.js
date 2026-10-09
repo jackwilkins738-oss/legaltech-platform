@@ -116,13 +116,35 @@ function idempotencyKey(req) {
   return value;
 }
 
+function assertBodyKeys(body,allowed) {
+  for (const key of Object.keys(body)) if (!allowed.has(key)) throw appError('invalid request', {code:'INVALID_REQUEST'});
+}
+function csvParam(url,name,{maxItems=16}={}) {
+  const raw=url.searchParams.get(name); if(raw===null)return null;
+  if(!raw||raw.length>1000)throw appError('invalid query', {code:'INVALID_REQUEST'});
+  const items=raw.split(',');if(items.length>maxItems||items.some(x=>!x||x.length>100))throw appError('invalid query',{code:'INVALID_REQUEST'});return items;
+}
+function cursorParam(url) {
+  const raw=url.searchParams.get('cursor');if(raw===null)return null;if(raw.length>2200||!/^[A-Za-z0-9_.-]+$/.test(raw))throw appError('invalid cursor',{code:'INVALID_REQUEST'});return raw;
+}
+function workOwnerQuery(url) {
+  const kind=url.searchParams.get('owner_kind'),id=url.searchParams.get('owner_id');
+  if(kind===null&&id===null)return null;if(!kind||!id)return (()=>{throw appError('invalid owner filter',{code:'INVALID_REQUEST'});})();
+  return {kind,id};
+}
+
 function assertBodyTenant(body, session) {
   if (body.tenantId != null && body.tenantId !== session.tenantId) {
     throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
   }
 }
 
-export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter(), identitySessionService = null}) {
+export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter(), identitySessionService = null, workApi = null, readiness = null}) {
+  function accountRead(session,traceId,resource,count,matterIds=[]){
+    const unique=[...new Set((matterIds??[]).filter(Boolean))];
+    platform.securityMonitor?.observeRead({session,traceId,resource,count,matterIds:unique});
+    abuseLimiter.checkRead?.(session,{resource,count,matterIds:unique});
+  }
   async function integrationMutation(session, traceId, action, objectId, run) {
     const entry = {tenantId: session.tenantId, actorId: session.actorId, traceId, action, objectId: /^(?:sub|del)_[a-f0-9-]{36}$/.test(objectId) ? objectId : ['MICROSOFT_GRAPH', 'PROCLAIM'].includes(objectId) ? objectId : 'MICROSOFT_GRAPH'};
     // Fail closed before changing connector state if the audit store is unavailable.
@@ -144,6 +166,13 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
       const url = requestUrl(req.url);
       if (req.method === 'GET' && serveStatic(res, uiRoot, url.pathname)) return;
       if (req.method === 'GET' && url.pathname === '/api/v1/health') return send(res, 200, {status: 'ok'}, traceId);
+      if (req.method === 'GET' && url.pathname === '/api/v1/ready') {
+        if(!readiness||typeof readiness.publicStatus!=='function') return send(res,503,{status:'NOT_READY'},traceId);
+        let state;
+        try { state=await readiness.publicStatus(); } catch { state={status:'NOT_READY'}; }
+        const status=['READY','DEGRADED'].includes(state?.status)?200:503;
+        return send(res,status,{status:status===200?state.status:'NOT_READY'},traceId);
+      }
       if (identitySessionService && req.method === 'POST' && url.pathname === '/api/v1/auth/session') {
         const exchanged=await identitySessionService.exchange(req.headers);
         return send(res,200,{status:'AUTHENTICATED',expiresAt:exchanged.expiresAt},traceId,{'set-cookie':exchanged.setCookie});
@@ -170,7 +199,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'matter:read');
         const limit=boundedLimit(url,{fallback:100,max:200});
         const items=platform.listMatters(session.tenantId,limit).filter(matter=>matterAccessAllowed(session,matter));
-        platform.securityMonitor?.observeRead({session,traceId,resource:'matters',count:items.length,matterIds:items.map(x=>x.id)});
+        accountRead(session,traceId,'matters',items.length,items.map(x=>x.id));
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -180,16 +209,43 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         const matter = platform.getMatter(session.tenantId, routeId(matterMatch[1]));
         if (!matter) throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
         assertMatterAccess(session,matter);
-        platform.securityMonitor?.observeMatterAccess({session,traceId,matter});
-        platform.securityMonitor?.observeRead({session,traceId,resource:'matter',count:1});
+        accountRead(session,traceId,'matter',1,[matter.id]);
         return send(res, 200, {matter}, traceId);
       }
+
+      if (workApi && req.method === 'GET' && url.pathname === '/api/v1/work') {
+        const limit=boundedLimit(url,{fallback:50,max:100}),owner=workOwnerQuery(url),states=csvParam(url,'states'),types=csvParam(url,'types'),matterId=url.searchParams.get('matter_id'),cursor=cursorParam(url);
+        const result=workApi.list({session,owner,states,types,matterId,limit,cursor});
+        accountRead(session,traceId,'work',result.items.length,result.items.map(x=>x.matterId));
+        return send(res,200,{items:result.items,next_cursor:result.nextCursor},traceId);
+      }
+
+      if (workApi && req.method === 'POST' && url.pathname === '/api/v1/work') {
+        const body=await readJson(req);assertBodyTenant(body,session);assertBodyKeys(body,new Set(['tenantId','matterId','type','title','description','owner','priority','dueAt','metadata']));
+        const item=workApi.create({session,input:{matterId:body.matterId??null,type:body.type??'TASK',title:body.title,description:body.description??null,owner:body.owner,priority:body.priority??50,dueAt:body.dueAt??null,metadata:body.metadata??{}},idempotencyKey:idempotencyKey(req),traceId});
+        return send(res,item.replayed?200:201,{work:item},traceId);
+      }
+
+      const workEventMatch=url.pathname.match(/^\/api\/v1\/work\/([^/]+)\/events$/);
+      if(workApi&&req.method==='GET'&&workEventMatch){const workId=routeId(workEventMatch[1]),limit=boundedLimit(url,{fallback:100,max:200});const work=workApi.get({session,workId});const items=workApi.events({session,workId,limit});accountRead(session,traceId,'work-events',items.length,work.matterId?[work.matterId]:[]);return send(res,200,{items,next_cursor:null},traceId);}
+
+      const workStateMatch=url.pathname.match(/^\/api\/v1\/work\/([^/]+)\/state$/);
+      if(workApi&&req.method==='POST'&&workStateMatch){const body=await readJson(req);assertBodyTenant(body,session);assertBodyKeys(body,new Set(['tenantId','to','expectedVersion','reason']));const item=workApi.transition({session,workId:routeId(workStateMatch[1]),input:body,traceId});return send(res,200,{work:item},traceId);}
+
+      const workRespondMatch=url.pathname.match(/^\/api\/v1\/work\/([^/]+)\/respond$/);
+      if(workApi&&req.method==='POST'&&workRespondMatch){const body=await readJson(req);assertBodyTenant(body,session);assertBodyKeys(body,new Set(['tenantId','expectedVersion','outcome','comment','metadata']));const item=workApi.respond({session,workId:routeId(workRespondMatch[1]),input:body,traceId});return send(res,200,{work:item},traceId);}
+
+      const workAssignMatch=url.pathname.match(/^\/api\/v1\/work\/([^/]+)\/assign$/);
+      if(workApi&&req.method==='POST'&&workAssignMatch){const body=await readJson(req);assertBodyTenant(body,session);assertBodyKeys(body,new Set(['tenantId','expectedVersion','owner','reason']));const item=workApi.assign({session,workId:routeId(workAssignMatch[1]),input:body,traceId});return send(res,200,{work:item},traceId);}
+
+      const workMatch=url.pathname.match(/^\/api\/v1\/work\/([^/]+)$/);
+      if(workApi&&req.method==='GET'&&workMatch){const item=workApi.get({session,workId:routeId(workMatch[1])});accountRead(session,traceId,'work',1,item.matterId?[item.matterId]:[]);return send(res,200,{work:item},traceId);}
 
       if (req.method === 'GET' && url.pathname === '/api/v1/inbound-events') {
         requireCapability(session, 'inbound:read');
         const limit=boundedLimit(url,{fallback:50,max:200});
         const items=platform.listEvents(session.tenantId,limit).filter(event=>eventVisible(session,platform,event));
-        platform.securityMonitor?.observeRead({session,traceId,resource:'inbound-events',count:items.length,matterIds:items.flatMap(linkedMatterIds)});
+        accountRead(session,traceId,'inbound-events',items.length,items.flatMap(linkedMatterIds));
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -199,7 +255,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         const event = platform.getEvent(session.tenantId, routeId(eventMatch[1]));
         if (!event) throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
         assertEventMatterAccess(session,platform,event);
-        platform.securityMonitor?.observeRead({session,traceId,resource:'inbound-event',count:1,matterIds:linkedMatterIds(event)});
+        accountRead(session,traceId,'inbound-event',1,linkedMatterIds(event));
         return send(res, 200, {event}, traceId);
       }
 
@@ -239,7 +295,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
           const event=platform.getEvent(session.tenantId,ex.eventId);
           return event&&eventVisible(session,platform,event);
         });
-        platform.securityMonitor?.observeRead({session,traceId,resource:'exceptions',count:items.length,matterIds:items.map(ex=>platform.getEvent(session.tenantId,ex.eventId)).filter(Boolean).flatMap(linkedMatterIds)});
+        accountRead(session,traceId,'exceptions',items.length,items.map(ex=>platform.getEvent(session.tenantId,ex.eventId)).filter(Boolean).flatMap(linkedMatterIds));
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -271,7 +327,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
           const matter=platform.getMatter(session.tenantId,item.matterId);
           return matter&&matterAccessAllowed(session,matter);
         });
-        platform.securityMonitor?.observeRead({session,traceId,resource:'audit',count:items.length,matterIds:items.map(x=>x.matterId).filter(Boolean)});
+        accountRead(session,traceId,'audit',items.length,items.map(x=>x.matterId).filter(Boolean));
         return send(res, 200, {items, next_cursor: null}, traceId);
       }
 
@@ -279,7 +335,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'security:read');
         const limit=boundedLimit(url,{fallback:50,max:200});
         const items=platform.securityAlerts(session.tenantId,limit);
-        platform.securityMonitor?.observeRead({session,traceId,resource:'security-alerts',count:items.length});
+        accountRead(session,traceId,'security-alerts',items.length);
         return send(res,200,{items,next_cursor:null},traceId);
       }
 
