@@ -4,9 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import {fileURLToPath} from 'node:url';
 import {loadMigrationManifest,verifyMigrationDirectory,verifyAppliedMigrations,detectDestructiveSql,createMigrationReadinessProbe} from '../src/migrationSafety.js';
 
-const here=path.dirname(new URL(import.meta.url).pathname);
+const here=path.dirname(fileURLToPath(import.meta.url));
 const migrationDir=path.resolve(here,'../db/migrations');
 const manifestPath=path.join(migrationDir,'MANIFEST.json');
 const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
@@ -16,7 +17,7 @@ function cleanup(dir){ fs.rmSync(dir,{recursive:true,force:true}); }
 test('V77 committed migration manifest exactly verifies the canonical migration directory',()=>{
   const manifest=loadMigrationManifest(manifestPath);
   const result=verifyMigrationDirectory({directory:migrationDir,manifest});
-  assert.deepEqual(result,{status:'VERIFIED',count:34,latest:'034_dead_letter_recovery.sql'});
+  assert.deepEqual(result,{status:'VERIFIED',count:40,latest:'040_onboarding_readiness.sql'});
 });
 
 test('V77 changed migration bytes are detected as checksum drift',()=>{
@@ -54,9 +55,22 @@ test('V77 destructive SQL requires an explicit bounded review reference',()=>{
   } finally { cleanup(dir); }
 });
 
-test('V77 symlinked migration content is refused even when its bytes match',()=>{
+test('V77 symlinked migration content is refused even when its bytes match',t=>{
   const dir=copyMigrations(); try{
-    const name='016_work_queue_read_model.sql'; const original=fs.readFileSync(path.join(dir,name)); const target=path.join(dir,'safe-target.txt'); fs.writeFileSync(target,original); fs.unlinkSync(path.join(dir,name)); fs.symlinkSync(target,path.join(dir,name));
+    const name='016_work_queue_read_model.sql';
+    const original=fs.readFileSync(path.join(dir,name));
+    const target=path.join(dir,'safe-target.txt');
+    fs.writeFileSync(target,original);
+    fs.unlinkSync(path.join(dir,name));
+    try{
+      fs.symlinkSync(target,path.join(dir,name));
+    }catch(error){
+      if(['EPERM','EACCES','ENOTSUP'].includes(error?.code)){
+        t.skip('OS does not permit file symlink creation for this test process');
+        return;
+      }
+      throw error;
+    }
     assert.throws(()=>verifyMigrationDirectory({directory:dir,manifest:loadMigrationManifest(path.join(dir,'MANIFEST.json'))}),error=>['UNSAFE_MIGRATION_FILE','MIGRATION_PATH_ESCAPE'].includes(error.code));
   } finally { cleanup(dir); }
 });
@@ -76,7 +90,7 @@ test('V77 current applied migration set verifies without exposing SQL',()=>{
   const manifest=loadMigrationManifest(manifestPath);
   const applied=manifest.migrations.map(({file,sha256})=>({file,sha256}));
   const state=verifyAppliedMigrations({manifest,applied});
-  assert.deepEqual(state,{status:'CURRENT',appliedCount:34,pending:[],latestRequired:'034_dead_letter_recovery.sql'});
+  assert.deepEqual(state,{status:'CURRENT',appliedCount:40,pending:[],latestRequired:'040_onboarding_readiness.sql'});
   assert.equal(JSON.stringify(state).includes('CREATE TABLE'),false);
 });
 
@@ -89,11 +103,24 @@ test('V77 schema readiness fails closed on pending or drifted applied migrations
   assert.deepEqual(await createMigrationReadinessProbe({manifest,getApplied:async()=>drift})(),{ok:false,code:'SCHEMA_MIGRATION_DRIFT'});
 });
 
-test('V77 manifest parser refuses symlink, oversized shape, and unexpected properties',()=>{
+test('V77 manifest parser refuses symlink, oversized shape, and unexpected properties',t=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'legaltech-manifest-')); try{
-    const target=path.join(dir,'real.json'); fs.writeFileSync(target,JSON.stringify({version:1,migrations:[]})); const link=path.join(dir,'MANIFEST.json'); fs.symlinkSync(target,link);
-    assert.throws(()=>loadMigrationManifest(link),error=>error.code==='INVALID_MIGRATION_MANIFEST_FILE');
+    const target=path.join(dir,'real.json');
+    fs.writeFileSync(target,JSON.stringify({version:1,migrations:[]}));
+    const link=path.join(dir,'MANIFEST.json');
+    try{
+      fs.symlinkSync(target,link);
+      assert.throws(()=>loadMigrationManifest(link),error=>error.code==='INVALID_MIGRATION_MANIFEST_FILE');
+    }catch(error){
+      if(['EPERM','EACCES','ENOTSUP'].includes(error?.code)){
+        t.diagnostic('OS does not permit file symlink creation; symlink-specific assertion skipped');
+      }else{
+        throw error;
+      }
+    }
   } finally { cleanup(dir); }
-  const manifest=loadMigrationManifest(manifestPath); const malformed={...manifest,unexpected:true};
+
+  const manifest=loadMigrationManifest(manifestPath);
+  const malformed={...manifest,unexpected:true};
   assert.throws(()=>verifyAppliedMigrations({manifest:malformed,applied:[]}),error=>error.code==='INVALID_MIGRATION_MANIFEST');
 });

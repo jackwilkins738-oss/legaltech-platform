@@ -229,6 +229,13 @@
     "deployment drain rejects new work",
     "deployment drain preserves inflight",
     "deployment drain readiness unready",
-    "deployment drain shared state"
+    "deployment drain shared state",
+    "tenant lifecycle offboarding",
+    "access recertification snapshot",
+    "deny unclassified data",
+    "tenant scoped admission quota",
+    "aggregate service level evidence",
+    "tenant pinned data residency",
+    "tenant activation readiness hash"
   ]
 }

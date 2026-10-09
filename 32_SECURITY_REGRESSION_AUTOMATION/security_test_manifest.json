@@ -104,6 +104,41 @@
       "id": "SEC-DEPLOYMENT-DRAIN",
       "concept": "graceful shared deployment drain and readiness",
       "severity": "HIGH"
+    },
+    {
+      "id": "SEC-TENANT-LIFECYCLE",
+      "concept": "tenant lifecycle offboarding",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-ACCESS-REVIEW",
+      "concept": "access recertification snapshot",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-DATA-CLASSIFICATION",
+      "concept": "deny unclassified data",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-TENANT-QUOTA",
+      "concept": "tenant scoped admission quota",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-SLO-EVIDENCE",
+      "concept": "aggregate service level evidence",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "SEC-DATA-RESIDENCY",
+      "concept": "tenant pinned data residency",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-TENANT-ONBOARDING",
+      "concept": "tenant activation readiness hash",
+      "severity": "HIGH"
     }
   ]
 }

@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+const sql=fs.readFileSync(new URL('../db/migrations/035_tenant_lifecycle.sql',import.meta.url),'utf8');const env=fs.readFileSync(new URL('../src/env.js',import.meta.url),'utf8');
+test('V103 lifecycle state/evidence is tenant bound and append only',()=>{assert.match(sql,/FORCE ROW LEVEL SECURITY/);assert.match(sql,/PROVISIONING.*ACTIVE.*SUSPENDED.*OFFBOARDING.*OFFBOARDED/s);assert.match(sql,/append only/);assert.doesNotMatch(sql,/DELETE FROM|TRUNCATE/i);});
+test('V103 production env requires managed lifecycle and evidence gated offboarding',()=>{assert.match(env,/TENANT_LIFECYCLE_MODE/);assert.match(env,/managed-state-machine/);assert.match(env,/TENANT_OFFBOARDING_MODE/);assert.match(env,/evidence-gated-no-auto-delete/);assert.match(env,/TENANT_LIFECYCLE_VALIDATION_STATUS/);});

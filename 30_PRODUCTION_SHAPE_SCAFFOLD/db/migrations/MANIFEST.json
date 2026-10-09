@@ -170,6 +170,36 @@
       "file": "034_dead_letter_recovery.sql",
       "sha256": "0f64b43ea6360591ebfe42f9763f71a9b285b513bdc8bd78b465f18841e34173",
       "destructive": false
+    },
+    {
+      "file": "035_tenant_lifecycle.sql",
+      "sha256": "22d31a2ba69b7f525128b86b2ac4266b33e52dd09ba883f59972cfda24c65a0d",
+      "destructive": false
+    },
+    {
+      "file": "036_access_review.sql",
+      "sha256": "cbbc8abef4767d9860c98230afc0f6b38f576a5ecd31721ffc2b0a0ba225c7eb",
+      "destructive": false
+    },
+    {
+      "file": "037_data_classification.sql",
+      "sha256": "f7a2de0b42180bf0b0af87a0698e22b1a1b385d4e172d18b741d106d135e68c8",
+      "destructive": false
+    },
+    {
+      "file": "038_service_level_evidence.sql",
+      "sha256": "e45bad1710310f8814d3f494a988dc86d4faa975117b572842d06eedb6440d96",
+      "destructive": false
+    },
+    {
+      "file": "039_data_residency.sql",
+      "sha256": "ef949970172468dd3dd7d071386434109a97e4e018d26783cfebe3f2e9b1346b",
+      "destructive": false
+    },
+    {
+      "file": "040_onboarding_readiness.sql",
+      "sha256": "5efd18b526aa0cd53432cddd435f0e56b4c22168f8811123683aa64d94386c75",
+      "destructive": false
     }
   ]
 }
