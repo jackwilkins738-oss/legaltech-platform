@@ -366,3 +366,38 @@ V91 adds a bounded lease-recoverable queue/worker around V89 validation. Receipt
 
 ## V92 Graph delta recovery and checkpoint safety
 Missed Graph notification recovery now has a bounded reference delta engine. Next/delta URLs are origin-pinned to Graph v1.0 and treated as opaque, terminal delta checkpoints are stored only through managed-secret references, and V90 subscriptions cannot return from recovery-required to active until the checkpoint is secured. Production shape persists only checkpoint hashes/generations and append-only recovery evidence. See `docs/V92_GRAPH_DELTA_RECOVERY.md`.
+
+
+## V93 incident response evidence and containment
+V93 adds a tenant-scoped incident lifecycle around the V82 security interlocks. Incident and evidence records contain bounded codes and cryptographic references only; raw forensic/client content stays external. Recovery and closure are evidence-bound, all active interlocks must be released before closure, and the incident opener cannot close the incident. See `docs/V93_INCIDENT_RESPONSE.md`.
+
+
+## V94 tenant configuration rollout safety
+V94 adds immutable tenant configuration bundles containing only server-validated component references/hashes. Activation requires an exact V83 change approval and switching back to an older published bundle is recorded as rollback rather than mutating history. See `docs/V94_TENANT_CONFIGURATION.md`.
+
+
+## V95 synthetic workflow simulation
+V95 can execute a validated workflow definition against an explicitly synthetic scenario without creating work, sending notifications, scheduling delays or touching a matter. It returns hashes rather than context values and supports deterministic before/after effect comparison. See `docs/V95_WORKFLOW_SIMULATION.md`.
+
+
+## V96 tenant configuration regression certification
+V96 binds an exact tenant configuration bundle hash to an exact synthetic scenario-suite hash and a successful bounded runner result. V94 activation now requires certification through an injected validation authority; failed/unavailable suites fail closed and scenario payloads are not persisted. See `docs/V96_CONFIG_VALIDATION.md`.
+
+
+## V97 supply-chain attestation
+V97 adds CycloneDX 1.7 SBOM generation shape plus an external-signature verification boundary binding artifact, SBOM, SLSA-style provenance and source revision hashes. Signature material remains outside application persistence and readiness can fail on artifact/source drift. See `docs/V97_SUPPLY_CHAIN_ATTESTATION.md`.
+
+### V98 vulnerability evidence
+V98 adds an SBOM-bound external vulnerability evidence boundary and critical/high release gate. VEX exceptions are exact finding/SBOM bound and require externally verified reviewed evidence; raw scanner/advisory/signature payloads remain outside application persistence.
+
+### V99 exact dead-letter recovery
+V99 adds exact-snapshot, attempt-preserving operator recovery for dead background jobs, with fail-closed risk classification and separate approval for high-risk replay.
+
+### V100 outbound egress policy
+V100 adds destination allowlisting, DNS/address pinning, private-network SSRF refusal and redirect-free outbound request plans for future managed integration clients.
+
+### V101 dependency protection
+V101 adds tenant-scoped circuit breaking, bounded dependency concurrency and full-jitter retry primitives for Graph/Proclaim/managed external dependencies.
+
+### V102 graceful deployment drain
+V102 adds shared-state deployment draining and readiness control so rolling deploys/maintenance do not accept new mutable work while in-flight operations finish.

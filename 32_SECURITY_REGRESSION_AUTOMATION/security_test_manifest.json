@@ -54,6 +54,56 @@
       "id": "SEC-BREAK-GLASS-ALERT",
       "concept": "break-glass alert",
       "severity": "HIGH"
+    },
+    {
+      "id": "SEC-INCIDENT-RESPONSE",
+      "concept": "incident containment and evidence",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-TENANT-CONFIG",
+      "concept": "tenant configuration rollout",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-WORKFLOW-SIMULATION",
+      "concept": "synthetic no-side-effect workflow simulation",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-CONFIG-REGRESSION",
+      "concept": "synthetic configuration regression certification",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-SUPPLY-CHAIN",
+      "concept": "SBOM and build provenance attestation",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-VULNERABILITY-GATE",
+      "concept": "SBOM-bound vulnerability and reviewed VEX release gate",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-DEAD-LETTER-RECOVERY",
+      "concept": "exact dead-letter recovery with preserved attempt budget",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-EGRESS-SSRF",
+      "concept": "outbound egress destination and DNS pinning",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-DEPENDENCY-BACKPRESSURE",
+      "concept": "tenant-scoped dependency circuit and concurrency containment",
+      "severity": "HIGH"
+    },
+    {
+      "id": "SEC-DEPLOYMENT-DRAIN",
+      "concept": "graceful shared deployment drain and readiness",
+      "severity": "HIGH"
     }
   ]
 }

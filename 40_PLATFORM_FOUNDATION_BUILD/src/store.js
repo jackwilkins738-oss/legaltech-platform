@@ -209,6 +209,12 @@ export class PlatformStore {
     return Number(this.db.prepare("UPDATE jobs SET status=?,available_at=?,last_error=?,updated_at=? WHERE id=? AND tenant_id=? AND type=? AND status='RUNNING' AND attempts=?")
       .run(retry?'QUEUED':'DEAD',new Date(Date.now()+delayMs).toISOString(),String(error),new Date().toISOString(),job.id,job.tenantId,job.type,job.attempts).changes)===1;
   }
+  requeueDeadJob(tenantId,jobId,{expected,availableAt=new Date().toISOString()}={}) {
+    if(!expected||expected.id!==jobId||expected.tenantId!==tenantId||expected.status!=='DEAD')return false;
+    const changed=this.db.prepare("UPDATE jobs SET status='QUEUED',available_at=?,updated_at=? WHERE id=? AND tenant_id=? AND type=? AND status='DEAD' AND attempts=? AND trace_id=? AND updated_at=? AND available_at=? AND created_at=? AND json(payload_json)=json(?) AND COALESCE(last_error,'')=COALESCE(?,'')")
+      .run(availableAt,new Date().toISOString(),jobId,tenantId,expected.type,expected.attempts,expected.traceId,expected.updatedAt,expected.availableAt,expected.createdAt,json(expected.payload),expected.lastError).changes;
+    return Number(changed)===1;
+  }
   completeJob(id){this.db.prepare("UPDATE jobs SET status='DONE',updated_at=? WHERE id=?").run(new Date().toISOString(),id);return this.getJob(id);}
   failJob(id,error,{retry=true,delayMs=0}={}){const state=retry?'QUEUED':'DEAD';this.db.prepare('UPDATE jobs SET status=?,available_at=?,last_error=?,updated_at=? WHERE id=?').run(state,new Date(Date.now()+delayMs).toISOString(),String(error),new Date().toISOString(),id);return this.getJob(id);}
   getIdempotent(scope){const r=this.db.prepare('SELECT data_json FROM idempotency WHERE scope=?').get(scope);return parse(r?.data_json);}

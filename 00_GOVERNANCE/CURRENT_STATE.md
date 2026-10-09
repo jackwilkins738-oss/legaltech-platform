@@ -493,3 +493,44 @@ V91 adds the managed-queue reference boundary behind V89/V90. Receipt performs o
 
 ## 2026-10-09 — Graph delta recovery and opaque checkpoint safety — V92
 V92 adds bounded recovery for missed Microsoft Graph notifications. Opaque `nextLink`/`deltaLink` URLs are origin-pinned to Graph v1.0, terminal delta state is stored only through managed secret references, dispatch is explicitly retry/idempotency aware, and a V90 subscription cannot reactivate until a terminal checkpoint is secured. Production-shaped checkpoint/evidence tables are tenant-bound, forced-RLS and append-only. No live Graph credential, deployed delta worker, scheduler or production recovery drill is claimed.
+
+
+## 2026-10-09 — Incident response evidence and containment lifecycle — V93
+V93 adds a generic tenant-scoped incident authority around the existing V82 emergency interlocks. Incidents and evidence persist only bounded codes/hashes/references, containment reuses fail-closed interlocks, recovery is evidence-bound and closure requires a distinct actor after all active interlocks are released. Production-shaped incident evidence/events are append-only and real-client-data mode requires external incident-response validation. No live SIEM/SOAR, forensic repository, breach-notification procedure or regulatory conclusion is claimed.
+
+
+## 2026-10-09 — Tenant configuration versioning and rollout safety — V94
+V94 adds tenant-scoped immutable configuration bundles over server-validated workflow/policy/flag references. Bundles are version/hash bound, activation consumes an exact V83 approval, and reactivating an older published version creates append-only rollback evidence instead of editing live configuration in place. This provides a safe post-TO rollout mechanism without encoding any Co-op workflow or SLA before field evidence exists.
+
+
+## 2026-10-09 — Synthetic workflow simulation and impact preview — V95
+V95 adds side-effect-free execution of the same bounded V65 workflow definitions against caller-validated synthetic scenarios. It projects task/notification/branch behavior, stops at waits, returns context hashes rather than scenario values and supports before/after impact comparison. Production configuration requires isolated no-side-effect mode and synthetic-only data. This provides a safe way to validate TO-derived workflow designs before activation without using client data.
+
+
+## 2026-10-09 — Synthetic regression certification for tenant configuration — V96
+V96 requires exact-bundle synthetic regression evidence before V94 configuration activation. Certification is bound to tenant, bundle key/version/hash and scenario-suite hash; only bounded pass/fail counts, runner version and evidence hashes persist. Runner failure or any failed scenario produces no certification. This creates a software-regression gate for post-TO workflow rollout without treating synthetic tests as legal validation.
+
+
+## 2026-10-09 — SBOM and build-provenance attestation boundary — V97
+V97 adds a CycloneDX 1.7 SBOM shape and external-verifier attestation boundary over release artifact, SBOM, provenance and source-revision hashes. The application does not create or persist signing keys or raw signature envelopes; verified evidence is append-only digest/reference metadata and readiness can fail on deployment drift. The intended provenance shape aligns with SLSA v1.2, but no production SLSA level is claimed until external CI/build evidence exists.
+
+## V98 — Vulnerability evidence and release gate
+- Exact-SBOM external scan evidence is verified before release assessment.
+- Critical/high findings block by default; only reviewed signed VEX `NOT_AFFECTED`/`FIXED` evidence can clear the exact finding.
+- Durable evidence is append-only hash metadata; no embedded vulnerability database or raw scanner/VEX payload is claimed.
+
+## V99 — Exact dead-letter recovery
+- Failed background work can only be recovered by exact immutable job snapshot, never arbitrary payload replay.
+- Retry attempts are preserved; high-risk recovery requires dual control and all recovery evidence is append-only/hash-bounded.
+
+## V100 — Outbound egress / SSRF containment
+- Server-owned purpose-specific HTTPS allowlists, DNS resolution pinning, private-network refusal and redirect blocking protect outbound integrations.
+- Trusted private services require exact resolved-address configuration; this does not replace network-level egress controls.
+
+## V101 — Dependency outage/backpressure containment
+- Circuit and concurrency state is tenant+dependency isolated, with single half-open probes and bounded full-jitter retry guidance.
+- Production requires a shared managed state implementation to prevent per-instance retry storms.
+
+## V102 — Graceful deployment drain
+- New ingress/background/side-effect work stops immediately during drain while existing leases complete.
+- Readiness remains unready until an authorized resume; production requires shared managed drain state.
