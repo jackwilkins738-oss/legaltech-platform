@@ -268,3 +268,101 @@ The foundation now includes strict managed-secret references and a tenant/kind/p
 
 ## V62 security monitoring and audit integrity boundary
 The foundation now hash-chains synthetic audit entries, verifies the chain, keeps local audit/security-alert ledgers append-only and emits bounded security signals for privileged connector actions, break-glass use, anomalous session context, bulk/cross-matter reads and connector failure bursts. Production-shaped configuration requires a managed alert sink, strict redaction, server-generated incident correlation and explicit retention. See `docs/V62_SECURITY_MONITORING.md` and `TEST_RESULTS_V62.md`. This is monitoring/reference logic only; no live SIEM/SOC integration is claimed.
+
+
+## V63 backup, restore and ransomware recovery resilience
+The foundation now validates immutable tenant-bound backup manifests, records append-only hash-chained recovery evidence, requires dual-control restore authorization, constrains restores to isolated/clean targets and refuses verified status until database/audit/object/tenant integrity checks pass. Production-shaped configuration requires PITR, isolated backup identity, separate KMS keys and ransomware recovery controls. See `docs/V63_RECOVERY_RESILIENCE.md`. No live cloud backup or production restore is claimed.
+
+
+## V64 generic work orchestration foundation
+The foundation now has workflow-agnostic typed work, explicit states, generic user/role/team/pool ownership, optimistic versioning, idempotent creation, matter binding, dependencies with cycle protection, automatic downstream reactivation, structured request responses, bounded queues, append-only work events and baseline flow metrics. See `docs/V64_WORK_ORCHESTRATION.md`. No Co-op-specific role mapping, SLA, routing or legal workflow is encoded before TO evidence.
+
+
+## V65 versioned workflow runtime, feature flags and notification intents
+The foundation now supports validated/published workflow definitions, definition-hash/version-pinned instances, bounded create-work/wait/delay/branch/notify/complete execution, idempotent starts/signals, tenant pilot feature flags and deduplicated in-app/Teams notification intents. Notification steps never send externally; connector delivery remains a separate credentialed boundary. See `docs/V65_WORKFLOW_RUNTIME.md`.
+
+## V66 time-and-motion evidence foundation
+The foundation now includes tenant-bound, pseudonymised TO studies with measured/estimated timing separation, internal/external dependency evidence, correction-by-supersession, append-only observation/estimate history, flow summaries and guarded annualisation. See `docs/V66_TO_EVIDENCE_FOUNDATION.md`. The module measures process evidence; it does not decide what to automate before TO findings exist.
+
+## V67 delegation and flow intelligence
+The foundation now supports bounded generic delegation/absence routing and append-only aggregate flow snapshots. Flow intelligence can quantify queue age, waits, dependencies and downstream work blocked by an owner without persisting case titles or matter IDs in snapshots. See `docs/V67_DELEGATION_FLOW_INTELLIGENCE.md`. Firm-specific SLA/escalation rules remain post-TO configuration.
+
+## V68 configurable response targets and escalation intents
+The foundation now supports versioned, published response-target policies that can generate bounded notification intents or explicit escalation work after configurable created/waiting/due thresholds. Source work is never automatically reassigned. See `docs/V68_RESPONSE_TARGET_ESCALATION.md`. Actual thresholds and escalation routes remain TO-driven configuration.
+
+## V69 matter-aware work authorization
+The generic work foundation now has an explicit tenant/matter-aware authorization boundary before API/UI exposure. Self access is derived only from trusted actor/role claims; TEAM/POOL membership is not inferred, requester read visibility does not grant mutation authority, and broad work capabilities never bypass restricted matter controls. Policy management requires recent step-up by default. See `docs/V69_WORK_AUTHORIZATION.md`.
+
+## V70 bounded work API
+The generic work model is now available through an authenticated, bounded HTTP contract backed by V69 matter-aware authorization. Tenant/requester/actor/trace identity is server-owned, queues are bounded and filtered, stale mutations return safe conflicts, and no endpoint can bypass restricted matter controls. See `docs/V70_WORK_API.md`.
+
+## V71 trusted organisation membership
+The foundation now has a generic tenant-bound TEAM/POOL directory with time-aware memberships, optimistic revocation, retired-group handling and append-only membership evidence. V69 can use this trusted directory to authorize shared team/pool work without trusting browser-supplied group identity. See `docs/V71_ORGANIZATION_DIRECTORY.md`.
+
+## V72 durable response-policy evaluation worker
+The foundation now has a bounded, lease-recoverable worker for evaluating the generic V68 response-target policies. Jobs pin published policy version/hash, scan work in bounded pages, deduplicate materialisation on replay and isolate individual item failures. No polling cadence, SLA or external notification delivery is installed. See `docs/V72_POLICY_EVALUATION_WORKER.md`.
+
+## V73 bounded notification delivery containment
+The foundation now has a bounded delivery worker for V65 notification intents. In-app delivery is local; external Teams delivery requires an explicitly injected adapter and receives only structured template/object references, never arbitrary matter text or connector credentials. Delivery attempts are tenant-scoped, lease-recoverable, retry-capped and recorded as append-only bounded evidence with provider references stored only as hashes. See `docs/V73_NOTIFICATION_DELIVERY.md`. No live Teams tenant, external messaging credential or production notification transport is claimed.
+
+## V74 opaque work pagination and queue read-model hardening
+The bounded work API now uses encrypted/authenticated short-lived cursors bound to tenant and exact queue filters instead of exposing numeric offsets. Tampering, cross-tenant reuse, filter reuse and expiry fail closed; unreadable work can still be scanned without disclosing skipped-record counts. Production-shaped owner/state/type/matter queue indexes support large shared workloads without adding firm-specific semantics. See `docs/V74_WORK_CURSOR_AND_QUEUE_READ_MODEL.md`. A production deployment must inject stable managed cursor-key material across instances; the synthetic dev service may use an ephemeral process key.
+
+## V75 TO field intake and evidence report
+The TO evidence foundation now has a strict anonymised CSV intake/preflight boundary and evidence-driven field report. Imports are bounded, row-isolated and idempotent; PII-like process notes remain rejected by the V66 evidence validator; accepted rows preserve measured/estimated separation. Reports expose task burden, dependency-role waiting, role×task matrices, system usage and guarded annualisation independently rather than inventing a composite opportunity score. See `docs/V75_TO_FIELD_INTAKE.md` and `docs/TO_FIELD_IMPORT_TEMPLATE.csv`.
+
+
+## V76 operational readiness and degraded-mode controls
+The HTTP boundary now separates process liveness from dependency-aware readiness. Critical dependency failure fails readiness closed, non-critical failure is explicit `DEGRADED`, public responses redact dependency/error detail, and bounded cached probes avoid turning readiness traffic into dependency amplification. Production configuration requires process-only liveness, dependency-aware readiness and fail-closed readiness semantics. See `docs/V76_OPERATIONAL_READINESS.md`.
+
+
+## V77 migration and release integrity
+Production-shaped SQL history is now SHA-256 manifest-pinned and sequence-checked. Missing, unexpected, reordered, tampered or symlinked migrations fail closed; applied database evidence must be an exact ordered prefix; destructive schema/data operations require an explicit review reference; and schema compatibility can participate in V76 readiness. Runtime production instances are configured not to auto-migrate. See `docs/V77_MIGRATION_RELEASE_INTEGRITY.md`.
+
+
+## V78 authenticated read-volume containment
+Authenticated visible reads now consume a tenant+actor record budget and a distinct-matter budget across protected endpoints before response egress. Work queues/event history participate in V62 bulk-read monitoring, denied extraction returns a bounded 429 without an items payload, and production requires a shared managed read-volume limiter rather than per-process memory. See `docs/V78_READ_VOLUME_CONTAINMENT.md`.
+
+
+## V79 data lifecycle and legal-hold safety
+Retention now has a versioned policy primitive with no default period, matter/resource legal holds fail disposition closed, eligible disposition plans are idempotent and policy-pinned, and approval requires a second actor plus a fresh hold/policy check. There is intentionally no automatic delete/execute method; production disposition remains externally controlled and real-client-data mode requires reviewed retention/hold/procedure evidence. See `docs/V79_DATA_LIFECYCLE.md`.
+
+
+## V80 release and configuration provenance
+Runtime identity can now bind source revision, package version, artifact digest, migration-manifest digest and a secret-free fingerprint of security-relevant configuration. Readiness can fail on release drift and bounded fleet assessment distinguishes mixed binaries from config drift without exposing environment values. Production and real-client-data gates require verified provenance/drift evidence. See `docs/V80_RELEASE_PROVENANCE.md`.
+
+## V81 controlled data export and download containment
+Future export/reporting features now have a bounded egress primitive: every resource is server-authorized before request creation, manifests and packages are digest-pinned, package readiness requires managed-storage evidence, and downloads use short-lived actor-bound single-use grants whose raw tokens are never persisted. Public links and arbitrary external delivery are explicitly absent/disabled. See `docs/V81_CONTROLLED_EXPORT.md`.
+
+## V82 security incident interlocks
+The foundation now has tenant-scoped emergency controls for all egress, Proclaim writes, external notifications, export, connector credential use and new server sessions. Activation is server-authorized and persistent; release requires a different authorized actor. The reference interlock is consumed by the export, connector, notification, session and writeback boundaries while preserving reads/recovery. See `docs/V82_SECURITY_INTERLOCKS.md`.
+
+## V83 production change governance
+Normal production behavior changes can now be bound to an expiring, exact target hash and require approval by a second authorized actor before one-time execution. Workflow publication, response-policy publication, feature-flag changes and retention-policy publication can consume this evidence when change control is configured. V82 emergency interlocks remain independent so incident containment is not delayed. See `docs/V83_PRODUCTION_CHANGE_CONTROL.md`.
+
+## V84 worker execution identity
+Background workers can now require short-lived, single-use execution grants bound to tenant, worker type, exact queued object and trace before they claim work. Inbound processing, Proclaim writeback, response-policy evaluation and notification delivery all support the boundary. Production shape requires managed workload identity plus durable replay evidence. See `docs/V84_WORKER_EXECUTION_IDENTITY.md`.
+
+## V85 audit checkpoint and rollback detection
+V85 adds externally anchorable audit-chain checkpoints so a locally valid but older/restored ledger can be detected as rollback or fork. Checkpoints persist only bounded hashes locally, are append-only and tenant-bound, and can participate in readiness without exposing audit contents or external anchor references. See `docs/V85_AUDIT_CHECKPOINT_ROLLBACK_DETECTION.md`.
+
+## V86 secure document delivery
+V86 adds short-lived, actor/matter-bound, single-use individual-document delivery without exposing reusable object-storage references. Authorization is rechecked at redemption, document identity is hash-bound, `ALL_EGRESS` can stop delivery, and production shape records immutable grant/consumption evidence. See `docs/V86_DOCUMENT_DELIVERY.md`.
+
+## V87 managed encryption key lifecycle
+V87 adds tenant/purpose-scoped, monotonic envelope-encryption key-generation metadata with ACTIVE, DECRYPT_ONLY and RETIRED states. It pins ciphertext metadata to exact generations while keeping all key material outside application state. See `docs/V87_KEY_LIFECYCLE.md`.
+
+## V88 just-in-time support access
+The foundation now includes a read-only, exact-resource JIT support-access boundary. Support capabilities alone never grant client-data access: requests require recent step-up, a distinct approver, ticket/purpose evidence, tenant/matter/resource binding and a short expiry. V86 document delivery can consume an exact document support grant without exposing object-storage identity. See `docs/V88_JIT_SUPPORT_ACCESS.md`. No standing support super-admin, support write scope or live ticketing integration is introduced.
+
+## V89 Graph webhook ingress authenticity and replay containment
+The foundation now separates webhook acknowledgement from trusted dispatch. Basic Microsoft Graph notifications must match a server-owned active subscription and secret `clientState`; internal tenant identity comes from that subscription rather than webhook JSON. Rich notifications additionally require a trusted validation-token verifier and exact app/tenant/Graph-caller claims. Replay is fingerprinted and production evidence excludes raw payload/clientState/token data. See `docs/V89_GRAPH_WEBHOOK_INGRESS.md`. No live webhook/JWT verifier or managed ingress queue is claimed.
+
+## V90 Graph subscription lifecycle and durable registry
+V90 adds a server-owned lifecycle authority for Microsoft Graph change-notification subscriptions. It keeps clientState in managed secret storage, binds webhook resolution to durable subscription metadata, treats missed notifications as recovery-required, handles removal/reauthorization states, and separates renew from reauthorize mutations. See `docs/V90_GRAPH_SUBSCRIPTION_LIFECYCLE.md`. No live Graph subscription client, scheduler or managed secret implementation is claimed.
+
+## V91 durable Graph webhook queue and validation worker
+V91 adds a bounded lease-recoverable queue/worker around V89 validation. Receipt is fast, invalid callbacks dead-letter, transient dependency/dispatch failures retry, downstream dispatch is fingerprint-idempotent, and terminal items retain no raw callback payload. See `docs/V91_GRAPH_WEBHOOK_QUEUE.md`. No managed queue deployment is claimed.
+
+## V92 Graph delta recovery and checkpoint safety
+Missed Graph notification recovery now has a bounded reference delta engine. Next/delta URLs are origin-pinned to Graph v1.0 and treated as opaque, terminal delta checkpoints are stored only through managed-secret references, and V90 subscriptions cannot return from recovery-required to active until the checkpoint is secured. Production shape persists only checkpoint hashes/generations and append-only recovery evidence. See `docs/V92_GRAPH_DELTA_RECOVERY.md`.

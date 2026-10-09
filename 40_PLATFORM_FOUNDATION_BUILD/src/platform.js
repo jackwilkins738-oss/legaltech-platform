@@ -11,7 +11,7 @@ import crypto from 'node:crypto'; import {appError} from './errors.js'; import {
 class SupersededInbound extends Error {}
 class InvalidInboundEvidence extends Error {}
 export class Platform {
-  constructor({store,objectStorage,aiGateway,proclaim,graph=null,documentSecurity=null,requireDocumentSecurityEvidence=false,securityMonitor=null,securityAlertSink=null,requireSecurityAlertSink=false}){this.store=store;this.objectStorage=objectStorage;this.aiGateway=aiGateway;this.proclaim=proclaim;this.graph=graph;this.documentSecurity=documentSecurity;this.requireDocumentSecurityEvidence=requireDocumentSecurityEvidence===true;if(this.requireDocumentSecurityEvidence&&(!documentSecurity||typeof documentSecurity.assess!=='function'||typeof documentSecurity.verifyEvidence!=='function'))throw new Error('DOCUMENT_SECURITY_PIPELINE_REQUIRED');if(requireSecurityAlertSink===true&&(!securityAlertSink||typeof securityAlertSink.emit!=='function'))throw new Error('SECURITY_ALERT_SINK_REQUIRED');this.securityMonitor=securityMonitor??new SecurityMonitor({store,alertSink:securityAlertSink});this.store.attachSecurityMonitor(this.securityMonitor);this.writebackWorker=new WritebackWorker({store,proclaim});}
+  constructor({store,objectStorage,aiGateway,proclaim,graph=null,documentSecurity=null,requireDocumentSecurityEvidence=false,securityMonitor=null,securityAlertSink=null,requireSecurityAlertSink=false,securityInterlock=null,workerExecutionBoundary=null}){this.store=store;this.objectStorage=objectStorage;this.aiGateway=aiGateway;this.proclaim=proclaim;this.graph=graph;this.documentSecurity=documentSecurity;this.requireDocumentSecurityEvidence=requireDocumentSecurityEvidence===true;if(this.requireDocumentSecurityEvidence&&(!documentSecurity||typeof documentSecurity.assess!=='function'||typeof documentSecurity.verifyEvidence!=='function'))throw new Error('DOCUMENT_SECURITY_PIPELINE_REQUIRED');if(requireSecurityAlertSink===true&&(!securityAlertSink||typeof securityAlertSink.emit!=='function'))throw new Error('SECURITY_ALERT_SINK_REQUIRED');this.securityMonitor=securityMonitor??new SecurityMonitor({store,alertSink:securityAlertSink});this.store.attachSecurityMonitor(this.securityMonitor);if(workerExecutionBoundary!==null&&(!workerExecutionBoundary||typeof workerExecutionBoundary.locate!=='function'||typeof workerExecutionBoundary.authorize!=='function'))throw new Error('WORKER_EXECUTION_BOUNDARY_INVALID');this.workerExecutionBoundary=workerExecutionBoundary;this.writebackWorker=new WritebackWorker({store,proclaim,securityInterlock,executionBoundary:workerExecutionBoundary});}
   #trace(){return `trc_${crypto.randomUUID()}`;}
   ingest({tenantId,input,idempotencyKey}) {
     if (typeof tenantId!=='string'||!tenantId||tenantId.length>200) throw appError('tenant required',{status:401,code:'TENANT_REQUIRED'});
@@ -56,8 +56,10 @@ export class Platform {
       return result;
     });
   }
-  async processNext({tenantId=null,eventId=null}={}) {
-    const job = this.store.claimNext('PROCESS_INBOUND',tenantId,{eventId});
+  async processNext({tenantId=null,eventId=null,executionToken=null}={}) {
+    let job;
+    if(this.workerExecutionBoundary){if(typeof tenantId!=='string'||!tenantId)throw new Error('WORKER_EXECUTION_TENANT_REQUIRED');const locator=this.workerExecutionBoundary.locate(executionToken),candidate=this.store.getJob(locator.objectId);if(!candidate||candidate.tenantId!==tenantId||candidate.type!=='PROCESS_INBOUND'||eventId!==null&&candidate.payload?.eventId!==eventId)return null;this.workerExecutionBoundary.authorize({token:executionToken,tenantId,workerType:'PROCESS_INBOUND',objectType:'JOB',objectId:candidate.id,traceId:candidate.traceId});job=this.store.claimJobById(candidate.id,'PROCESS_INBOUND',tenantId,{eventId});}
+    else job = this.store.claimNext('PROCESS_INBOUND',tenantId,{eventId});
     if (!job) return null;
     try {
       const result = await this.#processInbound(job);

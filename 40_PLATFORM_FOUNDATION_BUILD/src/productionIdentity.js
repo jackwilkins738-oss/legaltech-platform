@@ -219,13 +219,13 @@ function cookieHeader(token,maxAgeSeconds,name=COOKIE_NAME){return `${name}=${to
 function clearCookieHeader(name=COOKIE_NAME){return `${name}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`;}
 
 export class IdentitySessionService {
-  #oidc;#store;#cookies;#origin;
-  constructor({oidcAuthProvider,sessionStore,allowedOrigin,cookieName=COOKIE_NAME}={}){
+  #oidc;#store;#cookies;#origin;#interlock;
+  constructor({oidcAuthProvider,sessionStore,allowedOrigin,cookieName=COOKIE_NAME,securityInterlock=null}={}){
     if(!oidcAuthProvider||typeof oidcAuthProvider.authenticate!=='function'||!sessionStore||typeof sessionStore.issue!=='function'||typeof sessionStore.revoke!=='function')throw configError();
-    this.#oidc=oidcAuthProvider;this.#store=sessionStore;this.#cookies=cookieName;this.#origin=exactOrigin(allowedOrigin);
+    if(securityInterlock!==null&&typeof securityInterlock?.assertAllowed!=='function')throw configError();this.#oidc=oidcAuthProvider;this.#store=sessionStore;this.#cookies=cookieName;this.#origin=exactOrigin(allowedOrigin);this.#interlock=securityInterlock;
   }
   async exchange(headers){
-    const session=await this.#oidc.authenticate(headers),issued=this.#store.issue(session);
+    const session=await this.#oidc.authenticate(headers);this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'NEW_SESSION'});const issued=this.#store.issue(session);
     return Object.freeze({session,expiresAt:issued.expiresAt,setCookie:cookieHeader(issued.token,issued.maxAgeSeconds,this.#cookies)});
   }
   logout(headers){
