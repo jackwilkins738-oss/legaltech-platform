@@ -13,6 +13,8 @@ const UNSAFE_METHODS=new Set(['POST','PUT','PATCH','DELETE']);
 const record=value=>value!==null&&typeof value==='object'&&Object.getPrototypeOf(value)===Object.prototype;
 const authError=(code='AUTH_REQUIRED')=>appError('authentication required',{status:401,code});
 const configError=()=>appError('authentication configuration invalid',{status:500,code:'AUTH_CONFIGURATION_INVALID'});
+const referenceSessionAdapters=new WeakSet();
+export const usesReferenceSessionStore=adapter=>referenceSessionAdapters.has(adapter);
 
 function identifier(value,{max=512}={}) {
   if(typeof value!=='string'||value.length<1||value.length>max||value.trim()!==value||/[\u0000-\u001f\u007f]/.test(value)) throw authError('OIDC_CLAIMS_INVALID');
@@ -211,6 +213,7 @@ export class SessionCookieAuthProvider {
   constructor({store,allowedOrigin,cookieName=COOKIE_NAME}={}){
     if(!store||typeof store.get!=='function'||typeof store.revoke!=='function'||typeof cookieName!=='string'||!/^__Host-[A-Za-z0-9_-]{1,80}$/.test(cookieName))throw configError();
     this.#store=store;this.#origin=exactOrigin(allowedOrigin);this.#name=cookieName;
+    if(store instanceof InMemoryServerSessionStore)referenceSessionAdapters.add(this);
   }
   async authenticate(headers,{method='GET'}={}){
     if(headers?.authorization!==undefined||headers?.Authorization!==undefined)throw authError();
@@ -234,15 +237,20 @@ export class IdentitySessionService {
   #oidc;#store;#cookies;#origin;#interlock;
   constructor({oidcAuthProvider,sessionStore,allowedOrigin,cookieName=COOKIE_NAME,securityInterlock=null}={}){
     if(!oidcAuthProvider||typeof oidcAuthProvider.authenticate!=='function'||!sessionStore||typeof sessionStore.issue!=='function'||typeof sessionStore.revoke!=='function')throw configError();
-    if(securityInterlock!==null&&typeof securityInterlock?.assertAllowed!=='function')throw configError();this.#oidc=oidcAuthProvider;this.#store=sessionStore;this.#cookies=cookieName;this.#origin=exactOrigin(allowedOrigin);this.#interlock=securityInterlock;
+    if(securityInterlock!==null&&typeof securityInterlock?.assertAllowed!=='function')throw configError();
+    if(typeof cookieName!=='string'||!/^__Host-[A-Za-z0-9_-]{1,80}$/.test(cookieName))throw configError();
+    this.#oidc=oidcAuthProvider;this.#store=sessionStore;this.#cookies=cookieName;this.#origin=exactOrigin(allowedOrigin);this.#interlock=securityInterlock;
+    if(sessionStore instanceof InMemoryServerSessionStore)referenceSessionAdapters.add(this);
   }
   async exchange(headers){
-    const session=await this.#oidc.authenticate(headers);this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'NEW_SESSION'});const issued=this.#store.issue(session);
+    const session=await this.#oidc.authenticate(headers);
+    await this.#interlock?.assertAllowed({tenantId:session.tenantId,actorId:session.actorId,operation:'NEW_SESSION'});
+    const issued=await this.#store.issue(session);
     return Object.freeze({session,expiresAt:issued.expiresAt,setCookie:cookieHeader(issued.token,issued.maxAgeSeconds,this.#cookies)});
   }
-  logout(headers){
+  async logout(headers){
     const provider=new SessionCookieAuthProvider({store:this.#store,allowedOrigin:this.#origin,cookieName:this.#cookies});
-    provider.revoke(headers,{method:'POST'});
+    await provider.revoke(headers,{method:'POST'});
     return Object.freeze({setCookie:clearCookieHeader(this.#cookies)});
   }
 }

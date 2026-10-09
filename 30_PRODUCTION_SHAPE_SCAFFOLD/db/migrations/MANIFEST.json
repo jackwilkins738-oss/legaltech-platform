@@ -230,6 +230,11 @@
       "file": "046_runtime_rls_enforcement.sql",
       "sha256": "fc4a159c705de71603703ccdb1be7eff5eefefc987495d71faabbfd38684e079",
       "destructive": false
+    },
+    {
+      "file": "047_shared_identity_sessions.sql",
+      "sha256": "14c566d19b7a21892e9eb8a0861f5ca709616cb0360a832339412ecf47049c82",
+      "destructive": false
     }
   ]
 }

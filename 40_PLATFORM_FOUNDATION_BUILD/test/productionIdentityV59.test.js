@@ -127,7 +127,7 @@ test('V59 identity exchange issues hardened __Host cookie and logout revokes it'
   const cookie=exchanged.setCookie.split(';',1)[0];
   const provider=new SessionCookieAuthProvider({store,allowedOrigin:'https://app.example.test'});
   assert.equal((await provider.authenticate({cookie},{method:'GET'})).actorId,'actor-a');
-  const loggedOut=service.logout({cookie,origin:'https://app.example.test'});
+  const loggedOut=await service.logout({cookie,origin:'https://app.example.test'});
   assert.match(loggedOut.setCookie,/Max-Age=0/);
   await assert.rejects(provider.authenticate({cookie},{method:'GET'}),e=>e.code==='AUTH_REQUIRED');
 });
