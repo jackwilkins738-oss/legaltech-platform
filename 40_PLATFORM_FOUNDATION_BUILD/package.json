@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test",
     "demo": "node src/demo.js",
-    "dev": "node src/devServer.js"
+    "dev": "node src/devServer.js",
+    "to:field": "node src/toFieldCli.js"
   },
   "engines": {
     "node": ">=22"
