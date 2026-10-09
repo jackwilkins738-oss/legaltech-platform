@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V120-SHARED-AUDIT",
+      "concept": "V120 shared audit regression",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V119-SHARED-CONTROLS",
       "concept": "V119 shared security regression",
       "severity": "BLOCKER"

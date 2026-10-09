@@ -9,6 +9,15 @@ function driver({query=async()=>({rows:[]}),role='runtime'}={}) {
 }
 const boundary=(x,options={})=>new PostgresTenantTransactions({pool:x.pool,expectedRole:'runtime',timeoutMs:100,...options});
 
+test('V120 repeatable-read is selected in BEGIN before any snapshot-producing query',async()=>{
+  const x=driver();await runPostgresTransaction({pool:x.pool,expectedRole:'runtime',readOnly:true,isolation:'REPEATABLE READ'},async tx=>{await tx.query('SELECT 1')});
+  assert.equal(x.calls[0].sql,'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');assert.deepEqual(x.releases,[false]);
+});
+test('V120 unsupported or injected isolation clauses cannot check out a connection',async()=>{
+  const x=driver();for(const isolation of ['SERIALIZABLE','REPEATABLE READ; RESET ALL',{},null])await assert.rejects(runPostgresTransaction({pool:x.pool,expectedRole:'runtime',isolation},async()=>{}),/CONFIGURATION_INVALID/);
+  assert.equal(x.calls.length,0);
+});
+
 test('V118 tenant context uses transaction-local bound parameters on one checked-out connection',async()=>{
   const x=driver();const tx=boundary(x);let retained;
   assert.equal(await tx.run(context,async client=>{retained=client;await client.query('SELECT $1::text',['synthetic']);return 7}),7);
