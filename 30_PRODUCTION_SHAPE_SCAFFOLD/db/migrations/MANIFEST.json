@@ -225,6 +225,11 @@
       "file": "045_clock_integrity.sql",
       "sha256": "98e5bedbd62253fc75198dc52d6b6db2684780f3b1e89942567b51890b6f959f",
       "destructive": false
+    },
+    {
+      "file": "046_runtime_rls_enforcement.sql",
+      "sha256": "fc4a159c705de71603703ccdb1be7eff5eefefc987495d71faabbfd38684e079",
+      "destructive": false
     }
   ]
 }

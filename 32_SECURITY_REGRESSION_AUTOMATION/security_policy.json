@@ -248,6 +248,7 @@
     "offboarding export exact version certification",
     "trusted monotonic clock",
     "clock skew readiness",
-    "clock rollback resistance"
+    "clock rollback resistance",
+    "V117 production admission regression"
   ]
 }
