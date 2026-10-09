@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V123-DOMAIN-PIPELINE",
+      "concept": "V123 domain pipeline regression",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V122-TRANSACTIONAL-OUTBOX",
       "concept": "V122 transactional outbox regression",
       "severity": "BLOCKER"

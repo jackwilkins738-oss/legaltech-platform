@@ -256,6 +256,11 @@
       "file": "051_transactional_outbox.sql",
       "sha256": "34439289dea2bd98c6fde94942653fb02a0a40c0a62ccc375543b8c65a7daa52",
       "destructive": false
+    },
+    {
+      "file": "052_domain_job_commands.sql",
+      "sha256": "4fad21c1e6d6cf8de3ba28e5656ab945533ae4bf7cd5d584a5a39905a96c15c0",
+      "destructive": false
     }
   ]
 }

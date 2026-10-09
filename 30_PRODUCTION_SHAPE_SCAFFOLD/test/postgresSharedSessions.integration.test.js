@@ -15,6 +15,8 @@ import {PostgresJobProducer,PostgresJobWorker,PostgresJobReader} from '../../40_
 import {PostgresDomainOutbox,PostgresOutboxRelay} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresOutbox.js';
 import {prepareJobIntent,intentHash} from '../../40_PLATFORM_FOUNDATION_BUILD/src/jobIntent.js';
 import {canonicalAuditPayload} from '../../40_PLATFORM_FOUNDATION_BUILD/src/securityMonitoring.js';
+import {createPostgresDomainPipeline} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresDomainPipeline.js';
+import {DeploymentDrainController} from '../../40_PLATFORM_FOUNDATION_BUILD/src/deploymentDrain.js';
 import {createPostgresRuntimeProbe} from '../src/postgresRuntime.js';
 
 const enabled=process.env.LEGALTECH_RUN_POSTGRES_TESTS==='true';
@@ -22,15 +24,15 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119/V120/V121/V122 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120/V121/V122/V123 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
   const {PGPASSWORD:adminPassword}=process.env;
   const admin=new Pool({...base,user:process.env.PGUSER,password:adminPassword});
   admin.on('error',()=>{});
-  const pools=[admin];
-  t.after(async()=>{await Promise.all(pools.map(pool=>pool.end()))});
+  const pools=[admin],supervisors=[];
+  t.after(async()=>{for(const supervisor of supervisors)await supervisor.stop();await Promise.all(pools.map(pool=>pool.end()))});
   const existing=await admin.query("SELECT to_regclass('public.tenants') AS existing");
   if(existing.rows[0].existing!==null)throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const migrations=fileURLToPath(new URL('../db/migrations/',import.meta.url));
@@ -52,7 +54,9 @@ test('V118/V119/V120/V121/V122 real PostgreSQL shared identity, security and ten
   }
   await admin.query('REVOKE CREATE ON SCHEMA public FROM PUBLIC');
   await admin.query('GRANT USAGE ON SCHEMA public TO legaltech_runtime_ci');
-  await admin.query('GRANT legaltech_outbox_writer TO legaltech_runtime_ci');
+  await admin.query('GRANT legaltech_outbox_writer,legaltech_domain_commands TO legaltech_runtime_ci');
+  await admin.query('GRANT SELECT ON public.actors,public.tenants TO legaltech_runtime_ci');
+  await admin.query('GRANT SELECT,INSERT ON public.inbound_events TO legaltech_runtime_ci');
   await admin.query('GRANT SELECT,INSERT,UPDATE ON public.matters TO legaltech_runtime_ci');
   await admin.query('GRANT SELECT ON public.matter_actor_access,public.matter_break_glass_grants,public.actor_security_zones TO legaltech_runtime_ci');
   const makePool=(user,max=1)=>{const pool=new Pool({...base,user,password,max});pool.on('error',()=>{});pools.push(pool);return pool};
@@ -63,8 +67,8 @@ test('V118/V119/V120/V121/V122 real PostgreSQL shared identity, security and ten
   const one=new PostgresServerSessionStore({...options,brokerPool:brokerOne}),two=new PostgresServerSessionStore({...options,brokerPool:brokerTwo});
   const session=(providerSessionId=`provider-${uuid()}`)=>({tenantId:tenantA,actorId:actorA,capabilities:['matter:read'],roles:[],authContext:{method:'OIDC',mfaVerified:true,authTime:null,expiresAt:new Date(Date.now()+3600000).toISOString(),providerSessionId}});
 
-  await t.test('all 51 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
-    assert.equal(manifest.migrations.length,51);
+  await t.test('all 52 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
+    assert.equal(manifest.migrations.length,52);
     const result=await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({});assert.equal(result.ok,true);
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
@@ -382,6 +386,77 @@ test('V118/V119/V120/V121/V122 real PostgreSQL shared identity, security and ten
     assert.equal((await admin.query('SELECT job_id FROM queue_security.jobs WHERE job_id=$1',[event.jobId])).rows.length,1);
     assert.equal((await admin.query('SELECT job_id FROM public.domain_outbox_receipts WHERE job_id=$1',[event.jobId])).rows.length,0);
     assert.equal((await relay.relay(outboxScope)).delivered,1);
+  });
+
+  // All accepting callbacks and the in-memory drain below are synthetic CI
+  // fixtures. Deployment must bind real capability, payload, policy and drain gates.
+  const serviceActor=uuid();
+  await admin.query("INSERT INTO public.actors(id,tenant_id,actor_type,status) VALUES($1,$2,'SERVICE','ACTIVE')",[serviceActor,tenantA]);
+  const relayScope={tenantId:tenantA,actorId:serviceActor};
+  const authorizeScope=async({tenantId,actorId,signal})=>transactions.run({tenantId,actorId,signal,readOnly:true},async tx=>{
+    const state=await tx.query('SELECT a.actor_type,a.status,t.status AS tenant_status FROM public.actors a JOIN public.tenants t ON t.id=a.tenant_id WHERE a.tenant_id=$1 AND a.id=$2',[tenantId,actorId]);
+    return state.rows.length===1&&state.rows[0].actor_type==='SERVICE'&&state.rows[0].status==='ACTIVE'&&state.rows[0].tenant_status==='ACTIVE';
+  });
+  const pipelineOptions={domainPool:runtime,expectedDomainRole:'legaltech_runtime_ci',relayPool,expectedRelayRole:'legaltech_outbox_relay_ci',producerPool:queueProducerPool,expectedProducerRole:'legaltech_queue_producer_ci',
+    authorizeDomain:async()=>true,authorizeAppend:async()=>true,authorizeRelay:async()=>true,authorizeEnqueue:async()=>true,
+    getScopes:async()=>[relayScope],authorizeScope,drain:new DeploymentDrainController({authorize:()=>true}),pollIntervalMs:100,cycleTimeoutMs:10000};
+  const pipeline=createPostgresDomainPipeline(pipelineOptions);
+  supervisors.push(pipeline.supervisor);
+  const command=()=>({tenantId:tenantA,actorId:actorA,commandId:uuid(),jobId:uuid(),eventId:uuid(),payloadId:uuid(),payloadHash:'a'.repeat(64),sourceSystem:'MANUAL_UPLOAD',externalEventId:`ci-source-${uuid()}`,traceId:'v123-ci'});
+  const waitReceipt=async jobId=>{
+    const end=Date.now()+5000;while(Date.now()<end){if((await admin.query('SELECT job_id FROM public.domain_outbox_receipts WHERE tenant_id=$1 AND job_id=$2',[tenantA,jobId])).rows.length)return;await new Promise(resolve=>setTimeout(resolve,10));}
+    throw new Error('CI_RELAY_RECEIPT_TIMEOUT');
+  };
+  await t.test('V123 real domain pipeline registers once and supervised relay delivers one job',async()=>{
+    const input=command();const results=await Promise.all([pipeline.handlers.registerInbound(input),pipeline.handlers.registerInbound(input)]);
+    assert.deepEqual(results.map(r=>r.replayed).sort(),[false,true]);
+    const row=(await admin.query('SELECT * FROM public.inbound_events WHERE id=$1',[input.eventId])).rows[0];
+    assert.equal(row.status,'RECEIVED');assert.equal(row.external_event_id,crypto.createHash('sha256').update(input.externalEventId).digest('hex'));assert.equal(row.payload_ref,`object:${input.payloadId}`);
+    assert.equal((await admin.query('SELECT command_id FROM public.domain_job_commands WHERE command_id=$1',[input.commandId])).rows.length,1);
+    pipeline.supervisor.start();await waitReceipt(input.jobId);assert.equal((await pipeline.supervisor.stop()).drained,true);
+    assert.equal((await admin.query('SELECT job_id FROM queue_security.jobs WHERE job_id=$1',[input.jobId])).rows.length,1);
+    await assert.rejects(pipeline.handlers.registerInbound({...input,payloadHash:'b'.repeat(64)}),/DOMAIN_COMMAND_CONFLICT/);
+  });
+  await t.test('V123 policy request binds accessible open matter and exact version; closed/invisible matters deny',async()=>{
+    const matterId=uuid();await admin.query('INSERT INTO public.matters(id,tenant_id,display_reference) VALUES($1,$2,$3)',[matterId,tenantA,`policy-${matterId}`]);
+    const input={tenantId:tenantA,actorId:actorA,commandId:uuid(),jobId:uuid(),matterId,policyVersionId:uuid(),policyVersionHash:'b'.repeat(64),traceId:'v123-policy'};
+    assert.equal((await pipeline.handlers.requestPolicyEvaluation(input)).replayed,false);assert.equal((await pipeline.handlers.requestPolicyEvaluation(input)).replayed,true);
+    await assert.rejects(pipeline.handlers.requestPolicyEvaluation({...input,policyVersionHash:'c'.repeat(64)}),/DOMAIN_COMMAND_CONFLICT/);
+    await admin.query("UPDATE public.matters SET status='CLOSED' WHERE id=$1",[matterId]);
+    await assert.rejects(pipeline.handlers.requestPolicyEvaluation({...input,commandId:uuid(),jobId:uuid()}),/DOMAIN_COMMAND_FORBIDDEN/);
+    await assert.rejects(pipeline.handlers.requestPolicyEvaluation({...input,commandId:uuid(),jobId:uuid(),matterId:'11700000-0000-4000-8000-000000000033'}),/DOMAIN_COMMAND_FORBIDDEN/);
+    await relay.relay(outboxScope);
+  });
+  await t.test('V123 append authorization failure rolls back concrete inbound row and command',async()=>{
+    const blocked=createPostgresDomainPipeline({...pipelineOptions,authorizeAppend:async()=>false}),input=command();
+    await assert.rejects(blocked.handlers.registerInbound(input),/DOMAIN_COMMAND_UNAVAILABLE/);
+    for(const [table,column,id] of [['inbound_events','id',input.eventId],['domain_job_commands','command_id',input.commandId],['domain_outbox_events','job_id',input.jobId]]){
+      assert.equal((await admin.query(`SELECT 1 FROM public.${table} WHERE ${column}=$1`,[id])).rows.length,0);
+    }
+  });
+  await t.test('V123 deferred command foreign keys reject a commit without the exact bound outbox intent',async()=>{
+    const matterId=uuid();await admin.query('INSERT INTO public.matters(id,tenant_id,display_reference) VALUES($1,$2,$3)',[matterId,tenantA,`fk-${matterId}`]);
+    const commandId=uuid(),jobId=uuid();
+    await assert.rejects(transactions.run(outboxScope,tx=>tx.query(`INSERT INTO public.domain_job_commands(tenant_id,command_id,actor_id,job_id,kind,object_id,matter_id,policy_version_id,policy_version_hash,trace_hash,request_hash,intent_hash)
+      VALUES($1,$2,$3,$4,'POLICY_EVALUATION',$5,$5,$6,$7,$7,$7,$7)`,[tenantA,commandId,actorA,jobId,matterId,uuid(),'a'.repeat(64)])),/OUTCOME_UNKNOWN/);
+    assert.equal((await admin.query('SELECT command_id FROM public.domain_job_commands WHERE command_id=$1',[commandId])).rows.length,0);
+  });
+  await t.test('V123 command tenant/actor policies and immutable grants deny cross-tenant or private-role misuse',async()=>{
+    const hidden=await transactions.run({tenantId:tenantB,actorId:actorB},tx=>tx.query('SELECT * FROM public.domain_job_commands'));assert.equal(hidden.rows.length,0);
+    for(const sql of ['UPDATE public.domain_job_commands SET trace_hash=trace_hash','DELETE FROM public.domain_job_commands','TRUNCATE public.domain_job_commands'])assert.equal(await runtime.query(sql).then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await relayPool.query('SELECT * FROM public.domain_job_commands').then(()=>false,e=>e.code==='42501'),true);
+    assert.equal(await queueProducerPool.query('SELECT * FROM public.domain_job_commands').then(()=>false,e=>e.code==='42501'),true);
+    await admin.query('GRANT legaltech_domain_commands TO legaltech_queue_producer_ci');
+    try{await assert.rejects(queueProducer.probe(),/UNAVAILABLE/);}finally{await admin.query('REVOKE legaltech_domain_commands FROM legaltech_queue_producer_ci');}
+  });
+  await t.test('V123 disabled service scope fails supervision without delivery and recovery replays pending intent',async()=>{
+    const input=command();await pipeline.handlers.registerInbound(input);
+    await admin.query("UPDATE public.actors SET status='DISABLED' WHERE id=$1",[serviceActor]);
+    pipeline.supervisor.start();const end=Date.now()+5000;while(pipeline.supervisor.status().inFlight&&Date.now()<end)await new Promise(resolve=>setTimeout(resolve,10));
+    assert.equal(pipeline.supervisor.status().state,'FAILED');assert.equal((await admin.query('SELECT job_id FROM queue_security.jobs WHERE job_id=$1',[input.jobId])).rows.length,0);
+    await admin.query("UPDATE public.actors SET status='ACTIVE' WHERE id=$1",[serviceActor]);
+    pipeline.supervisor.start();await waitReceipt(input.jobId);assert.equal((await pipeline.supervisor.stop()).drained,true);
+    assert.equal((await admin.query('SELECT job_id FROM queue_security.jobs WHERE job_id=$1',[input.jobId])).rows.length,1);
   });
 
 });

@@ -1,6 +1,6 @@
 import {runPostgresTransaction} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 
-const GROUPS=['legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_session_broker','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_writer','legaltech_outbox_relay'];
+const GROUPS=['legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_session_broker','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_writer','legaltech_outbox_relay','legaltech_domain_commands'];
 const SCHEMA={legaltech_outbox_relay:'public',legaltech_audit_writer:'audit_security',legaltech_audit_reader:'audit_security',legaltech_queue_producer:'queue_security',legaltech_queue_worker:'queue_security',legaltech_queue_reader:'queue_security'};
 const ALLOWED={
   legaltech_outbox_relay:['domain_outbox_events','domain_outbox_receipts'],
