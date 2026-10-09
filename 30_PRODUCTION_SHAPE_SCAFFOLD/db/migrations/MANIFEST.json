@@ -140,6 +140,36 @@
       "file": "028_graph_delta_recovery.sql",
       "sha256": "b1cc0029287a41a82d09105648e8d5bfeeb73aa10f91a00be16da2355ef556f6",
       "destructive": false
+    },
+    {
+      "file": "029_incident_response.sql",
+      "sha256": "5f82a8eccdd40a6c748196017e7c08be460f819ec95219d3f2b8e5f28d26ba2f",
+      "destructive": false
+    },
+    {
+      "file": "030_tenant_configuration_rollout.sql",
+      "sha256": "8261c804a77418f71959ab9d17fa0f8a0ad42b9c9eed370643199cc21653d176",
+      "destructive": false
+    },
+    {
+      "file": "031_tenant_config_validation.sql",
+      "sha256": "3fb6593218f592a9ea2fd4bedbf788ab6c02b661ad8ff96b40dde5b2c2a32e60",
+      "destructive": false
+    },
+    {
+      "file": "032_supply_chain_attestation.sql",
+      "sha256": "15f29d7335d0f214bbe882c75eab525316100e97c4e708344ccd0fb886e25cbe",
+      "destructive": false
+    },
+    {
+      "file": "033_vulnerability_evidence.sql",
+      "sha256": "dd8bff771ac2285765bda7d7c43cb721083ef1c3977c68351fabf189e7ba3cb7",
+      "destructive": false
+    },
+    {
+      "file": "034_dead_letter_recovery.sql",
+      "sha256": "0f64b43ea6360591ebfe42f9763f71a9b285b513bdc8bd78b465f18841e34173",
+      "destructive": false
     }
   ]
 }

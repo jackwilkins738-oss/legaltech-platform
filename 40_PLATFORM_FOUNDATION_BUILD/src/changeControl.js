@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import {canonicalAuditPayload} from './securityMonitoring.js';
 
-export const CHANGE_TYPES=Object.freeze(['WORKFLOW_PUBLISH','RESPONSE_POLICY_PUBLISH','FEATURE_FLAG_CHANGE','RETENTION_POLICY_PUBLISH']);
+export const CHANGE_TYPES=Object.freeze(['WORKFLOW_PUBLISH','RESPONSE_POLICY_PUBLISH','FEATURE_FLAG_CHANGE','RETENTION_POLICY_PUBLISH','TENANT_CONFIG_ACTIVATE']);
 const TYPE_SET=new Set(CHANGE_TYPES);
 const SAFE_ID=/^[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,255}$/;
 const CODE=/^[A-Z0-9][A-Z0-9_.:/-]{0,99}$/;

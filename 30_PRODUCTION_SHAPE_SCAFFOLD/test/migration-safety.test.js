@@ -16,7 +16,7 @@ function cleanup(dir){ fs.rmSync(dir,{recursive:true,force:true}); }
 test('V77 committed migration manifest exactly verifies the canonical migration directory',()=>{
   const manifest=loadMigrationManifest(manifestPath);
   const result=verifyMigrationDirectory({directory:migrationDir,manifest});
-  assert.deepEqual(result,{status:'VERIFIED',count:28,latest:'028_graph_delta_recovery.sql'});
+  assert.deepEqual(result,{status:'VERIFIED',count:34,latest:'034_dead_letter_recovery.sql'});
 });
 
 test('V77 changed migration bytes are detected as checksum drift',()=>{
@@ -76,7 +76,7 @@ test('V77 current applied migration set verifies without exposing SQL',()=>{
   const manifest=loadMigrationManifest(manifestPath);
   const applied=manifest.migrations.map(({file,sha256})=>({file,sha256}));
   const state=verifyAppliedMigrations({manifest,applied});
-  assert.deepEqual(state,{status:'CURRENT',appliedCount:28,pending:[],latestRequired:'028_graph_delta_recovery.sql'});
+  assert.deepEqual(state,{status:'CURRENT',appliedCount:34,pending:[],latestRequired:'034_dead_letter_recovery.sql'});
   assert.equal(JSON.stringify(state).includes('CREATE TABLE'),false);
 });
 

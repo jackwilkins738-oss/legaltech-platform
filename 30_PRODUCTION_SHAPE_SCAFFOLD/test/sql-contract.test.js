@@ -365,3 +365,53 @@ test('V92 Graph delta checkpoints are opaque append-only tenant-bound recovery e
   assert.doesNotMatch(sql,/delta_link text|next_link|raw_payload|message_body|message_subject|access_token|refresh_token|client_secret/i);
   for(const table of ['graph_delta_checkpoints','graph_delta_recovery_events']) assert.match(sql,new RegExp(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`));
 });
+
+
+test('V93 incident response evidence is tenant-bound hash-only append-only and containment-linked',()=>{
+  const sql=fs.readFileSync(path.join(migrationDir,'029_incident_response.sql'),'utf8');
+  assert.match(sql,/status text NOT NULL CHECK \(status IN \('OPEN','CONTAINING','CONTAINED','RECOVERING','CLOSED'\)\)/);
+  assert.match(sql,/evidence_hash text NOT NULL CHECK \(evidence_hash ~ '\^\[a-f0-9\]\{64\}\$'\)/);
+  assert.match(sql,/security incident evidence is append-only/);
+  assert.match(sql,/source_ref_hash/);assert.match(sql,/recovery_evidence_hash/);assert.match(sql,/root_cause_hash/);assert.match(sql,/lessons_hash/);
+  assert.doesNotMatch(sql,/raw_log|raw_payload|client_name|document_text|email_body|access_token|client_secret/i);
+  for(const table of ['security_incidents','security_incident_evidence','security_incident_events']) assert.match(sql,new RegExp(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`));
+});
+
+
+test('V94 tenant configuration bundles are versioned immutable and activation history is append-only',()=>{
+  const sql=fs.readFileSync(path.join(migrationDir,'030_tenant_configuration_rollout.sql'),'utf8');
+  assert.match(sql,/UNIQUE \(tenant_id,bundle_key,version\)/);assert.match(sql,/bundle_hash char\(64\)/);
+  assert.match(sql,/tenant configuration bundle identity immutable/);assert.match(sql,/tenant configuration activations are append-only/);
+  assert.match(sql,/action text NOT NULL CHECK \(action IN \('ACTIVATE','ROLLBACK'\)\)/);
+  assert.doesNotMatch(sql,/client_secret|access_token|refresh_token|private_key|credential_value/i);
+  for(const table of ['tenant_configuration_bundles','tenant_configuration_activations']) assert.match(sql,new RegExp(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`));
+});
+
+
+test('V96 tenant configuration certification is exact hash-bound synthetic evidence and append-only',()=>{
+  const sql=fs.readFileSync(path.join(migrationDir,'031_tenant_config_validation.sql'),'utf8');
+  assert.match(sql,/bundle_hash char\(64\)/);assert.match(sql,/scenario_suite_hash char\(64\)/);assert.match(sql,/evidence_hash char\(64\)/);
+  assert.match(sql,/failed integer NOT NULL CHECK \(failed = 0\)/);assert.match(sql,/CHECK \(passed = total\)/);
+  assert.match(sql,/tenant configuration certifications are append-only/);assert.match(sql,/ALTER TABLE tenant_configuration_certifications ENABLE ROW LEVEL SECURITY/);
+  assert.doesNotMatch(sql,/scenario_payload|client_name|document_text|email_body|access_token|client_secret/i);
+});
+
+
+test('V97 supply chain evidence is digest-only append-only and signature-material free',()=>{
+  const sql=fs.readFileSync(path.join(migrationDir,'032_supply_chain_attestation.sql'),'utf8');
+  for(const col of ['artifact_sha256','sbom_sha256','provenance_sha256','builder_ref_hash','attestation_ref_hash','statement_hash']) assert.match(sql,new RegExp(`${col} char\\(64\\)`));
+  assert.match(sql,/source_revision char\(40\)/);assert.match(sql,/status text NOT NULL CHECK \(status='VERIFIED'\)/);assert.match(sql,/release supply chain evidence is append-only/);
+  assert.doesNotMatch(sql,/signature_envelope|private_key|client_secret|access_token|builder_token/i);
+});
+
+
+test('V98 vulnerability and VEX evidence are append-only hash metadata only',()=>{
+  const sql=fs.readFileSync(path.join(migrationDir,'033_vulnerability_evidence.sql'),'utf8');
+  for(const col of ['sbom_sha256','scanner_id_hash','scanner_version_hash','scan_ref_hash','findings_hash','vulnerability_id_hash','component_ref_hash','vex_ref_hash','reviewer_ref_hash','statement_hash']) assert.match(sql,new RegExp(`${col} char\\(64\\)`));
+  assert.match(sql,/release vulnerability scan evidence is append-only/);
+  assert.match(sql,/release VEX evidence is append-only/);
+  assert.doesNotMatch(sql,/signature_envelope|advisory_text|finding_payload|access_token|client_secret|private_key/i);
+});
+
+
+test('V99 dead-letter recovery is tenant-bound exact-target and append-only evidential',()=>{const sql=fs.readFileSync(path.join(migrationDir,'034_dead_letter_recovery.sql'),'utf8');assert.match(sql,/FOREIGN KEY \(tenant_id,job_id\) REFERENCES jobs\(tenant_id,id\)/);assert.match(sql,/job_snapshot_hash char\(64\)/);assert.match(sql,/attempts_at_request integer NOT NULL/);assert.match(sql,/dead letter recovery identity immutable/);assert.match(sql,/dead letter recovery events are append-only/);assert.match(sql,/approved_by IS NULL OR approved_by<>requested_by/);assert.doesNotMatch(sql,/payload jsonb|payload_json|reset_attempts/i);});
