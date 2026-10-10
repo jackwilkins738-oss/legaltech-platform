@@ -93,7 +93,7 @@ test('V119 activation returns only after COMMIT and an uncertain commit is disti
 });
 test('V119 same activating actor cannot release and a different authorised actor is bound to SQL',async()=>{
   const x=driver({data:async sql=>sql.startsWith('SELECT *')?{rows:[active]}:sql.startsWith('UPDATE operational_security.interlocks')?{rows:[{...active,status:'RELEASED',released_by:otherActor,released_at:new Date(),resolution_code:'RESOLVED'}]}:{rows:[]}});
-  const release={tenantId,actorId,control:'EXPORT',traceId:'r',resolutionCode:'RESOLVED'};
+  const release={tenantId,actorId,control:'EXPORT',interlockId:active.id,incidentId:active.incident_id,traceId:'r',resolutionCode:'RESOLVED'};
   await assert.rejects(operator(x).release(release),/DUAL_CONTROL/);
   assert.equal((await operator(x).release({...release,actorId:otherActor})).releasedBy,otherActor);
   assert.equal(x.calls.find(x=>x.sql.startsWith('UPDATE operational_security.interlocks')).values[2],otherActor);
