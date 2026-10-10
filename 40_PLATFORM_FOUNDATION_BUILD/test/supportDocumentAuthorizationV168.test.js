@@ -21,7 +21,7 @@ test('V168 invokes current durable DOCUMENT_READ lookup at every review document
   });
   for(const phase of ['RESOLVE','READ_VERSION','RELEASE'])assert.equal(await authorizer(input(phase)),true);
   assert.deepEqual(phases,['RESOLVE','READ_VERSION','RELEASE']);
-  assert.equal(seen.length,3);
+  assert.equal(seen.length,6);
   for(const grant of seen)assert.deepEqual({...grant,signal:undefined},{tenantId,actorId,requestId,matterId,documentRefHash,scope:'DOCUMENT_READ',signal:undefined});
 });
 test('V168 revoked or absent durable grant always denies and never invokes normal authorizer',async()=>{
@@ -61,4 +61,25 @@ test('V168 accessors cannot forge authorization fields',async()=>{
   const forged=input('RESOLVE');
   Object.defineProperty(forged,'tenantId',{get(){throw Error('getter executed')},enumerable:true});
   await assert.rejects(authorizer(forged),/SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE/);
+});
+
+test('V170 revocation during awaited normal document permission denies after second durable lookup',async()=>{
+  let current=true,checks=0;
+  const authorizer=createSupportDocumentAuthorization({
+    authorizeDocument:async()=>{current=false;return true;},
+    resolveBinding:async()=>binding(),
+    readCurrentGrant:async()=>{checks++;return {active:current};}
+  });
+  await assert.rejects(authorizer(input('RELEASE')),/SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE/);
+  assert.equal(checks,2);
+});
+test('V170 existing document callback cannot mutate caller input to change authorization identity',async()=>{
+  const original=input('RELEASE');let seen;
+  const authorizer=createSupportDocumentAuthorization({
+    authorizeDocument:async value=>{seen=value;assert.throws(()=>{value.tenantId='11700000-0000-4000-8000-000000000002';},TypeError);return true;},
+    resolveBinding:async()=>binding(),
+    readCurrentGrant:async()=>({active:true})
+  });
+  assert.equal(await authorizer(original),true);
+  assert.equal(seen.tenantId,tenantId);
 });
