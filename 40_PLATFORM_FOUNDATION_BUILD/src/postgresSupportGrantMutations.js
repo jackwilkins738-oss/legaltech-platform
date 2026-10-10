@@ -35,6 +35,7 @@ export class PostgresSupportGrantMutations {
           (tenant_id,request_id,actor_id,matter_id,event_type,resource_hash,trace_id)
           VALUES($1,$2,$3,$4,'REQUESTED',$5,$6)`,
           [session.tenantId,requestId,session.actorId,matterId,documentRefHash,traceId]);
+        await live(this.#live,session);
         return Object.freeze({requestId,tenantId:session.tenantId});
       });
     }catch{throw denied();}
@@ -58,6 +59,7 @@ export class PostgresSupportGrantMutations {
         await tx.query(`INSERT INTO public.support_access_events(tenant_id,request_id,actor_id,matter_id,event_type,resource_hash,trace_id)
           VALUES($1,$2,$3,$4,'APPROVED',$5,$6)`,
           [session.tenantId,requestId,session.actorId,r.rows[0].matter_id,r.rows[0].document_ref_hash,traceId]);
+        await live(this.#live,session);
         return Object.freeze({requestId,status:'ACTIVE'});
       });
     }catch{throw denied();}
@@ -77,6 +79,7 @@ export class PostgresSupportGrantMutations {
         await tx.query(`INSERT INTO public.support_access_events(tenant_id,request_id,actor_id,matter_id,event_type,resource_hash,trace_id)
           VALUES($1,$2,$3,$4,'REVOKED',$5,$6)`,
           [session.tenantId,requestId,session.actorId,r.rows[0].matter_id,r.rows[0].document_ref_hash,traceId]);
+        await live(this.#live,session);
         return Object.freeze({requestId,status:'REVOKED'});
       });
     }catch{throw denied();}
