@@ -53,3 +53,41 @@ test('V154 operator factory rejects unprivileged and NOLOGIN role identities',()
   assert.throws(()=>createTenantScopedPostgresSupportGrantMutations({pool:{connect:async()=>{}},expectedRole:'legaltech_support_operator',liveSession}),/DURABLE_SUPPORT_MUTATION_CONFIGURATION_INVALID/);
   assert.throws(()=>createTenantScopedPostgresSupportGrantMutations({pool:null,expectedRole:'legaltech_support_operator_ci',liveSession}),/POSTGRES_TRANSACTION_CONFIGURATION_INVALID/);
 });
+
+test('V156 mutation input validation prevents any database contact',async()=>{
+  let calls=0;
+  const svc=new PostgresSupportGrantMutations({liveSession,transact:async()=>{calls++;throw Error('should not happen');}});
+  const invalid=[
+    svc.request({session,matterId,scope:'DOCUMENT_READ',ticketRefHash:'a'.repeat(64),purposeHash:'b'.repeat(64),traceId}),
+    svc.request({session,matterId,scope:'MATTER_READ',documentRefHash:'a'.repeat(64),ticketRefHash:'a'.repeat(64),purposeHash:'b'.repeat(64),traceId}),
+    svc.approve({session,requestId:'not-a-uuid',traceId}),
+    svc.revoke({session,requestId,reasonHash:'invalid',traceId}),
+    svc.revoke({session,requestId,reasonHash,traceId:'invalid whitespace'})
+  ];
+  for(const p of invalid)await assert.rejects(p,/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+  assert.equal(calls,0);
+});
+test('V156 duplicate approval and revoke return no success without exact inserted row',async()=>{
+  const service=new PostgresSupportGrantMutations({liveSession,transact:async(_,work)=>work({query:async sql=>{
+    if(sql.includes('FROM public.support_access_requests'))return {rows:[{matter_id:matterId,requester_id:'66666666-6666-4666-8666-666666666666',document_ref_hash:null}]};
+    if(sql.includes('FROM public.support_access_revocations'))return {rows:[]};
+    if(sql.includes('ON CONFLICT'))return {rows:[]};
+    return {rows:[{id:requestId}]};
+  }})});
+  await assert.rejects(service.approve({session,requestId,traceId}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+  await assert.rejects(service.revoke({session,requestId,reasonHash,traceId}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+});
+
+test('V156 identity expiry during transaction fails before successful mutation response',async()=>{
+  let checked=0;
+  const service=new PostgresSupportGrantMutations({
+    liveSession:{assertCurrent:async()=>++checked===1},
+    transact:async(_,work)=>work({query:async sql=>{
+      if(sql.includes('FROM public.support_access_requests'))
+        return {rows:[{matter_id:matterId,document_ref_hash:null}]};
+      return {rows:[{id:requestId}]};
+    }})
+  });
+  await assert.rejects(service.revoke({session,requestId,reasonHash,traceId}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+  assert.equal(checked,2);
+});
