@@ -1,3 +1,5 @@
+import {PostgresGraphInboxProducer,PostgresGraphInboxWorker,PostgresGraphInboxReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresGraphInbox.js';
+import {ManagedGraphWebhookIntake,graphSourceDeliveryFingerprint} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedGraphWebhookIntake.js';
 // Runs only against a disposable PostgreSQL CI database, never a deployed customer database.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +28,7 @@ import {REQUIRED_PRODUCTION_PROBES} from '../../40_PLATFORM_FOUNDATION_BUILD/src
 import {createPostgresWorkerPipeline} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerPipeline.js';
 import {PostgresWorkerDomainLoader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerDomain.js';
 import {PostgresDeploymentDrainBackend} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresDeploymentDrain.js';
-import {ManagedProcessingIngress,createGraphProcessingDispatch} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedProcessingIngress.js';
+import {ManagedProcessingIngress,createGraphProcessingDispatch,graphApprovedSourceVersionHash} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedProcessingIngress.js';
 import {GraphWebhookIngress} from '../../40_PLATFORM_FOUNDATION_BUILD/src/graphWebhookIngress.js';
 import {GraphWebhookValidationQueue} from '../../40_PLATFORM_FOUNDATION_BUILD/src/graphWebhookQueue.js';
 import {createApiServer} from '../../40_PLATFORM_FOUNDATION_BUILD/src/httpApi.js';
@@ -41,7 +43,7 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
@@ -65,7 +67,7 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130 real Post
   await admin.query(`CREATE ROLE legaltech_runtime_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await admin.query(`CREATE ROLE legaltech_broker_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await admin.query('GRANT legaltech_session_broker TO legaltech_broker_ci');
-  for(const [login,group] of [['legaltech_reader_ci','legaltech_security_reader'],['legaltech_operator_ci','legaltech_security_operator'],['legaltech_limiter_ci','legaltech_rate_limiter'],['legaltech_audit_writer_ci','legaltech_audit_writer'],['legaltech_audit_reader_ci','legaltech_audit_reader'],['legaltech_queue_producer_ci','legaltech_queue_producer'],['legaltech_queue_worker_ci','legaltech_queue_worker'],['legaltech_queue_reader_ci','legaltech_queue_reader'],['legaltech_outbox_relay_ci','legaltech_outbox_relay'],['legaltech_job_domain_reader_ci','legaltech_job_domain_reader']]){
+  for(const [login,group] of [['legaltech_reader_ci','legaltech_security_reader'],['legaltech_operator_ci','legaltech_security_operator'],['legaltech_limiter_ci','legaltech_rate_limiter'],['legaltech_audit_writer_ci','legaltech_audit_writer'],['legaltech_audit_reader_ci','legaltech_audit_reader'],['legaltech_queue_producer_ci','legaltech_queue_producer'],['legaltech_queue_worker_ci','legaltech_queue_worker'],['legaltech_queue_reader_ci','legaltech_queue_reader'],['legaltech_outbox_relay_ci','legaltech_outbox_relay'],['legaltech_job_domain_reader_ci','legaltech_job_domain_reader'],['legaltech_graph_producer_ci','legaltech_graph_producer'],['legaltech_graph_worker_ci','legaltech_graph_worker'],['legaltech_graph_reader_ci','legaltech_graph_reader']]){
     await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
     await admin.query(`GRANT ${group} TO ${login}`);
   }
@@ -84,8 +86,8 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130 real Post
   const one=new PostgresServerSessionStore({...options,brokerPool:brokerOne}),two=new PostgresServerSessionStore({...options,brokerPool:brokerTwo});
   const session=(providerSessionId=`provider-${uuid()}`)=>({tenantId:tenantA,actorId:actorA,capabilities:['matter:read'],roles:[],authContext:{method:'OIDC',mfaVerified:true,authTime:null,expiresAt:new Date(Date.now()+3600000).toISOString(),providerSessionId}});
 
-  await t.test('all 56 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
-    assert.equal(manifest.migrations.length,56);
+  await t.test('all 57 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
+    assert.equal(manifest.migrations.length,57);
     const result=await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({});assert.equal(result.ok,true);
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
@@ -950,6 +952,150 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130 real Post
       assert.equal(result.commandId,receipt.commandId);assert.equal(result.resultCode,'CLASSIFIED');
       stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true);assert.equal((await durable.status(scope)).state,'DRAINED');assert.equal((await durable.status(scope)).inFlight,0);
     }finally{sourceHealthy=true;if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
+  });
+
+  const graphProducerPool=makePool('legaltech_graph_producer_ci',2),graphWorkerPool=makePool('legaltech_graph_worker_ci',2),graphReaderPool=makePool('legaltech_graph_reader_ci',2);
+  const graphProducerOptions={pool:graphProducerPool,expectedRole:'legaltech_graph_producer_ci',actorId:serviceActor,authorizeEnqueue:async()=>true};
+  const graphWorkerOptions={pool:graphWorkerPool,expectedRole:'legaltech_graph_worker_ci',actorId:serviceActor,workerId:uuid(),authorizeWorker:async()=>true};
+  const graphReaderOptions={pool:graphReaderPool,expectedRole:'legaltech_graph_reader_ci',actorId:serviceActor,authorizeRead:async()=>true};
+  const graphProducer=new PostgresGraphInboxProducer(graphProducerOptions),graphWorker=new PostgresGraphInboxWorker(graphWorkerOptions),graphReader=new PostgresGraphInboxReader(graphReaderOptions);
+  const graphTenant=async()=>{const tenantId=uuid();await admin.query('INSERT INTO public.tenants(id,name) VALUES($1,$2)',[tenantId,'V132 isolated synthetic inbox scope']);return tenantId;};
+  const graphRecord=tenantId=>({tenantId,subscriptionId:uuid(),notificationFingerprint:crypto.createHash('sha256').update(uuid()).digest('hex'),sourceEvidenceHash:reason,sourceVersionHash:artifactHash,eventType:'CREATED'});
+  const graphKey=r=>({tenantId:r.tenantId,subscriptionId:r.subscriptionId,notificationFingerprint:r.notificationFingerprint});
+  await t.test('V132 actual PostgreSQL graph roles verify exact column grants forced tenant RLS and pinned triggers',async()=>{
+    for(const adapter of [graphProducer,graphWorker,graphReader])assert.equal((await adapter.probe()).ok,true);
+    for(const pool of [graphProducerPool,graphWorkerPool,graphReaderPool])assert.equal((await pool.query('SELECT * FROM graph_security.notifications')).rows.length,0);
+    for(const pool of [runtime,brokerOne,queueProducerPool,queueWorkerPool,queueReaderPool,relayPool,domainReaderPool,drainWorkerPool,drainOperatorPool,drainReaderPool])assert.equal(await pool.query('SELECT * FROM graph_security.notifications').then(()=>false,e=>e.code==='42501'),true);
+  });
+  await t.test('V132 concurrent enqueue and reconstructed producer retain one exact immutable inbox row',async()=>{
+    const input=graphRecord(await graphTenant()),other=new PostgresGraphInboxProducer(graphProducerOptions);
+    const results=await Promise.all([graphProducer.enqueueBatch([input]),other.enqueueBatch([input])]);assert.deepEqual(results.map(r=>r[0].replayed).sort(),[false,true]);
+    const row=(await admin.query('SELECT * FROM graph_security.notifications WHERE tenant_id=$1',[input.tenantId])).rows;assert.equal(row.length,1);assert.equal(row[0].source_version_hash,artifactHash);
+    await assert.rejects(other.enqueueBatch([{...input,sourceEvidenceHash:'e'.repeat(64)}]),/CONFLICT/);assert.equal((await graphReader.get(graphKey(input))).sourceEvidenceHash,reason);
+  });
+  await t.test('V132 conflicting batch rolls back earlier new notifications in the same tenant',async()=>{
+    const tenantId=await graphTenant(),prior=graphRecord(tenantId),fresh=graphRecord(tenantId);await graphProducer.enqueueBatch([prior]);
+    await assert.rejects(graphProducer.enqueueBatch([fresh,{...prior,sourceVersionHash:'e'.repeat(64)}]),/CONFLICT/);assert.equal(await graphReader.get(graphKey(fresh)),null);
+  });
+  await t.test('V132 concurrent tenant capacity is serialized while immutable retries remain admitted',async()=>{
+    const tenantId=await graphTenant(),bounded=new PostgresGraphInboxProducer({...graphProducerOptions,maxQueued:1}),a=graphRecord(tenantId),b=graphRecord(tenantId);
+    const result=await Promise.allSettled([bounded.enqueueBatch([a]),bounded.enqueueBatch([b])]);assert.equal(result.filter(r=>r.status==='fulfilled').length,1);
+    const accepted=result[0].status==='fulfilled'?a:b;assert.equal((await bounded.enqueueBatch([accepted]))[0].replayed,true);assert.equal((await admin.query('SELECT count(*)::integer AS n FROM graph_security.notifications WHERE tenant_id=$1',[tenantId])).rows[0].n,1);
+  });
+  await t.test('V132 PostgreSQL RLS hides other tenants and rejects a context-swapped insert',async()=>{
+    const a=graphRecord(await graphTenant()),b={...a,tenantId:await graphTenant()};await graphProducer.enqueueBatch([a]);await graphProducer.enqueueBatch([b]);
+    const tx=new PostgresTenantTransactions({pool:graphReaderPool,expectedRole:graphReaderOptions.expectedRole});
+    const visible=await tx.run({tenantId:a.tenantId,actorId:serviceActor},x=>x.query('SELECT tenant_id FROM graph_security.notifications'));assert.equal(visible.rows.length,1);assert.equal(visible.rows[0].tenant_id,a.tenantId);
+    const producerTx=new PostgresTenantTransactions({pool:graphProducerPool,expectedRole:graphProducerOptions.expectedRole});
+    await assert.rejects(producerTx.run({tenantId:a.tenantId,actorId:serviceActor},x=>x.query('INSERT INTO graph_security.notifications(tenant_id,subscription_id,notification_fingerprint,source_evidence_hash,source_version_hash,event_type,request_hash,max_attempts) VALUES($1,$2,$3,$4,$5,$6,$7,5)',[b.tenantId,uuid(),'f'.repeat(64),reason,artifactHash,'CREATED',reason])),/UNAVAILABLE/);
+  });
+  await t.test('V132 claim fencing survives reconstruction and never steals a live claim on elapsed time',async()=>{
+    const input=graphRecord(await graphTenant());await graphProducer.enqueueBatch([input]);
+    const owner=await graphWorker.claimNext({tenantId:input.tenantId}),other=new PostgresGraphInboxWorker({...graphWorkerOptions,workerId:uuid()});assert.equal(await other.claimNext({tenantId:input.tenantId}),null);
+    assert.equal(await graphWorker.assertCurrent(owner),true);await assert.rejects(other.assertCurrent({...owner,workerId:uuid()}),/INPUT_INVALID/);
+    const record=(await admin.query('SELECT * FROM graph_security.notifications WHERE tenant_id=$1',[input.tenantId])).rows[0];assert.notEqual(record.token_hash,owner.token);assert.equal(record.token_hash,crypto.createHash('sha256').update(owner.token).digest('hex'));
+    assert.equal((await admin.query("SELECT count(*)::integer AS n FROM information_schema.columns WHERE table_schema='graph_security' AND table_name='notifications' AND column_name IN ('lease_until','expires_at')")).rows[0].n,0);
+    await graphWorker.fail(owner,{retryable:true,errorCode:'DISPATCH_RETRY'});const second=await other.claimNext({tenantId:input.tenantId});assert.equal(second.attempt,2);
+    await assert.rejects(graphWorker.complete(owner,{outcomeHash:reason}),/UNVERIFIED/);assert.equal(await other.complete(second,{outcomeHash:reason}),true);assert.equal(await other.complete(second,{outcomeHash:reason}),true);
+    await assert.rejects(other.complete(second,{outcomeHash:'b'.repeat(64)}),/UNVERIFIED/);assert.equal((await graphReader.get(graphKey(input))).status,'DONE');
+  });
+  await t.test('V132 retry budget reaches DEAD without reopening a terminal notification',async()=>{
+    const producer=new PostgresGraphInboxProducer({...graphProducerOptions,maxAttempts:2}),input=graphRecord(await graphTenant());await producer.enqueueBatch([input]);
+    for(let i=0;i<2;i++){const claim=await graphWorker.claimNext({tenantId:input.tenantId});await graphWorker.fail(claim,{retryable:true,errorCode:'DISPATCH_RETRY'});}
+    assert.equal((await graphReader.get(graphKey(input))).status,'DEAD');assert.equal(await graphWorker.claimNext({tenantId:input.tenantId}),null);
+  });
+  await t.test('V132 deferred PostgreSQL receipt constraints reject completion without an exact receipt',async()=>{
+    const input=graphRecord(await graphTenant());await graphProducer.enqueueBatch([input]);const claim=await graphWorker.claimNext({tenantId:input.tenantId});
+    const tx=new PostgresTenantTransactions({pool:graphWorkerPool,expectedRole:graphWorkerOptions.expectedRole}),context={tenantId:input.tenantId,actorId:serviceActor};
+    await assert.rejects(tx.run(context,x=>x.query("UPDATE graph_security.notifications SET status='DONE' WHERE tenant_id=$1 AND subscription_id=$2 AND notification_fingerprint=$3",[input.tenantId,input.subscriptionId,input.notificationFingerprint])),/OUTCOME_UNKNOWN/);
+    const tokenHash=crypto.createHash('sha256').update(claim.token).digest('hex');
+    await assert.rejects(tx.run(context,x=>x.query('INSERT INTO graph_security.receipts(tenant_id,subscription_id,notification_fingerprint,attempt,worker_id,token_hash,outcome_hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[input.tenantId,input.subscriptionId,input.notificationFingerprint,claim.attempt,claim.workerId,tokenHash,reason])),/OUTCOME_UNKNOWN/);
+    assert.equal((await graphReader.get(graphKey(input))).status,'RUNNING');await graphWorker.complete(claim,{outcomeHash:reason});
+    for(const sql of ['DELETE FROM graph_security.receipts','TRUNCATE graph_security.receipts','UPDATE graph_security.receipts SET outcome_hash=NULL'])assert.equal(await graphWorkerPool.query(sql).then(()=>false,e=>e.code==='42501'),true);
+  });
+  await t.test('V132 authorization is rechecked after tenant lock waits and rolls back rejected admission',async()=>{
+    const input=graphRecord(await graphTenant()),blocker=await admin.connect();let allowed=true,entered=false,pending;
+    const gated=new PostgresGraphInboxProducer({...graphProducerOptions,authorizeEnqueue:async c=>{if(c.phase==='ADMIT')entered=true;return allowed;}});
+    try{await blocker.query('BEGIN');await blocker.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[JSON.stringify(['graph-inbox-v132',input.tenantId])]);
+      pending=gated.enqueueBatch([input]).then(value=>({value}),error=>({error}));const deadline=Date.now()+5000;while(!entered&&Date.now()<deadline)await new Promise(r=>setTimeout(r,5));assert.equal(entered,true);
+      allowed=false;await blocker.query('COMMIT');assert.match((await pending).error?.message??'',/FORBIDDEN/);assert.equal(await graphReader.get(graphKey(input)),null);
+    }finally{await blocker.query('ROLLBACK');blocker.release();if(pending)await pending;}
+  });
+  await t.test('V132 mixed graph roles and direct foreign-table grants fail posture across old boundaries',async()=>{
+    await admin.query('GRANT legaltech_graph_worker TO legaltech_graph_producer_ci');try{assert.equal((await graphProducer.probe()).ok,false);}finally{await admin.query('REVOKE legaltech_graph_worker FROM legaltech_graph_producer_ci');}
+    await admin.query('GRANT SELECT ON public.matters TO legaltech_graph_reader_ci');try{assert.equal((await graphReader.probe()).ok,false);}finally{await admin.query('REVOKE SELECT ON public.matters FROM legaltech_graph_reader_ci');}
+    for(const [principal,check] of [['legaltech_runtime_ci',()=>createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})()],['legaltech_broker_ci',()=>one.probe()],['legaltech_drain_reader_ci',()=>durable.probe()]]){
+      await admin.query(`GRANT legaltech_graph_reader TO ${principal}`);try{assert.equal((await check()).ok,false);}finally{await admin.query(`REVOKE legaltech_graph_reader FROM ${principal}`);}
+      await admin.query(`GRANT USAGE ON SCHEMA graph_security TO ${principal}`);await admin.query(`GRANT SELECT ON graph_security.notifications TO ${principal}`);
+      try{assert.equal((await check()).ok,false);}finally{await admin.query(`REVOKE SELECT ON graph_security.notifications FROM ${principal}`);await admin.query(`REVOKE USAGE ON SCHEMA graph_security FROM ${principal}`);}
+    }
+  });
+  await t.test('V132 changed forced RLS policy trigger state and function body cannot attest inbox health',async()=>{
+    await admin.query('ALTER TABLE graph_security.notifications NO FORCE ROW LEVEL SECURITY');try{assert.equal((await graphWorker.probe()).ok,false);}finally{await admin.query('ALTER TABLE graph_security.notifications FORCE ROW LEVEL SECURITY');}
+    await admin.query('ALTER POLICY graph_notification_read ON graph_security.notifications USING(true)');try{assert.equal((await graphReader.probe()).ok,false);}finally{await admin.query('ALTER POLICY graph_notification_read ON graph_security.notifications USING(tenant_id=public.app_current_tenant_id())');}
+    await admin.query('ALTER TABLE graph_security.notifications DISABLE TRIGGER graph_notification_transition');try{assert.equal((await graphProducer.probe()).ok,false);}finally{await admin.query('ALTER TABLE graph_security.notifications ENABLE TRIGGER graph_notification_transition');}
+    const definition=(await admin.query("SELECT pg_get_functiondef('graph_security.protect_notification()'::regprocedure) AS sql")).rows[0].sql;
+    await admin.query(definition.replace('AS $function$','AS $function$\n-- synthetic catalog tamper'));try{assert.equal((await graphWorker.probe()).ok,false);}finally{await admin.query(definition);}
+  });
+  await resumeDurable();
+  function actualGraphFixture(extra={}){
+    const upload=approvedUpload(),base={...approvedSources.get(upload.uploadId),actorId:serviceActor},subscriptionId=uuid(),directoryTenantId=uuid(),expiresAt=new Date(Date.now()+3600000).toISOString();
+    const subscription={tenantId:tenantA,subscriptionId,directoryTenantId,clientState:'synthetic-v132-client-state',status:'ACTIVE',expiresAt,richData:false};
+    const payload={value:[{subscriptionId,tenantId:directoryTenantId,clientState:subscription.clientState,resource:'/users/synthetic/messages/synthetic-v132',changeType:'created',subscriptionExpirationDateTime:expiresAt}]};
+    const config={producer:graphProducer,worker:graphWorker,reader:graphReader,processingIngress:extra.processingIngress??actualIngress(),drain:new ManagedDeploymentDrain({backend:durable,authorize:async()=>true,deploymentId:drainDeployment}),readiness:syntheticReady(),
+      resolveSubscription:async()=>({...subscription}),registerSource:async row=>{
+        const binding={...base,subscriptionId,changeType:row.changeType},sourceVersionHash=graphApprovedSourceVersionHash(binding),eventType=row.changeType==='updated'?'UPDATED':'CREATED';
+        const receipt={tenantId:tenantA,subscriptionId,validatedFingerprint:row.notificationFingerprint,sourceEvidenceHash:reason,sourceVersionHash};
+        const notificationFingerprint=graphSourceDeliveryFingerprint({...receipt,eventType});approvedSources.set(notificationFingerprint,{...binding,sourceKey:notificationFingerprint});return {...receipt,notificationFingerprint};
+      },authorizeDispatch:async()=>true,dispatchControl:async c=>({tenantId:c.tenantId,subscriptionId:c.subscriptionId,notificationFingerprint:c.notificationFingerprint,sourceEvidenceHash:c.sourceEvidenceHash,sourceVersionHash:c.sourceVersionHash,status:'ACCEPTED'}),probeGraph:async()=>({ok:true}),...extra.config};
+    return {config,payload,subscription,base,intake:new ManagedGraphWebhookIntake(config)};
+  }
+  await t.test('V132 validated intake replays across reconstruction and completes one actual domain outbox command',async()=>{
+    const f=actualGraphFixture();await f.intake.receive(f.payload);assert.equal((await new ManagedGraphWebhookIntake(f.config).receive(f.payload)).replayed,1);
+    assert.equal((await f.intake.relay(relayScope)).delivered,1);const rows=(await admin.query('SELECT * FROM graph_security.notifications WHERE subscription_id=$1',[f.subscription.subscriptionId])).rows;assert.equal(rows.length,1);assert.equal(rows[0].status,'DONE');
+    const commands=(await admin.query('SELECT * FROM public.domain_job_commands WHERE payload_id=$1',[f.base.payloadId])).rows;assert.equal(commands.length,1);assert.equal(commands[0].actor_id,serviceActor);assert.equal((await admin.query('SELECT job_id FROM public.domain_outbox_events WHERE job_id=$1',[commands[0].job_id])).rows.length,1);
+    assert.equal((await admin.query('SELECT * FROM graph_security.receipts WHERE subscription_id=$1',[f.subscription.subscriptionId])).rows.length,1);
+  });
+  await t.test('V132 identical basic Graph notices admit a new immutable version while same-version deliveries replay',async()=>{
+    const f=actualGraphFixture();await f.intake.receive(f.payload);await f.intake.relay(relayScope);f.base.revision=2;await f.intake.receive(f.payload);assert.equal((await f.intake.receive(f.payload)).replayed,1);await f.intake.relay(relayScope);
+    const rows=(await admin.query('SELECT notification_fingerprint,source_version_hash FROM graph_security.notifications WHERE subscription_id=$1',[f.subscription.subscriptionId])).rows;assert.equal(rows.length,2);assert.notEqual(rows[0].notification_fingerprint,rows[1].notification_fingerprint);assert.notEqual(rows[0].source_version_hash,rows[1].source_version_hash);
+  });
+  await t.test('V132 lost postcommit ingress acknowledgement replays one durable command under a new fenced attempt',async()=>{
+    let lost=true;const router=new ManagedProcessingIngress({...ingressOptions,handlers:pipeline.handlers,drain:new ManagedDeploymentDrain({backend:durable,authorize:async()=>true,deploymentId:drainDeployment}),readiness:syntheticReady(),audit:async c=>{if(c.phase==='ACCEPTED'&&lost){lost=false;throw new Error('synthetic-lost-ingress-ack');}}});
+    const f=actualGraphFixture({processingIngress:router});await f.intake.receive(f.payload);await assert.rejects(f.intake.relay(relayScope));assert.equal((await f.intake.relay(relayScope)).delivered,1);
+    const row=(await admin.query('SELECT status,attempts FROM graph_security.notifications WHERE subscription_id=$1',[f.subscription.subscriptionId])).rows[0];assert.equal(row.status,'DONE');assert.equal(row.attempts,2);assert.equal((await admin.query('SELECT count(*)::integer AS n FROM public.domain_job_commands WHERE payload_id=$1',[f.base.payloadId])).rows[0].n,1);
+  });
+  await t.test('V132 current source tenant and version mismatch cannot commit a cross-bound domain command',async()=>{
+    const f=actualGraphFixture();await f.intake.receive(f.payload);const row=(await admin.query('SELECT notification_fingerprint FROM graph_security.notifications WHERE subscription_id=$1',[f.subscription.subscriptionId])).rows[0];approvedSources.set(row.notification_fingerprint,{...approvedSources.get(row.notification_fingerprint),tenantId:tenantB,actorId:actorB});
+    await assert.rejects(f.intake.relay(relayScope));assert.equal((await admin.query('SELECT count(*)::integer AS n FROM public.domain_job_commands WHERE payload_id=$1',[f.base.payloadId])).rows[0].n,0);assert.equal((await graphReader.get({tenantId:tenantA,subscriptionId:f.subscription.subscriptionId,notificationFingerprint:row.notification_fingerprint})).status,'DEAD');
+  });
+  await t.test('V132 stalled source publication holds an actual PostgreSQL deployment lease after cancellation',async()=>{
+    let finish,entered=false;const gate=new Promise(r=>{finish=r}),f=actualGraphFixture();const register=f.config.registerSource;
+    const intake=new ManagedGraphWebhookIntake({...f.config,timeoutMs:100,registerSource:async row=>{entered=true;await gate;return register(row);}});let settled=false;const task=intake.receive(f.payload).catch(e=>{settled=true;return e;});
+    try{const end=Date.now()+5000;while(!entered&&Date.now()<end)await new Promise(r=>setTimeout(r,10));assert.equal(entered,true);await new Promise(r=>setTimeout(r,120));assert.equal(settled,false);assert.equal((await beginDurable()).state,'DRAINING');assert.equal((await durable.status(scope)).inFlight,1);await assert.rejects(resumeDurable(),/UNVERIFIED/);
+      assert.equal((await intake.stop({timeoutMs:20})).drained,false);finish();await task;assert.equal((await durable.status(scope)).state,'DRAINED');assert.equal((await admin.query('SELECT count(*)::integer AS n FROM graph_security.notifications WHERE subscription_id=$1',[f.subscription.subscriptionId])).rows[0].n,0);
+    }finally{finish();await task;await intake.stop();await resumeDurable();}
+  });
+  await t.test('V132 twelve-pool root binds real inbox HTTP worker readiness and global shutdown',async()=>{
+    const f=actualGraphFixture(),{drain:unusedDomain,...serviceDomain}=pipelineOptions,{drain:unusedWorker,...serviceWorker}=managedWorker;let graphHealthy=true;
+    const webhooks={producerOptions:graphProducerOptions,workerOptions:graphWorkerOptions,readerOptions:graphReaderOptions,resolveSubscription:f.config.resolveSubscription,registerSource:f.config.registerSource,authorizeDispatch:f.config.authorizeDispatch,dispatchControl:f.config.dispatchControl,probeGraph:async()=>({ok:graphHealthy}),getScopes:async()=>[relayScope],authorizeScope,pollIntervalMs:100,cycleTimeoutMs:10000};
+    const options={drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},ingress:ingressOptions,webhooks,processing:{domain:serviceDomain,worker:serviceWorker,queueReaderPool,expectedQueueReaderRole:'legaltech_queue_reader_ci',authorizeResultRead:async()=>true,authorizeAdoption:async()=>true,
+      artifacts:{manifest:{resolveVersion:async r=>manifests.get(r.id),probe:async()=>({ok:true})},storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.hash,contentLength:r.size,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},authorizeVersion:async()=>true,verifyEvidence:async()=>true},
+      canary:{tenantId:tenantA,actorId:actorA,serviceActorId:serviceActor,authorizeCanary:async()=>true,createFixture:async()=>{const fixture=approvedUpload(),m=approvedSources.get(fixture.uploadId);return {confirmedSynthetic:true,payloadId:m.payloadId,payloadHash:m.payloadHash,expectedResultCode:'CLASSIFIED',expectedResultHash:resultHash};},timeoutMs:5000,maxAgeMs:30000}},http:httpFixture,probes:Object.fromEntries(REQUIRED_PRODUCTION_PROBES.map(k=>[k,async()=>({ok:true})])),readiness:{probeTimeoutMs:5000},canaryIntervalMs:10000};
+    for(const field of ['producer','worker','reader','processingIngress','drain','readiness','operation','relay'])assert.throws(()=>createDurablePostgresProcessingService({...options,webhooks:{...webhooks,[field]:{}}}),/GRAPH_OVERRIDE_FORBIDDEN/);
+    assert.throws(()=>createDurablePostgresProcessingService({...options,http:{...httpFixture,graphIntake:{}}}),/HTTP_OVERRIDE_FORBIDDEN/);
+    assert.throws(()=>createDurablePostgresProcessingService({...options,webhooks:{...webhooks,producerOptions:{...graphProducerOptions,pool:drainWorkerPool}}}),/GRAPH_SEPARATE_POOLS_REQUIRED/);
+    const root=createDurablePostgresProcessingService(options);let stopped;
+    try{await root.start({port:0});const baseUrl=`http://127.0.0.1:${root.server.address().port}`,ready=async()=>{let response;const end=Date.now()+10000;do{response=await fetch(baseUrl+'/api/v1/ready');await response.arrayBuffer();if(response.status===200)return;await new Promise(r=>setTimeout(r,25));}while(Date.now()<end);assert.equal(response.status,200);};await ready();
+      const send=()=>fetch(baseUrl+'/api/v1/integrations/graph/webhooks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(f.payload)});const response=await send();assert.equal(response.status,202);await response.arrayBuffer();
+      let notification;const end=Date.now()+10000;do{notification=(await admin.query('SELECT * FROM graph_security.notifications WHERE subscription_id=$1',[f.subscription.subscriptionId])).rows[0];if(notification?.status==='DONE')break;await new Promise(r=>setTimeout(r,25));}while(Date.now()<end);assert.equal(notification?.status,'DONE');
+      const command=(await admin.query('SELECT command_id,job_id FROM public.domain_job_commands WHERE payload_id=$1',[f.base.payloadId])).rows[0];assert.ok(command);
+      let processed;const processingEnd=Date.now()+10000;do{processed=await queueReader.getResult({tenantId:tenantA,jobId:command.job_id});if(processed)break;await new Promise(r=>setTimeout(r,25));}while(Date.now()<processingEnd);
+      assert.equal(processed?.commandId,command.command_id);assert.equal(processed?.resultCode,'CLASSIFIED');
+      const replay=await send();assert.equal(replay.status,202);assert.equal((await replay.json()).replayed,1);
+      graphHealthy=false;root.readiness.invalidate();const unavailable=await fetch(baseUrl+'/api/v1/ready');assert.equal(unavailable.status,503);await unavailable.arrayBuffer();graphHealthy=true;root.readiness.invalidate();await ready();
+      stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true);assert.equal((await durable.status(scope)).state,'DRAINED');assert.equal((await durable.status(scope)).inFlight,0);
+    }finally{graphHealthy=true;if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
   });
   // V130 runs last: its approvals queue PROCLAIM_WRITEBACK work that nothing in this
   // suite executes yet (V131), so it must not precede the service drain cases.

@@ -4,6 +4,13 @@
 
 A partner-firm user reports (second hand, SINGLE USER REPORT) that handlers' tasks stall for hours waiting on supervisor approval by email. Desk research found that the SRA's June 2026 post-*Mazur* supervision guidance expects escalation routes, available supervisors and management information on case flow. That makes the hypothesis worth testing, not validated. It changes no wedge or priority. The partner is logging approvals for a week. See `01_RESEARCH_EVIDENCE/APPROVAL_WAIT_DESK_RESEARCH_2026-10.md` (actions A1–A8) and the raw note in `39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/`. V131 (durable writeback execution) is paused until that evidence is in.
 
+## V132 — Durable Graph intake and fenced dispatch
+
+V132 connects the optional production Graph webhook endpoint to a metadata-only PostgreSQL inbox, exact immutable source-version identities and append-only fenced dispatch receipts. Migration 057 forces tenant RLS and separates producer/worker/reader credentials. The twelve-pool root binds the actual inbox to readiness, supervised dispatch and global drain ownership; cancelled callbacks and uncertain acknowledgements cannot authorize expiry recovery or optimistic shutdown. Created/updated sources are pinned to tenant/evidence/version before domain commit; lifecycle/deleted controls stay separate. See `40_PLATFORM_FOUNDATION_BUILD/docs/V132_DURABLE_GRAPH_INTAKE.md`.
+
+Local suites pass 2,366 platform and 140 scaffold tests, including 105 new boundary regressions. Seventeen actual PostgreSQL CI cases are added; local database execution is skipped and CI must pass before merge. All 57 migrations are checksum-pinned; no dependency is added. Live Graph credentials/hosting, approved source publishing, delta/lifecycle/control reconciliation, real permission/evidence providers, durable read/review UI and Proclaim outputs remain outstanding. This continues the authorized D-018 integration exception; the pre-TO freeze and customer-data deployment gate remain in force.
+
+
 ## V130 — Durable human review decision
 
 V130 adds the human decision on an adopted inbound result to the PostgreSQL path. Migration 056 records one immutable decision per event: APPROVE into an open matter or REJECT, by an active user only, bound by foreign key to the exact adopted result hash. Database triggers make the decision and the event's PROCESSED to APPROVED/REJECTED transition inseparable. An approval atomically queues exactly one PROCLAIM_WRITEBACK outbox intent for the event. A new reviewer group is separated from the result writer and command author; the handler refuses a principal holding both. See `40_PLATFORM_FOUNDATION_BUILD/docs/V130_DURABLE_REVIEW_DECISION.md`.
