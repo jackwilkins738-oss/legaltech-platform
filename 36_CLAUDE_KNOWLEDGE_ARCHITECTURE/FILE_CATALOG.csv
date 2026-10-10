@@ -493,7 +493,7 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/test/offboarding-export-v113.test.js,production_shape,reference,low,js,979
 30_PRODUCTION_SHAPE_SCAFFOLD/test/onboarding-readiness-v109.test.js,production_shape,reference,low,js,766
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresRuntimeV117.test.js,production_shape,reference,low,js,4603
-30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,75665
+30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,75783
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresTransactionsV118.test.js,production_shape,reference,low,js,7779
 30_PRODUCTION_SHAPE_SCAFFOLD/test/secret-rotation-v111.test.js,production_shape,reference,low,js,1044
 30_PRODUCTION_SHAPE_SCAFFOLD/test/security-contract.test.js,engineering,reference,medium,js,228816
@@ -812,7 +812,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/postgresProcessingPipeline.js,platform_build,current,medium,js,2162
 40_PLATFORM_FOUNDATION_BUILD/src/postgresResultAdoption.js,platform_build,current,medium,js,8752
 40_PLATFORM_FOUNDATION_BUILD/src/postgresSecurityBoundary.js,platform_build,current,medium,js,14115
-40_PLATFORM_FOUNDATION_BUILD/src/postgresSessions.js,platform_build,current,medium,js,11196
+40_PLATFORM_FOUNDATION_BUILD/src/postgresSessions.js,platform_build,current,medium,js,11202
 40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerDomain.js,platform_build,current,medium,js,6462
 40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerPipeline.js,platform_build,current,medium,js,1673
 40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerRuntime.js,platform_build,current,medium,js,12031

@@ -59,7 +59,7 @@ export class PostgresServerSessionStore {
       const result=await tx.query(`WITH moment AS MATERIALIZED (SELECT clock_timestamp() AS stamp)
         INSERT INTO identity_security.server_sessions
         (token_hash,session_id,tenant_id,actor_id,mfa_verified,auth_time,provider_session_hash,created_at,expires_at,idle_timeout_ms,last_seen_at)
-        SELECT $1,$2::uuid,$3::uuid,$4::uuid,$5,$6::timestamptz,$7,stamp,
+        SELECT $1,$2::uuid,$3::uuid,$4::uuid,$5,$6::timestamptz,$7::text,stamp,
           LEAST(stamp+($8::bigint*interval '1 millisecond'),$9::timestamptz),$10,stamp
         FROM moment
         WHERE LEAST(stamp+($8::bigint*interval '1 millisecond'),$9::timestamptz)>stamp

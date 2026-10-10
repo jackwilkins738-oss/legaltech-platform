@@ -606,9 +606,10 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126 real PostgreSQL shared identi
     },timeoutMs:5000,maxAgeMs:30000}});
   supervisors.push(managed);
   await t.test('V125 six-pool managed root verifies a synthetic full submit/relay/load/process/adopt canary',async()=>{
-    assert.equal((await managed.canary.probe()).ok,false);await managed.start();assert.equal((await managed.canary.run()).ok,true);assert.equal((await managed.canary.probe()).ok,true);
+    try{assert.equal((await managed.canary.probe()).ok,false);await managed.start();assert.equal((await managed.canary.run()).ok,true);assert.equal((await managed.canary.probe()).ok,true);
     const probes=Object.fromEntries(REQUIRED_PRODUCTION_PROBES.map(k=>[k,async()=>({ok:true})]));const readiness=managed.createReadiness({probes,probeTimeoutMs:5000});
-    assert.equal((await readiness.publicStatus()).status,'READY');assert.equal((await managed.probe()).ok,true);assert.equal((await managed.stop()).drained,true);assert.equal((await managed.canary.probe()).ok,false);
+    const ready=await readiness.publicStatus();assert.equal(ready.status,'READY',JSON.stringify({ready,pipeline:managed.status(),processing:await managed.probe()}));assert.equal((await managed.probe()).ok,true);
+    }finally{assert.equal((await managed.stop()).drained,true);}assert.equal((await managed.canary.probe()).ok,false);
   });
   await t.test('V125 failed managed evidence or withdrawn canary authority cannot restore functional readiness',async()=>{
     await managed.start();evidenceAllowed=false;try{assert.equal((await managed.canary.run()).ok,false);assert.equal((await managed.canary.probe()).ok,false);}finally{evidenceAllowed=true;}
