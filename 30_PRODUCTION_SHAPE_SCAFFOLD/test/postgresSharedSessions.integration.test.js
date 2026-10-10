@@ -385,6 +385,34 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     }
     assert.deepEqual(accepted,[],'Actor-spoofed inserts must be denied by database policy; see issue #80');
   });
+  await t.test('V164 actor restrictions allow legitimate writes and deny concurrent same-tenant impersonation',async()=>{
+    const login='legaltech_support_operator_v164';
+    await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+    await admin.query(`GRANT legaltech_support_operator TO ${login}`);
+    const a=new PostgresTenantTransactions({pool:makePool(login,2),expectedRole:login});
+    const b=new PostgresTenantTransactions({pool:makePool(login,2),expectedRole:login});
+    const matter='11700000-0000-4000-8000-000000000031';
+    const actorOther='11700000-0000-4000-8000-000000000013';
+    const id=uuid();
+    const requestSql=`INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,ticket_ref_hash,purpose_hash,trace_id,expires_at)
+      VALUES($1,$2,$3,$4,'MATTER_READ',$5,$6,'v164',statement_timestamp()+interval '10 minutes')`;
+    await a.run({tenantId:tenantA,actorId:actorA},tx=>tx.query(requestSql,[id,tenantA,actorA,matter,'a'.repeat(64),'b'.repeat(64)]));
+    const spoofed=[
+      ['approval',`INSERT INTO public.support_access_approvals(tenant_id,request_id,approver_id,trace_id) VALUES($1,$2,$3,'v164')`,[tenantA,id,actorOther]],
+      ['revocation',`INSERT INTO public.support_access_revocations(tenant_id,request_id,revoked_by,reason_hash,trace_id) VALUES($1,$2,$3,$4,'v164')`,[tenantA,id,actorOther,'c'.repeat(64)]],
+      ['event',`INSERT INTO public.support_access_events(tenant_id,request_id,actor_id,matter_id,event_type,trace_id) VALUES($1,$2,$3,$4,'DENIED','v164')`,[tenantA,id,actorOther,matter]],
+      ['request',requestSql,[uuid(),tenantA,actorOther,matter,'a'.repeat(64),'b'.repeat(64)]]
+    ];
+    const results=await Promise.allSettled(spoofed.map(([,sql,args],index)=>
+      (index%2?a:b).run({tenantId:tenantA,actorId:actorA},tx=>tx.query(sql,args))));
+    assert.equal(results.filter(x=>x.status==='fulfilled').length,0);
+    const authorized=await b.run({tenantId:tenantA,actorId:actorOther},tx=>
+      tx.query(`INSERT INTO public.support_access_approvals(tenant_id,request_id,approver_id,trace_id)
+        VALUES($1,$2,$3,'v164') RETURNING request_id`,[tenantA,id,actorOther]));
+    assert.equal(authorized.rows[0].request_id,id);
+    const count=await admin.query(`SELECT count(*)::integer AS n FROM public.support_access_approvals WHERE tenant_id=$1 AND request_id=$2`,[tenantA,id]);
+    assert.equal(count.rows[0].n,1);
+  });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
     const results=await Promise.all(Array.from({length:12},(_,i)=>transactions.run(scopes[i%2],async tx=>{
