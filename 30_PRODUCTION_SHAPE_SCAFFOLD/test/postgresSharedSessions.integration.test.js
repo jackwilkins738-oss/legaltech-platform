@@ -1,3 +1,4 @@
+import {createTenantScopedPostgresSupportGrantMutations} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportGrantMutations.js';
 import {createTenantScopedPostgresSupportGrantLookup} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportGrantLookup.js';
 import {ManagedReviewDocuments} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedReviewDocuments.js';
 import {ReviewClient} from '../../40_PLATFORM_FOUNDATION_BUILD/browser/reviewClient.js';
@@ -175,6 +176,31 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     });
     await assert.rejects(operator.run({tenantId:tenantA,actorId:actorA},tx=>
       tx.query('SELECT * FROM public.support_access_events')),/UNAVAILABLE/);
+  });
+  await t.test('V155 live operator creates, approves, revokes and atomically records durable grant evidence',async()=>{
+    const login='legaltech_support_operator_v155';
+    await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+    await admin.query(`GRANT legaltech_support_operator TO ${login}`);
+    const operatorPool=makePool(login,2);
+    const identity={assertCurrent:async()=>true};
+    const service=createTenantScopedPostgresSupportGrantMutations({pool:operatorPool,expectedRole:login,liveSession:identity});
+    const original={tenantId:tenantA,actorId:actorA,sessionId:uuid()};
+    const approver={tenantId:tenantA,actorId:'11700000-0000-4000-8000-000000000013',sessionId:uuid()};
+    const request=await service.request({session:original,matterId:'11700000-0000-4000-8000-000000000031',
+      scope:'MATTER_READ',ticketRefHash:'a'.repeat(64),purposeHash:'b'.repeat(64),traceId:'synthetic-v155'});
+    assert.equal(request.tenantId,tenantA);
+    const grantId=request.requestId;
+    await assert.rejects(service.approve({session:original,requestId:grantId,traceId:'synthetic-v155'}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+    assert.equal((await service.approve({session:approver,requestId:grantId,traceId:'synthetic-v155'})).status,'ACTIVE');
+    await assert.rejects(service.approve({session:approver,requestId:grantId,traceId:'synthetic-v155'}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+    const recorded=await admin.query('SELECT event_type FROM public.support_access_events WHERE tenant_id=$1 AND request_id=$2 ORDER BY id',[tenantA,grantId]);
+    assert.deepEqual(recorded.rows.map(r=>r.event_type),['REQUESTED','APPROVED']);
+    assert.equal((await service.revoke({session:approver,requestId:grantId,reasonHash:'c'.repeat(64),traceId:'synthetic-v155'})).status,'REVOKED');
+    await assert.rejects(service.revoke({session:approver,requestId:grantId,reasonHash:'c'.repeat(64),traceId:'synthetic-v155'}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+    const after=await admin.query('SELECT event_type FROM public.support_access_events WHERE tenant_id=$1 AND request_id=$2 ORDER BY id',[tenantA,grantId]);
+    assert.deepEqual(after.rows.map(r=>r.event_type),['REQUESTED','APPROVED','REVOKED']);
+    const cross={tenantId:tenantB,actorId:actorB,sessionId:uuid()};
+    await assert.rejects(service.revoke({session:cross,requestId:grantId,reasonHash:'c'.repeat(64),traceId:'synthetic-v155'}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
   });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
