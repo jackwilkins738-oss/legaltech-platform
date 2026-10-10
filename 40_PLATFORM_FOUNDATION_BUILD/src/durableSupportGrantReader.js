@@ -8,10 +8,10 @@ function uuid(value){return typeof value==='string'&&UUID.test(value);}
 function own(row,key){return Object.hasOwn(row,key)&&Object.hasOwn(Object.getOwnPropertyDescriptor(row,key),'value');}
 function plain(row){return row!==null&&typeof row==='object'&&Object.getPrototypeOf(row)===Object.prototype;}
 export class DurableSupportGrantReader{
-  #readCurrent;#session;
-  constructor({readCurrent,liveSession}={}){
-    if(typeof readCurrent!=='function'||typeof liveSession?.assertCurrent!=='function')throw new Error('DURABLE_SUPPORT_GRANT_CONFIGURATION_INVALID');
-    this.#readCurrent=readCurrent;this.#session=liveSession;
+  #readCurrent;#session;#timeoutMs;#maxConcurrent;#outstanding=new Set();
+  constructor({readCurrent,liveSession,timeoutMs=3000,maxConcurrent=4}={}){
+    if(typeof readCurrent!=='function'||typeof liveSession?.assertCurrent!=='function'||!Number.isSafeInteger(timeoutMs)||timeoutMs<50||timeoutMs>10000||!Number.isSafeInteger(maxConcurrent)||maxConcurrent<1||maxConcurrent>16)throw new Error('DURABLE_SUPPORT_GRANT_CONFIGURATION_INVALID');
+    this.#readCurrent=readCurrent;this.#session=liveSession;this.#timeoutMs=timeoutMs;this.#maxConcurrent=maxConcurrent;
   }
   async assertCurrent(session,{requestId,matterId,scope,documentRefHash=null,signal}={}){
     if(!plain(session)||!['tenantId','actorId','sessionId'].every(k=>own(session,k)&&uuid(session[k]))||
@@ -20,9 +20,25 @@ export class DurableSupportGrantReader{
     try{
       if(await this.#session.assertCurrent(session,{signal})!==true)throw denied();
       if(signal?.aborted)throw denied();
-      const decision=await this.#readCurrent(Object.freeze({
-        tenantId:session.tenantId,actorId:session.actorId,requestId,matterId,scope,documentRefHash,signal
-      }));
+      if(this.#outstanding.size>=this.#maxConcurrent)throw denied();
+      const controller=new AbortController();
+      let timer,onAbort;
+      const deadline=new Promise((_,reject)=>{
+        onAbort=()=>{controller.abort();reject(denied());};
+        if(signal)signal.addEventListener('abort',onAbort,{once:true});
+        timer=setTimeout(onAbort,this.#timeoutMs);
+      });
+      const token={};this.#outstanding.add(token);
+      const lookup=Promise.resolve().then(()=>{
+        if(controller.signal.aborted)throw denied();
+        return this.#readCurrent(Object.freeze({
+          tenantId:session.tenantId,actorId:session.actorId,requestId,matterId,scope,documentRefHash,signal:controller.signal
+        }));
+      });
+      void lookup.then(()=>this.#outstanding.delete(token),()=>this.#outstanding.delete(token));
+      let decision;
+      try{decision=await Promise.race([lookup,deadline]);}
+      finally{clearTimeout(timer);if(signal)signal.removeEventListener('abort',onAbort);controller.abort();}
       if(signal?.aborted||!plain(decision)||Reflect.ownKeys(decision).length!==7||
         !['tenantId','actorId','requestId','matterId','scope','documentRefHash','active'].every(k=>own(decision,k))||
         decision.tenantId!==session.tenantId||decision.actorId!==session.actorId||
