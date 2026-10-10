@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V130 — Durable human review decision
+
+V130 adds the human decision on an adopted inbound result to the PostgreSQL path. Migration 056 records one immutable decision per event: APPROVE into an open matter or REJECT, by an active user only, bound by foreign key to the exact adopted result hash. Database triggers make the decision and the event's PROCESSED to APPROVED/REJECTED transition inseparable. An approval atomically queues exactly one PROCLAIM_WRITEBACK outbox intent for the event. A new reviewer group is separated from the result writer and command author; the handler refuses a principal holding both. See `40_PLATFORM_FOUNDATION_BUILD/docs/V130_DURABLE_REVIEW_DECISION.md`.
+
+Local suites pass 2,261 platform and 140 scaffold tests, including 13 new handler regressions. Seven new real PostgreSQL cases were executed locally against PostgreSQL 16 (105/105 with the existing integration suite) and must pass in CI on PostgreSQL 17. There are now 56 migrations. Writeback execution, mock Proclaim write and read-back reconciliation on the durable path, the durable review UI and real permission adapters remain outstanding. This continues the authorized D-018 integration exception; the pre-TO freeze and customer-data deployment gate remain in force.
+
 ## V129 — Production source ingress integration
 
 V129 binds approved upload references, validated Graph notifications and published policy requests to stable PostgreSQL commands with current source authorization, immutable version/evidence checks, metadata audit and shared deployment leases. Production legacy inbound HTTP adopts the registered bridge, source readiness joins the nine-pool root, and old direct commands are disabled when source ingress is configured. Graph duplicates still verify durable delivery; client-state simulation is blocked in production. See `40_PLATFORM_FOUNDATION_BUILD/docs/V129_PRODUCTION_INGRESS_BATCH.md`.
