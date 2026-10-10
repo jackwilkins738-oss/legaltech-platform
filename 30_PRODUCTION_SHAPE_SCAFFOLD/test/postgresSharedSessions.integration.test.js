@@ -153,6 +153,29 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA,readOnly:true},async tx=>
       tx.query('SELECT * FROM public.support_access_events')),/UNAVAILABLE/);
   });
+  await t.test('V154 support operator cannot read audit history or modify append-only evidence',async()=>{
+    const role=await admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='legaltech_support_operator'");
+    assert.deepEqual(role.rows[0],{rolcanlogin:false,rolsuper:false,rolbypassrls:false});
+    const rights=await admin.query(`SELECT
+      has_table_privilege('legaltech_support_operator','public.support_access_requests','INSERT') AS request_insert,
+      has_table_privilege('legaltech_support_operator','public.support_access_approvals','INSERT') AS approval_insert,
+      has_table_privilege('legaltech_support_operator','public.support_access_revocations','INSERT') AS revocation_insert,
+      has_table_privilege('legaltech_support_operator','public.support_access_events','INSERT') AS audit_insert,
+      has_table_privilege('legaltech_support_operator','public.support_access_events','SELECT') AS audit_read,
+      has_table_privilege('legaltech_support_operator','public.support_access_requests','UPDATE,DELETE,TRUNCATE') AS request_mutation`);
+    assert.deepEqual(rights.rows[0],{request_insert:true,approval_insert:true,revocation_insert:true,audit_insert:true,audit_read:false,request_mutation:false});
+    const login='legaltech_support_operator_ci';
+    await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+    await admin.query(`GRANT legaltech_support_operator TO ${login}`);
+    const pool=makePool(login);
+    const operator=new PostgresTenantTransactions({pool,expectedRole:login});
+    await operator.run({tenantId:tenantA,actorId:actorA},async tx=>{
+      const r=await tx.query("SELECT count(*)::integer AS n FROM public.support_access_requests WHERE tenant_id=$1",[tenantA]);
+      assert.equal(r.rows[0].n,0);
+    });
+    await assert.rejects(operator.run({tenantId:tenantA,actorId:actorA},tx=>
+      tx.query('SELECT * FROM public.support_access_events')),/UNAVAILABLE/);
+  });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
     const results=await Promise.all(Array.from({length:12},(_,i)=>transactions.run(scopes[i%2],async tx=>{
