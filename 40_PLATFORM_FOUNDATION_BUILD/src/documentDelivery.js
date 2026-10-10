@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import {normalizeSession,documentAccessAllowed} from './auth.js';
 import {canonicalAuditPayload} from './securityMonitoring.js';
+import {discardLifecyclePromise} from './lifecycleTransition.js';
 
 const SAFE=/^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$/;
 const HEX64=/^[a-f0-9]{64}$/;
@@ -42,13 +43,13 @@ export class DocumentDeliveryService {
     const evidence=await this.#resolveSafe(session.tenantId,documentRef);if(evidence.matter.id!==row.matterId||!equalHex(evidence.bindingHash,row.bindingHash)||!this.#authorized(session,evidence,documentRef,traceId))throw new Error('DOCUMENT_DELIVERY_GRANT_INVALID');
     // Recheck after every await and immediately before the synchronous one-use claim.
     await this.#interlock?.assertAllowed({tenantId:session.tenantId,operation:'DOCUMENT_DELIVERY'});
-    if(row.status!=='ACTIVE'||Date.parse(row.expiresAt)<=this.#now())throw new Error('DOCUMENT_DELIVERY_GRANT_INVALID');
+    if(row.status!=='ACTIVE'||Date.parse(row.expiresAt)<=this.#now()||!this.#authorized(session,evidence,documentRef,traceId))throw new Error('DOCUMENT_DELIVERY_GRANT_INVALID');
     row.status='CONSUMED';row.consumedAt=this.#at();let bytes;try{bytes=this.#storage.get({tenantId:session.tenantId,objectRef:evidence.objectRef});}catch{this.#event(row,'DOCUMENT_DELIVERY_FAILED',traceId,{reasonCode:'STORAGE_UNAVAILABLE'});throw new Error('DOCUMENT_DELIVERY_UNAVAILABLE');}
     if(!Buffer.isBuffer(bytes)||bytes.length!==evidence.size||sha(bytes)!==evidence.sha256){this.#event(row,'DOCUMENT_DELIVERY_FAILED',traceId,{reasonCode:'INTEGRITY_FAILURE'});throw new Error('DOCUMENT_DELIVERY_UNAVAILABLE');}
-    this.#event(row,'DOCUMENT_DELIVERED',traceId,{documentRefHash:row.documentRefHash,bindingHash:row.bindingHash,sha256:evidence.sha256,size:evidence.size});return Object.freeze({documentRef,matterId:row.matterId,contentType:evidence.contentType,size:evidence.size,sha256:evidence.sha256,body:Buffer.from(bytes)});
+    const body=Buffer.from(bytes);try{if(Date.parse(row.expiresAt)<=this.#now()||!this.#authorized(session,evidence,documentRef,traceId))throw new Error('DOCUMENT_DELIVERY_GRANT_INVALID');this.#event(row,'DOCUMENT_DELIVERED',traceId,{documentRefHash:row.documentRefHash,bindingHash:row.bindingHash,sha256:evidence.sha256,size:evidence.size});return Object.freeze({documentRef,matterId:row.matterId,contentType:evidence.contentType,size:evidence.size,sha256:evidence.sha256,body});}catch(error){body.fill(0);throw error;}
   }
   listEvents(tenantId){tenantId=id(tenantId,'DOCUMENT_DELIVERY_TENANT_REQUIRED');return Object.freeze(this.#events.filter(x=>x.tenantId===tenantId).map(x=>Object.freeze(clone(x))));}
-  #authorized(session,evidence,documentRef,traceId){if(documentAccessAllowed(session,evidence.document,evidence.matter,{now:this.#now()}))return true;if(!this.#support)return false;try{this.#support.assertDocumentRead(session,{matterId:evidence.matter.id,documentRef,traceId});return true;}catch{return false;}}
+  #authorized(session,evidence,documentRef,traceId){if(documentAccessAllowed(session,evidence.document,evidence.matter,{now:this.#now()}))return true;if(!this.#support)return false;try{const grant=this.#support.assertDocumentRead(session,{matterId:evidence.matter.id,documentRef,traceId});discardLifecyclePromise(grant);return !!grant&&Object.getOwnPropertyDescriptor(grant,'tenantId')?.value===session.tenantId&&Object.getOwnPropertyDescriptor(grant,'requesterId')?.value===session.actorId&&Object.getOwnPropertyDescriptor(grant,'matterId')?.value===evidence.matter.id&&Object.getOwnPropertyDescriptor(grant,'documentRef')?.value===documentRef&&Object.getOwnPropertyDescriptor(grant,'scope')?.value==='DOCUMENT_READ'&&typeof Object.getOwnPropertyDescriptor(grant,'requestId')?.value==='string';}catch{return false;}}
   async #resolveSafe(tenantId,documentRef){let value;try{value=await this.#resolve({tenantId,documentRef});}catch{throw new Error('DOCUMENT_DELIVERY_UNAVAILABLE');}if(!value)throw new Error('DOCUMENT_DELIVERY_UNAVAILABLE');return resolved(value,tenantId,documentRef);}
   #event(row,eventType,traceId,evidence){this.#events.push(Object.freeze({id:`dde_${crypto.randomUUID()}`,tenantId:row.tenantId,grantId:row.id,actorId:row.actorId,matterId:row.matterId,eventType,traceId,at:this.#at(),evidence:Object.freeze(clone(evidence))}));}
   #at(){return new Date(this.#now()).toISOString();}
