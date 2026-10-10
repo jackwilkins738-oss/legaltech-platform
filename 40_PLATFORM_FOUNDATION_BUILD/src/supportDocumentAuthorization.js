@@ -4,11 +4,11 @@
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const deny=()=>new Error('SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE');
 const same=(a,b)=>typeof a==='string'&&typeof b==='string'&&UUID.test(a)&&UUID.test(b)&&a===b;
-function snapshot(value,keys){
+function snapshot(value,keys,required=keys){
   if(value===null||typeof value!=='object'||Object.getPrototypeOf(value)!==Object.prototype)throw deny();
   const props=Object.getOwnPropertyDescriptors(value);
-  if(Reflect.ownKeys(value).some(k=>!keys.includes(k))||keys.some(k=>!props[k]||!Object.hasOwn(props[k],'value')))throw deny();
-  return Object.freeze(Object.fromEntries(keys.map(k=>[k,props[k].value])));
+  if(Reflect.ownKeys(value).some(k=>!keys.includes(k))||required.some(k=>!props[k])||Reflect.ownKeys(value).some(k=>!Object.hasOwn(props[k]??{},'value')))throw deny();
+  return Object.freeze(Object.fromEntries(Reflect.ownKeys(value).map(k=>[k,props[k].value])));
 }
 /**
  * The binding must be resolved from trusted server-side case/matter mapping,
@@ -18,7 +18,7 @@ export function createSupportDocumentAuthorization({authorizeDocument,resolveBin
   if([authorizeDocument,resolveBinding,readCurrentGrant].some(f=>typeof f!=='function'))throw new Error('SUPPORT_DOCUMENT_AUTHORIZATION_CONFIGURATION_INVALID');
   return async function authorize(input){
     try{
-      const request=snapshot(input,['tenantId','actorId','eventId','expectedResultJobId','expectedResultHash','artifactHash','phase','operation','signal','objectKey','versionId','size','contentType','evidenceHash','region','revision','state','malwareScan','parserIsolation']);
+      const request=snapshot(input,['tenantId','actorId','eventId','expectedResultJobId','expectedResultHash','artifactHash','phase','operation','signal','objectKey','versionId','size','contentType','evidenceHash','region','revision','state','malwareScan','parserIsolation'],['tenantId','actorId','eventId','phase','operation','signal']);
       if(request.operation!=='REVIEW_DOCUMENT'||!['RESOLVE','READ_VERSION','RELEASE'].includes(request.phase)||request.signal?.aborted)throw deny();
       const binding=snapshot(await resolveBinding(Object.freeze({tenantId:request.tenantId,actorId:request.actorId,eventId:request.eventId,signal:request.signal})),['tenantId','actorId','eventId','requestId','matterId','documentRefHash']);
       if(!same(binding.tenantId,request.tenantId)||!same(binding.actorId,request.actorId)||!same(binding.eventId,request.eventId)||!UUID.test(binding.requestId)||!UUID.test(binding.matterId)||!(/^[0-9a-f]{64}$/.test(binding.documentRefHash)))throw deny();
