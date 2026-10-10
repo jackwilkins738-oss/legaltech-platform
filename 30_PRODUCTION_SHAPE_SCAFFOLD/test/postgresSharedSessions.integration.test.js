@@ -299,6 +299,64 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       }
     }
   });
+  await t.test('V162 database clock denies expired and future grants without application cleanup',async()=>{
+    const lookup=createTenantScopedPostgresSupportGrantLookup({pool:makePool('legaltech_support_reader_ci'),expectedRole:'legaltech_support_reader_ci'});
+    const matterId='11700000-0000-4000-8000-000000000031';
+    for(const future of [false,true]){
+      const requestId=uuid();
+      // All three timestamps derive from one database statement, never the test host clock.
+      await admin.query(`WITH request AS (
+        INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,ticket_ref_hash,purpose_hash,trace_id,created_at,expires_at)
+        VALUES($1,$2,$3,$4,'MATTER_READ',$5,$6,'v162-clock',statement_timestamp()+$7::interval,statement_timestamp()+$8::interval)
+        RETURNING id,tenant_id,created_at)
+        INSERT INTO public.support_access_approvals(tenant_id,request_id,approver_id,trace_id,approved_at)
+        SELECT tenant_id,id,$9,'v162-clock',created_at+interval '1 minute' FROM request`,
+        [requestId,tenantA,actorA,matterId,'a'.repeat(64),'b'.repeat(64),future?'5 minutes':'-20 minutes',future?'15 minutes':'-10 minutes','11700000-0000-4000-8000-000000000013']);
+      await assert.rejects(lookup({tenantId:tenantA,actorId:actorA,requestId,matterId,scope:'MATTER_READ',documentRefHash:null}),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    }
+  });
+  await t.test('V162 document grants require exact resource, actor, matter and scope pins',async()=>{
+    const expectedRole='legaltech_support_operator_ci';
+    const service=createTenantScopedPostgresSupportGrantMutations({pool:makePool(expectedRole),expectedRole,liveSession:{assertCurrent:async()=>true}});
+    const session={tenantId:tenantA,actorId:actorA,sessionId:uuid()},approver={...session,actorId:'11700000-0000-4000-8000-000000000013'};
+    const matterId='11700000-0000-4000-8000-000000000031',documentRefHash='d'.repeat(64);
+    const request=await service.request({session,matterId,scope:'DOCUMENT_READ',documentRefHash,ticketRefHash:'a'.repeat(64),purposeHash:'b'.repeat(64),traceId:'v162-document'});
+    await service.approve({session:approver,requestId:request.requestId,traceId:'v162-document'});
+    const lookup=createTenantScopedPostgresSupportGrantLookup({pool:makePool('legaltech_support_reader_ci'),expectedRole:'legaltech_support_reader_ci'});
+    const input={tenantId:tenantA,actorId:actorA,requestId:request.requestId,matterId,scope:'DOCUMENT_READ',documentRefHash};
+    assert.equal((await lookup(input)).active,true);
+    for(const mismatch of [{documentRefHash:'e'.repeat(64)},{actorId:approver.actorId},{matterId:uuid()},{requestId:uuid()},{scope:'MATTER_READ',documentRefHash:null},{tenantId:tenantB,actorId:actorB}]){
+      await assert.rejects(lookup({...input,...mismatch}),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    }
+    await service.revoke({session:approver,requestId:request.requestId,reasonHash:'f'.repeat(64),traceId:'v162-document'});
+    await assert.rejects(lookup(input),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    const events=await admin.query('SELECT resource_hash FROM public.support_access_events WHERE tenant_id=$1 AND request_id=$2 ORDER BY id',[tenantA,request.requestId]);
+    assert.deepEqual(events.rows.map(row=>row.resource_hash),[documentRefHash,documentRefHash,documentRefHash]);
+  });
+  await t.test('V162 database audit rejection rolls back every support transition',async()=>{
+    const expectedRole='legaltech_support_operator_ci';
+    const service=createTenantScopedPostgresSupportGrantMutations({pool:makePool(expectedRole),expectedRole,liveSession:{assertCurrent:async()=>true}});
+    const session={tenantId:tenantA,actorId:actorA,sessionId:uuid()},approver={...session,actorId:'11700000-0000-4000-8000-000000000013'};
+    const args={matterId:'11700000-0000-4000-8000-000000000031',scope:'MATTER_READ',ticketRefHash:'a'.repeat(64),purposeHash:'b'.repeat(64),traceId:'v162-audit-failure'};
+    // Disposable database fault injection only; no production migration or grant change.
+    await admin.query(`CREATE FUNCTION public.v162_reject_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.trace_id='v162-audit-failure' THEN RAISE EXCEPTION 'synthetic audit unavailable'; END IF;
+      RETURN NEW; END; $$;
+      CREATE TRIGGER v162_reject_audit BEFORE INSERT ON public.support_access_events FOR EACH ROW EXECUTE FUNCTION public.v162_reject_audit()`);
+    try{
+      await assert.rejects(service.request({session,...args}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+      const rows=await admin.query('SELECT id FROM public.support_access_requests WHERE trace_id=$1',[args.traceId]);assert.equal(rows.rows.length,0);
+      for(const operation of ['approve','revoke']){
+        const request=await service.request({session,...args,traceId:'v162-setup'});
+        await assert.rejects(service[operation]({session:approver,requestId:request.requestId,reasonHash:'c'.repeat(64),traceId:args.traceId}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+        const table=operation==='approve'?'support_access_approvals':'support_access_revocations';
+        const mutated=await admin.query(`SELECT id FROM public.${table} WHERE tenant_id=$1 AND request_id=$2`,[tenantA,request.requestId]);assert.equal(mutated.rows.length,0);
+        const events=await admin.query('SELECT event_type FROM public.support_access_events WHERE tenant_id=$1 AND request_id=$2',[tenantA,request.requestId]);assert.deepEqual(events.rows.map(row=>row.event_type),['REQUESTED']);
+      }
+    }finally{
+      await admin.query('DROP TRIGGER v162_reject_audit ON public.support_access_events; DROP FUNCTION public.v162_reject_audit()');
+    }
+  });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
     const results=await Promise.all(Array.from({length:12},(_,i)=>transactions.run(scopes[i%2],async tx=>{
