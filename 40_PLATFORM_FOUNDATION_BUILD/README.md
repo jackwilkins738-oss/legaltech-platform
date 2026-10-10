@@ -406,3 +406,10 @@ V101 adds tenant-scoped circuit breaking, bounded dependency concurrency and ful
 
 ### V102 graceful deployment drain
 V102 adds shared-state deployment draining and readiness control so rolling deploys/maintenance do not accept new mutable work while in-flight operations finish.
+
+### V138 recovery artifact evidence
+
+Restore evidence now checks actual database/document bytes against a committed
+inventory, verifies complete history and rolls recovery/audit rows back together.
+See [V138 recovery evidence](docs/V138_RECOVERY_EVIDENCE_BATCH.md) for the bounded
+local checker, trusted-provider contract and outstanding managed-restore limits.

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {PlatformStore} from '../src/store.js';
 import {RecoverySafety,createBackupManifest,validateBackupManifest,backupManifestHash} from '../src/recoverySafety.js';
+import {RestoredArtifactVerifier,restoreInventoryHash} from '../src/restoredArtifacts.js';
 import {SecurityMonitor} from '../src/securityMonitoring.js';
 
 const H=seed=>crypto.createHash('sha256').update(seed).digest('hex');
@@ -23,6 +24,14 @@ test('production recovery is denied without explicit enablement and step-up',()=
 
 test('restore start is bound to immutable authorization and cannot be replayed',()=>{const now=Date.now(),x=fixture(now);try{const m=manifest(now);x.recovery.recordBackup({manifest:m,traceId:'b'});const auth=x.recovery.authorizeRestore({tenantId:'ta',manifest:m,traceId:'a',requesterId:'u1',approverId:'u2',reason:'drill'});const started=x.recovery.beginRestore({authorization:auth,traceId:'s',actorId:'restore-service'});assert.equal(started.eventType,'RESTORE_STARTED');assert.throws(()=>x.recovery.beginRestore({authorization:auth,traceId:'s2',actorId:'restore-service'}),/ALREADY_STARTED/);assert.throws(()=>x.recovery.beginRestore({authorization:{...auth,backupId:'evil'},traceId:'x',actorId:'restore-service'}),/UNVERIFIED/);}finally{x.close();}});
 
-test('restore verification requires isolated target and complete integrity checks',()=>{const now=Date.now(),x=fixture(now);try{const m=manifest(now);x.recovery.recordBackup({manifest:m,traceId:'b'});const auth=x.recovery.authorizeRestore({tenantId:'ta',manifest:m,traceId:'a',requesterId:'u1',approverId:'u2',reason:'drill'});x.recovery.beginRestore({authorization:auth,traceId:'s',actorId:'restore-service'});const base={tenantId:'ta',restoreId:auth.restoreId,traceId:'v',actorId:'validator',restoredContentHash:H('restored'),expectedManifestHash:m.manifestHash,integrityChecks:{database:true,auditChain:true,objectReferences:true,tenantBoundary:true}};assert.throws(()=>x.recovery.verifyRestore({...base,isolatedTarget:false}),/NOT_ISOLATED/);assert.throws(()=>x.recovery.verifyRestore({...base,integrityChecks:{...base.integrityChecks,tenantBoundary:false}}),/INCOMPLETE/);const ok=x.recovery.verifyRestore(base);assert.equal(ok.eventType,'RESTORE_VERIFIED');assert.equal(x.store.verifyRecoveryEvidenceChain('ta'),true);assert.throws(()=>x.recovery.verifyRestore(base),/ALREADY_VERIFIED/);}finally{x.close();}});
+test('restore verification requires isolated target and complete integrity checks',()=>{const now=Date.now(),x=fixture(now);try{
+  const bytes=Buffer.from('content');const inventory={version:'v138',tenantId:'ta',backupId:'b1',objectCount:0,artifacts:[{artifactId:'database',kind:'DATABASE',size:bytes.length,hash:H(bytes)}]};
+  const m=manifest(now,{contentHash:restoreInventoryHash(inventory)});x.recovery.recordBackup({manifest:m,traceId:'b'});
+  const auth=x.recovery.authorizeRestore({tenantId:'ta',manifest:m,traceId:'a',requesterId:'u1',approverId:'u2',reason:'drill'});x.recovery.beginRestore({authorization:auth,traceId:'s',actorId:'restore-service'});
+  const verifier=new RestoredArtifactVerifier({inventory,context:{restoreId:auth.restoreId,targetEnvironment:auth.targetEnvironment,backupManifestHash:m.manifestHash}});verifier.checkArtifact({artifactId:'database',bytes});
+  const base={tenantId:'ta',restoreId:auth.restoreId,traceId:'v',actorId:'validator',restoredContentHash:m.contentHash,expectedManifestHash:m.manifestHash,isolatedTarget:true,artifactEvidence:verifier.complete(),integrityChecks:{database:true,auditChain:true,objectReferences:true,tenantBoundary:true,keyAccess:true,deletions:true,externalEffects:true}};
+  assert.throws(()=>x.recovery.verifyRestore({...base,isolatedTarget:false}),/NOT_ISOLATED/);assert.throws(()=>x.recovery.verifyRestore({...base,integrityChecks:{...base.integrityChecks,tenantBoundary:false}}),/INCOMPLETE/);
+  assert.equal(x.recovery.verifyRestore(base).eventType,'RESTORE_VERIFIED');assert.equal(x.store.verifyRecoveryEvidenceChain('ta'),true);assert.throws(()=>x.recovery.verifyRestore(base),/ALREADY_VERIFIED/);
+}finally{x.close();}});
 
 test('recovery evidence chain detects historical tampering',()=>{const now=Date.now(),x=fixture(now);try{x.recovery.recordBackup({manifest:manifest(now),traceId:'b'});assert.equal(x.store.verifyRecoveryEvidenceChain('ta'),true);const row=x.store.db.prepare('SELECT data_json FROM recovery_evidence LIMIT 1').get();const item=JSON.parse(row.data_json);item.outcome='FAILED';x.store.db.exec('DROP TRIGGER recovery_evidence_append_only_update');x.store.db.prepare('UPDATE recovery_evidence SET data_json=?').run(JSON.stringify(item));assert.equal(x.store.verifyRecoveryEvidenceChain('ta'),false);}finally{x.close();}});
