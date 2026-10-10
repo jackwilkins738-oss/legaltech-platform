@@ -420,3 +420,11 @@ Tenant/purpose key identities cannot collide, lifecycle metadata/events change
 atomically, and clocks, authorization callbacks and mutation requests fail closed.
 See [V139 key/credential safety](docs/V139_KEY_CREDENTIAL_SAFETY_BATCH.md) for the
 reference boundary and outstanding durable KMS/provider work.
+
+### V140 incident and emergency-stop safeguards
+
+Containment requires exact activation receipts and current same-tenant stop
+confirmation. Uncertain effects retain the complete pending plan; failed stop
+release and incident audit cannot claim success. See
+[V140 incident boundary](docs/V140_INCIDENT_BOUNDARY_BATCH.md) for reference
+guarantees, retry rules and outstanding durable/provider enforcement.

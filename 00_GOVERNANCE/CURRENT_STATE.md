@@ -4,6 +4,12 @@
 
 A partner-firm user reports (second hand, SINGLE USER REPORT) that handlers' tasks stall for hours waiting on supervisor approval by email. Desk research found that the SRA's June 2026 post-*Mazur* supervision guidance expects escalation routes, available supervisors and management information on case flow. That makes the hypothesis worth testing, not validated. It changes no wedge or priority. The partner is logging approvals for a week. See `01_RESEARCH_EVIDENCE/APPROVAL_WAIT_DESK_RESEARCH_2026-10.md` (actions A1–A8) and the raw note in `39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/`. V131 (durable writeback execution) is paused until that evidence is in.
 
+## V140 — Confirmed incident containment and atomic emergency stops
+
+V140 verifies synchronous, exact incident/tenant/control activation receipts and same-tenant status readback before reference containment succeeds. Partial or uncertain provider/audit outcomes retain a full pinned CONTAINING plan and block recovery; retries cannot silently reduce the plan. Incident lifecycle/audit failures cannot commit successful local evidence. Interlock release failures preserve ACTIVE stops and their operation blocks. Strict mutation fields, validated clocks and callback recursion checks cover both registries. See `40_PLATFORM_FOUNDATION_BUILD/docs/V140_INCIDENT_BOUNDARY_BATCH.md`.
+
+Local suites pass 2,947 platform and 140 scaffold tests, including 87 new regressions. PostgreSQL is skipped locally and PostgreSQL 17 CI must pass before merge. No migration/dependency is added. These are process-local reference boundaries, not deployment-wide emergency controls or a distributed provider/audit transaction. Durable incident adoption, provider reconciliation, release fencing and real operating drills remain outstanding. D-018, the pre-TO/customer-data gates and V131 execution pause remain in force.
+
 ## V139 — Tenant-safe atomic key and credential metadata
 
 V139 removes a tenant/purpose key-identity collision, requires exact stored tenant/purpose bindings for decrypt eligibility, and rejects coerced generations and hidden/accessor mutation fields. Key and secret lifecycle transitions now commit reference metadata/events together with one validated clock observation. Clock/authorization recursion cannot commit a partially changed registry, even if the callback catches the nested error. Failed credential activation preserves the old active generation. See `40_PLATFORM_FOUNDATION_BUILD/docs/V139_KEY_CREDENTIAL_SAFETY_BATCH.md`.
