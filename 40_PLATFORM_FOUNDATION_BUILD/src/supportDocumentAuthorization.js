@@ -22,10 +22,15 @@ export function createSupportDocumentAuthorization({authorizeDocument,resolveBin
       if(request.operation!=='REVIEW_DOCUMENT'||!['RESOLVE','READ_VERSION','RELEASE'].includes(request.phase)||request.signal?.aborted)throw deny();
       const binding=snapshot(await resolveBinding(Object.freeze({tenantId:request.tenantId,actorId:request.actorId,eventId:request.eventId,signal:request.signal})),['tenantId','actorId','eventId','requestId','matterId','documentRefHash']);
       if(!same(binding.tenantId,request.tenantId)||!same(binding.actorId,request.actorId)||!same(binding.eventId,request.eventId)||!UUID.test(binding.requestId)||!UUID.test(binding.matterId)||!(/^[0-9a-f]{64}$/.test(binding.documentRefHash)))throw deny();
-      const decision=await readCurrentGrant(Object.freeze({tenantId:binding.tenantId,actorId:binding.actorId,requestId:binding.requestId,matterId:binding.matterId,scope:'DOCUMENT_READ',documentRefHash:binding.documentRefHash,signal:request.signal}));
-      if(decision?.active!==true||request.signal?.aborted)throw deny();
-      const permitted=await authorizeDocument(input);
+      const lookup=Object.freeze({tenantId:binding.tenantId,actorId:binding.actorId,requestId:binding.requestId,matterId:binding.matterId,scope:'DOCUMENT_READ',documentRefHash:binding.documentRefHash,signal:request.signal});
+      // Do not treat an earlier grant read as authority after the separate
+      // existing document-permission provider has awaited external work.
+      const first=await readCurrentGrant(lookup);
+      if(first?.active!==true||request.signal?.aborted)throw deny();
+      const permitted=await authorizeDocument(Object.freeze({...request}));
       if(permitted!==true||request.signal?.aborted)throw deny();
+      const last=await readCurrentGrant(lookup);
+      if(last?.active!==true||request.signal?.aborted)throw deny();
       return true;
     }catch{throw deny();}
   };
