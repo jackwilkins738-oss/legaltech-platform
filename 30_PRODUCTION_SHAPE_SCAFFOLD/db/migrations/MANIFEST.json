@@ -301,6 +301,11 @@
       "file": "060_support_reader_boundary.sql",
       "sha256": "7fafe8195b4596b8e34b8ef13f2ae730e23b7d1799e2b54b5ef69f7e09c876e3",
       "destructive": false
+    },
+    {
+      "file": "061_support_operator_boundary.sql",
+      "sha256": "b129259c255105d09c1b26ed1a3072ff21f71ed8b1b2a17384fcb01d3d69708f",
+      "destructive": false
     }
   ]
 }

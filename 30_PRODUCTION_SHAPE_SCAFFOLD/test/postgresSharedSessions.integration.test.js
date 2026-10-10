@@ -95,8 +95,8 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
   const one=new PostgresServerSessionStore({...options,brokerPool:brokerOne}),two=new PostgresServerSessionStore({...options,brokerPool:brokerTwo});
   const session=(providerSessionId=`provider-${uuid()}`)=>({tenantId:tenantA,actorId:actorA,capabilities:['matter:read'],roles:[],authContext:{method:'OIDC',mfaVerified:true,authTime:null,expiresAt:new Date(Date.now()+3600000).toISOString(),providerSessionId}});
 
-  await t.test('all 60 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
-    assert.equal(manifest.migrations.length,60);
+  await t.test('all 61 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
+    assert.equal(manifest.migrations.length,61);
     const result=await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({});assert.equal(result.ok,true);
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
@@ -151,6 +151,29 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA,readOnly:true},async tx=>
       tx.query('SELECT ticket_ref_hash FROM public.support_access_requests')),/UNAVAILABLE/);
     await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA,readOnly:true},async tx=>
+      tx.query('SELECT * FROM public.support_access_events')),/UNAVAILABLE/);
+  });
+  await t.test('V154 support operator cannot read audit history or modify append-only evidence',async()=>{
+    const role=await admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='legaltech_support_operator'");
+    assert.deepEqual(role.rows[0],{rolcanlogin:false,rolsuper:false,rolbypassrls:false});
+    const rights=await admin.query(`SELECT
+      has_column_privilege('legaltech_support_operator','public.support_access_requests','tenant_id','INSERT') AS request_insert,
+      has_column_privilege('legaltech_support_operator','public.support_access_approvals','tenant_id','INSERT') AS approval_insert,
+      has_column_privilege('legaltech_support_operator','public.support_access_revocations','tenant_id','INSERT') AS revocation_insert,
+      has_column_privilege('legaltech_support_operator','public.support_access_events','tenant_id','INSERT') AS audit_insert,
+      has_table_privilege('legaltech_support_operator','public.support_access_events','SELECT') AS audit_read,
+      has_table_privilege('legaltech_support_operator','public.support_access_requests','UPDATE,DELETE,TRUNCATE') AS request_mutation`);
+    assert.deepEqual(rights.rows[0],{request_insert:true,approval_insert:true,revocation_insert:true,audit_insert:true,audit_read:false,request_mutation:false});
+    const login='legaltech_support_operator_ci';
+    await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+    await admin.query(`GRANT legaltech_support_operator TO ${login}`);
+    const pool=makePool(login);
+    const operator=new PostgresTenantTransactions({pool,expectedRole:login});
+    await operator.run({tenantId:tenantA,actorId:actorA},async tx=>{
+      const r=await tx.query("SELECT count(*)::integer AS n FROM public.support_access_requests WHERE tenant_id=$1",[tenantA]);
+      assert.equal(r.rows[0].n,0);
+    });
+    await assert.rejects(operator.run({tenantId:tenantA,actorId:actorA},tx=>
       tx.query('SELECT * FROM public.support_access_events')),/UNAVAILABLE/);
   });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
