@@ -1,0 +1,24 @@
+{
+  "profile": {
+    "connectionLimit": 120,
+    "reservedConnections": 20,
+    "maxConcurrentReplicas": 3,
+    "maxWaitingPerPool": 32
+  },
+  "pools": [
+    {"name":"DOMAIN","max":2,"connectionTimeoutMillis":1000},
+    {"name":"RELAY","max":2,"connectionTimeoutMillis":1000},
+    {"name":"PRODUCER","max":2,"connectionTimeoutMillis":1000},
+    {"name":"WORKER","max":2,"connectionTimeoutMillis":1000},
+    {"name":"DOMAIN_READER","max":2,"connectionTimeoutMillis":1000},
+    {"name":"QUEUE_READER","max":2,"connectionTimeoutMillis":1000},
+    {"name":"DRAIN_WORKER","max":2,"connectionTimeoutMillis":1000},
+    {"name":"DRAIN_OPERATOR","max":2,"connectionTimeoutMillis":1000},
+    {"name":"DRAIN_READER","max":2,"connectionTimeoutMillis":1000},
+    {"name":"GRAPH_PRODUCER","max":2,"connectionTimeoutMillis":1000},
+    {"name":"GRAPH_WORKER","max":2,"connectionTimeoutMillis":1000},
+    {"name":"GRAPH_READER","max":2,"connectionTimeoutMillis":1000},
+    {"name":"REVIEW","max":2,"connectionTimeoutMillis":1000},
+    {"name":"REVIEW_READER","max":2,"connectionTimeoutMillis":1000}
+  ]
+}

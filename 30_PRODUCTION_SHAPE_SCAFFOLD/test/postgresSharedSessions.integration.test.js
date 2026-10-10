@@ -39,9 +39,13 @@ import {createApiServer} from '../../40_PLATFORM_FOUNDATION_BUILD/src/httpApi.js
 import {ManagedWorkerArtifacts} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedWorkerArtifacts.js';
 import {ManagedDeploymentDrain} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedDeploymentDrain.js';
 import {createDurablePostgresProcessingService} from '../../40_PLATFORM_FOUNDATION_BUILD/src/durableProcessingService.js';
+import {DeploymentCapacity} from '../../40_PLATFORM_FOUNDATION_BUILD/src/deploymentCapacity.js';
 import {DeploymentDrainController} from '../../40_PLATFORM_FOUNDATION_BUILD/src/deploymentDrain.js';
 import {createPostgresRuntimeProbe} from '../src/postgresRuntime.js';
 
+// Synthetic deployment capacity includes rollout overlap and other test principals.
+const capacityProfile={connectionLimit:100,reservedConnections:20,maxConcurrentReplicas:2,maxWaitingPerPool:32};
+const createCapacityBoundService=options=>createDurablePostgresProcessingService({capacity:capacityProfile,...options});
 const enabled=process.env.LEGALTECH_RUN_POSTGRES_TESTS==='true';
 const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-8000-000000000011';
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
@@ -819,7 +823,7 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
   });
   await t.test('V127 nine-pool service uses real durable drain for canary readiness and global shutdown',async()=>{
     const {drain:unusedDomainDrain,...serviceDomain}=pipelineOptions,{drain:unusedWorkerDrain,...serviceWorker}=managedWorker;
-    const root=createDurablePostgresProcessingService({drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},processing:{domain:serviceDomain,worker:serviceWorker,
+    const root=createCapacityBoundService({drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},processing:{domain:serviceDomain,worker:serviceWorker,
       queueReaderPool,expectedQueueReaderRole:'legaltech_queue_reader_ci',authorizeResultRead:async()=>true,authorizeAdoption:async()=>true,
       artifacts:{manifest:{resolveVersion:async r=>manifests.get(r.id),probe:async()=>({ok:true})},storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.hash,contentLength:r.size,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},authorizeVersion:async()=>true,verifyEvidence:async()=>true},
       canary:{tenantId:tenantA,actorId:actorA,serviceActorId:serviceActor,authorizeCanary:async()=>true,createFixture:async()=>{const payloadId=uuid();manifests.set(payloadId,{tenantId:tenantA,id:payloadId,kind:'PAYLOAD',hash:artifactHash,objectKey:`${tenantA}/canary/${payloadId}`,versionId:'synthetic-v127',size:bytes.length,state:'PROCESSING_ALLOWED',evidenceHash:reason,region:'synthetic-region',revision:1});return {confirmedSynthetic:true,payloadId,payloadHash:artifactHash,expectedResultCode:'CLASSIFIED',expectedResultHash:resultHash};},timeoutMs:5000,maxAgeMs:30000}},
@@ -827,7 +831,18 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     let stopped;
     try{await root.start({port:0});const base=`http://127.0.0.1:${root.server.address().port}`;let response;const deadline=Date.now()+10000;
       do{response=await fetch(base+'/api/v1/ready');await response.arrayBuffer();if(response.status===200)break;await new Promise(r=>setTimeout(r,25));}while(Date.now()<deadline);
-      assert.equal(response.status,200);stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true);
+      assert.equal(response.status,200);
+      await t.test('V137 actual durable service rejects pool drift in ready and restart',async()=>{
+        const before=queueReaderPool.options.max;queueReaderPool.options.max=before+1;
+        try{
+          assert.equal(root.deploymentCapacity.status().healthy,false);
+          let unhealthy;const until=Date.now()+3000;
+          do{unhealthy=await fetch(base+'/api/v1/ready');await unhealthy.arrayBuffer();if(unhealthy.status===503)break;await new Promise(r=>setTimeout(r,25));}while(Date.now()<until);
+          assert.equal(unhealthy.status,503);await assert.rejects(root.start({port:0}),/DEPLOYMENT_CAPACITY_UNVERIFIED/);
+        }finally{queueReaderPool.options.max=before;}
+        assert.equal(root.deploymentCapacity.status().uncertain,true);
+      });
+      assert.equal(root.deploymentCapacity.status().poolCount,9);assert.equal(root.deploymentCapacity.status().healthy,false);stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true);
       const global=await durable.status(scope);assert.equal(global.state,'DRAINED');assert.equal(global.inFlight,0);assert.equal(root.server.listening,false);
     }finally{if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
   });
@@ -943,9 +958,9 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       artifacts:{manifest:{resolveVersion:async r=>manifests.get(r.id),probe:async()=>({ok:true})},storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.hash,contentLength:r.size,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},authorizeVersion:async()=>true,verifyEvidence:async()=>true},
       canary:{tenantId:tenantA,actorId:actorA,serviceActorId:serviceActor,authorizeCanary:async()=>true,createFixture:async()=>{const fixture=approvedUpload(),m=approvedSources.get(fixture.uploadId);return {confirmedSynthetic:true,payloadId:m.payloadId,payloadHash:m.payloadHash,expectedResultCode:'CLASSIFIED',expectedResultHash:resultHash};},timeoutMs:5000,maxAgeMs:30000}},
       http:httpFixture,probes:Object.fromEntries(REQUIRED_PRODUCTION_PROBES.map(k=>[k,async()=>({ok:true})])),readiness:{probeTimeoutMs:5000},canaryIntervalMs:10000};
-    for(const field of ['handlers','drain','readiness'])assert.throws(()=>createDurablePostgresProcessingService({...options,ingress:{...options.ingress,[field]:{}}}),/INGRESS_OVERRIDE_FORBIDDEN/);
-    assert.throws(()=>createDurablePostgresProcessingService({...options,http:{...options.http,allowDirectCommands:true}}),/HTTP_OVERRIDE_FORBIDDEN/);
-    const root=createDurablePostgresProcessingService(options);let stopped;
+    for(const field of ['handlers','drain','readiness'])assert.throws(()=>createCapacityBoundService({...options,ingress:{...options.ingress,[field]:{}}}),/INGRESS_OVERRIDE_FORBIDDEN/);
+    assert.throws(()=>createCapacityBoundService({...options,http:{...options.http,allowDirectCommands:true}}),/HTTP_OVERRIDE_FORBIDDEN/);
+    const root=createCapacityBoundService(options);let stopped;
     try{await root.start({port:0});const base=`http://127.0.0.1:${root.server.address().port}`;
       const ready=async()=>{const deadline=Date.now()+10000;let response;do{response=await fetch(base+'/api/v1/ready');await response.arrayBuffer();if(response.status===200)return;await new Promise(r=>setTimeout(r,25));}while(Date.now()<deadline);assert.equal(response.status,200);};
       await ready();const bypass=await fetch(base+'/api/v1/processing/inbound',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});assert.equal(bypass.status,404);await bypass.arrayBuffer();
@@ -1093,10 +1108,10 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     const options={drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},ingress:ingressOptions,webhooks,processing:{domain:serviceDomain,worker:serviceWorker,queueReaderPool,expectedQueueReaderRole:'legaltech_queue_reader_ci',authorizeResultRead:async()=>true,authorizeAdoption:async()=>true,
       artifacts:{manifest:{resolveVersion:async r=>manifests.get(r.id),probe:async()=>({ok:true})},storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.hash,contentLength:r.size,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},authorizeVersion:async()=>true,verifyEvidence:async()=>true},
       canary:{tenantId:tenantA,actorId:actorA,serviceActorId:serviceActor,authorizeCanary:async c=>{canaryPhases.push(c.phase);return true;},createFixture:async()=>{const fixture=approvedUpload(),m=approvedSources.get(fixture.uploadId);return {confirmedSynthetic:true,payloadId:m.payloadId,payloadHash:m.payloadHash,expectedResultCode:'CLASSIFIED',expectedResultHash:resultHash};},timeoutMs:5000,maxAgeMs:30000}},http:httpFixture,probes:Object.fromEntries(REQUIRED_PRODUCTION_PROBES.map(k=>[k,async()=>({ok:true})])),readiness:{probeTimeoutMs:5000},canaryIntervalMs:10000};
-    for(const field of ['producer','worker','reader','processingIngress','drain','readiness','operation','relay'])assert.throws(()=>createDurablePostgresProcessingService({...options,webhooks:{...webhooks,[field]:{}}}),/GRAPH_OVERRIDE_FORBIDDEN/);
-    assert.throws(()=>createDurablePostgresProcessingService({...options,http:{...httpFixture,graphIntake:{}}}),/HTTP_OVERRIDE_FORBIDDEN/);
-    assert.throws(()=>createDurablePostgresProcessingService({...options,webhooks:{...webhooks,producerOptions:{...graphProducerOptions,pool:drainWorkerPool}}}),/GRAPH_SEPARATE_POOLS_REQUIRED/);
-    const root=createDurablePostgresProcessingService(options);let stopped;
+    for(const field of ['producer','worker','reader','processingIngress','drain','readiness','operation','relay'])assert.throws(()=>createCapacityBoundService({...options,webhooks:{...webhooks,[field]:{}}}),/GRAPH_OVERRIDE_FORBIDDEN/);
+    assert.throws(()=>createCapacityBoundService({...options,http:{...httpFixture,graphIntake:{}}}),/HTTP_OVERRIDE_FORBIDDEN/);
+    assert.throws(()=>createCapacityBoundService({...options,webhooks:{...webhooks,producerOptions:{...graphProducerOptions,pool:drainWorkerPool}}}),/GRAPH_SEPARATE_POOLS_REQUIRED/);
+    const root=createCapacityBoundService(options);let stopped;
     try{await root.start({port:0});const baseUrl=`http://127.0.0.1:${root.server.address().port}`,ready=async()=>{let response;const end=Date.now()+10000;do{response=await fetch(baseUrl+'/api/v1/ready');await response.arrayBuffer();if(response.status===200)return;await new Promise(r=>setTimeout(r,25));}while(Date.now()<end);assert.equal(response.status,200,JSON.stringify({service:root.status(),graph:root.graphIntake.status(),graphProbe:await root.graphIntake.probe(),canaryPhases,drain:await durable.status(scope),jobs:(await admin.query("SELECT kind,status,attempts,last_error_code,result_code FROM queue_security.jobs WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 10",[tenantA])).rows}));};await ready();
       // Admission can briefly close while a concurrent shared lease acquisition
       // is unacknowledged. Exercise Graph's durable retry contract on 503.
@@ -1248,10 +1263,10 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       artifacts:{manifest:{resolveVersion:async r=>manifests.get(r.id),probe:async()=>({ok:true})},storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.hash,contentLength:r.size,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},authorizeVersion:async()=>true,verifyEvidence:async()=>true},
       canary:{tenantId:tenantA,actorId:actorA,serviceActorId:serviceActor,authorizeCanary:async()=>true,createFixture:async()=>{const f=approvedUpload(),m=approvedSources.get(f.uploadId);return {confirmedSynthetic:true,payloadId:m.payloadId,payloadHash:m.payloadHash,expectedResultCode:'CLASSIFIED',expectedResultHash:resultHash};},timeoutMs:5000,maxAgeMs:30000}},
       http:{...httpFixture,reviewUi:{allowedOrigin:'https://review.example.test'},authProvider:{authenticate:async()=>session}},probes:Object.fromEntries(REQUIRED_PRODUCTION_PROBES.map(k=>[k,async()=>({ok:true})])),readiness:{probeTimeoutMs:5000},canaryIntervalMs:10000};
-    for(const field of ['reviews','domainOutbox','drain','readiness'])assert.throws(()=>createDurablePostgresProcessingService({...options,review:{...review,[field]:{}}}),/REVIEW_OVERRIDE_FORBIDDEN/);
-    assert.throws(()=>createDurablePostgresProcessingService({...options,review:{...review,pool:drainWorkerPool}}),/REVIEW_SEPARATE_POOL_REQUIRED/);
-    assert.throws(()=>createDurablePostgresProcessingService({...options,http:{...options.http,reviewIntake:{}}}),/HTTP_OVERRIDE_FORBIDDEN/);
-    const root=createDurablePostgresProcessingService(options);let stopped;
+    for(const field of ['reviews','domainOutbox','drain','readiness'])assert.throws(()=>createCapacityBoundService({...options,review:{...review,[field]:{}}}),/REVIEW_OVERRIDE_FORBIDDEN/);
+    assert.throws(()=>createCapacityBoundService({...options,review:{...review,pool:drainWorkerPool}}),/REVIEW_SEPARATE_POOL_REQUIRED/);
+    assert.throws(()=>createCapacityBoundService({...options,http:{...options.http,reviewIntake:{}}}),/HTTP_OVERRIDE_FORBIDDEN/);
+    const root=createCapacityBoundService(options);let stopped;
     try{await root.start({port:0});const base=`http://127.0.0.1:${root.server.address().port}`;
       const ready=async()=>{let r;const end=Date.now()+15000;do{r=await fetch(base+'/api/v1/ready');await r.arrayBuffer();if(r.status===200)return;await new Promise(resolve=>setTimeout(resolve,50));}while(Date.now()<end);assert.equal(r.status,200,JSON.stringify({service:root.status(),review:root.reviewIntake.status(),probe:await root.reviewIntake.probe()}));};await ready();
       const readMetadata=async path=>{let response;const deadline=Date.now()+10000;do{response=await fetch(base+path);if(response.status!==503)return response;await response.arrayBuffer();await new Promise(resolve=>setTimeout(resolve,100));}while(Date.now()<deadline);return response;};
@@ -1261,11 +1276,11 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       const crossWrite=await fetch(base+'/api/v1/processing/review-decisions',{method:'POST',headers:{origin:'https://evil.example.test','content-type':'application/json'},body:'{}'});assert.equal(crossWrite.status,403);await crossWrite.arrayBuffer();assert.equal((await decisionsFor(input.eventId)).length,0);
       const detail=await readMetadata('/api/v1/processing/reviews/'+input.eventId);assert.equal(detail.status,200);const metadata=await detail.json();assert.equal(metadata.resultHash,request.expectedResultHash);assert.equal(metadata.resultJobId,request.expectedResultJobId);
       const download=await readMetadata('/api/v1/processing/reviews/'+input.eventId+'/document?resultJobId='+metadata.resultJobId+'&resultHash='+metadata.resultHash);assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),bytes);assert.equal(download.headers.get('x-content-sha256'),artifactHash);assert.ok(download.headers.get('content-disposition').startsWith('attachment;'));assert.equal((await decisionsFor(input.eventId)).length,0);
-      for(const field of ['reader','drain','readiness','pool','expectedRole'])assert.throws(()=>createDurablePostgresProcessingService({...options,reviewDocuments:{...options.reviewDocuments,[field]:{}}}),/REVIEW_DOCUMENT_OVERRIDE_FORBIDDEN/);
-      assert.throws(()=>createDurablePostgresProcessingService({...options,http:{...options.http,reviewDocuments:{}}}),/HTTP_OVERRIDE_FORBIDDEN/);
+      for(const field of ['reader','drain','readiness','pool','expectedRole'])assert.throws(()=>createCapacityBoundService({...options,reviewDocuments:{...options.reviewDocuments,[field]:{}}}),/REVIEW_DOCUMENT_OVERRIDE_FORBIDDEN/);
+      assert.throws(()=>createCapacityBoundService({...options,http:{...options.http,reviewDocuments:{}}}),/HTTP_OVERRIDE_FORBIDDEN/);
       const listing=await readMetadata('/api/v1/processing/reviews?limit=100');assert.equal(listing.status,200);assert.ok((await listing.json()).items.some(item=>item.eventId===input.eventId));
-      assert.throws(()=>createDurablePostgresProcessingService({...options,reviewRead:{...options.reviewRead,pool:reviewerPool}}),/REVIEW_READ_SEPARATE_POOL_REQUIRED/);
-      for(const field of ['reader','drain','readiness'])assert.throws(()=>createDurablePostgresProcessingService({...options,reviewRead:{...options.reviewRead,[field]:{}}}),/REVIEW_READ_OVERRIDE_FORBIDDEN/);
+      assert.throws(()=>createCapacityBoundService({...options,reviewRead:{...options.reviewRead,pool:reviewerPool}}),/REVIEW_READ_SEPARATE_POOL_REQUIRED/);
+      for(const field of ['reader','drain','readiness'])assert.throws(()=>createCapacityBoundService({...options,reviewRead:{...options.reviewRead,[field]:{}}}),/REVIEW_READ_OVERRIDE_FORBIDDEN/);
       const browser=new ReviewClient({randomUUID:()=>uuid(),fetchImpl:(path,opts)=>fetch(base+path,{...opts,headers:{...opts.headers,...(opts.method==='POST'?{origin:'https://review.example.test'}:{})}})});
       const browseDeadline=Date.now()+15000;do{
         await browser.list();for(let page=0;page<100&&!browser.state().error&&!browser.state().items.some(x=>x.eventId===input.eventId)&&browser.state().nextCursor;page++)await browser.list({next:true});
@@ -1377,4 +1392,21 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     try{await assert.rejects(reviews.decide(decisionFor(input.eventId,{matterId})),/REVIEW_DECISION_UNAVAILABLE/);}finally{await admin.query('ALTER TABLE public.domain_review_decisions ENABLE TRIGGER domain_review_decision_binding');}
     assert.equal((await decisionsFor(input.eventId)).length,0);
   });
+  await t.test('V137 real fourteen-pool inventory reserves fleet headroom and detects live waiting pressure',async()=>{
+    const entries=[['DOMAIN',runtime],['RELAY',relayPool],['PRODUCER',queueProducerPool],['WORKER',queueWorkerPool],['DOMAIN_READER',domainReaderPool],['QUEUE_READER',queueReaderPool],
+      ['DRAIN_WORKER',drainWorkerPool],['DRAIN_OPERATOR',drainOperatorPool],['DRAIN_READER',drainReaderPool],['GRAPH_PRODUCER',graphProducerOptions.pool],['GRAPH_WORKER',graphWorkerOptions.pool],['GRAPH_READER',graphReaderOptions.pool],['REVIEW',reviewerPool],['REVIEW_READER',reviewReaderOptions.pool]];
+    const bindings=entries.map(([name,pool])=>({name,pool})),guard=new DeploymentCapacity({profile:{...capacityProfile,maxWaitingPerPool:0},bindings});
+    assert.equal(guard.status().poolCount,14);assert.equal((await guard.probe(async()=>({ok:(await queueReaderPool.query('SELECT 1 AS value')).rows[0].value===1}))).ok,true);
+    assert.throws(()=>new DeploymentCapacity({profile:{...capacityProfile,maxConcurrentReplicas:100},bindings}),/BUDGET_EXCEEDED/);
+    const held=[];let waiting;
+    try{
+      for(let i=0;i<queueReaderPool.options.max;i++)held.push(await queueReaderPool.connect());
+      waiting=queueReaderPool.connect();assert.equal(queueReaderPool.waitingCount,1);
+      assert.equal((await guard.probe(async()=>true)).ok,false);assert.equal(guard.status().uncertain,false);
+    }finally{
+      for(const client of held)client.release();if(waiting)(await waiting).release();
+    }
+    assert.equal((await guard.probe(async()=>true)).ok,true);
+  });
+
 });

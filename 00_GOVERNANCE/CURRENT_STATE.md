@@ -4,6 +4,12 @@
 
 A partner-firm user reports (second hand, SINGLE USER REPORT) that handlers' tasks stall for hours waiting on supervisor approval by email. Desk research found that the SRA's June 2026 post-*Mazur* supervision guidance expects escalation routes, available supervisors and management information on case flow. That makes the hypothesis worth testing, not validated. It changes no wedge or priority. The partner is logging approvals for a week. See `01_RESEARCH_EVIDENCE/APPROVAL_WAIT_DESK_RESEARCH_2026-10.md` (actions A1–A8) and the raw note in `39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/`. V131 (durable writeback execution) is paused until that evidence is in.
 
+## V137 — Deployment capacity and fleet connection budgets
+
+V137 requires an explicit capacity profile for the durable service, derives all 9–14 bound pool maxima, includes rolling-replica overlap and reserved headroom, and refuses missing/unbounded checkout configuration. Mandatory database readiness joins pool-setting/counter checks before and after the existing probe. Configuration drift latches uncertainty; ordinary queue pressure recovers after clearance. Probe ownership survives cancellation, and shutdown cannot claim drainage while a capacity-bound database callback is unsettled. A bounded, secret-free plan CLI and CI example are included. See `40_PLATFORM_FOUNDATION_BUILD/docs/V137_DEPLOYMENT_CAPACITY_BATCH.md`.
+
+Local suites pass 2,705 platform and 140 scaffold tests, including 60 new regressions. Two connected PostgreSQL cases are added; native PostgreSQL cannot run locally and the complete PostgreSQL 17 CI suite must pass before merge. All 59 migrations remain unchanged; no dependency is added. Provider quotas, fleet enforcement, other adapter budgets, deployment/restore evidence and release protections remain outstanding. This is the existing D-018 defect/integration exception; the pre-TO/customer-data gates and V131 execution pause remain in force.
+
 ## V136 — Authenticated adopted-source downloads
 
 V136 groups exact adopted-artifact downloads, immutable source version/evidence checks, current human/object/document authority, prepared metadata audit and stream/HTTP transfer ownership. A capability-gated review-page control requests the exact selected result pins. Optional production document providers join the existing eleven-pool reader/readiness/drain/shutdown composition without a new migration, privilege, dependency or executor. See `40_PLATFORM_FOUNDATION_BUILD/docs/V136_AUTHENTICATED_SOURCE_DOWNLOADS.md`.
