@@ -799,7 +799,7 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132 real
   });
   await t.test('V127 altered function body hash cannot silently change drain semantics',async()=>{
     const definition=(await admin.query("SELECT pg_get_functiondef('drain_security.operate(text,text,jsonb)'::regprocedure) AS sql")).rows[0].sql;
-    const modified=definition.replace('AS $function$','AS $function$\n-- synthetic catalog tamper');assert.notEqual(modified,definition);
+    const modified=definition.replace('AS $function$','AS $function$\n-- synthetic catalog tamper\n');assert.notEqual(modified,definition);
     await admin.query(modified);try{assert.equal((await durable.probe()).ok,false);}finally{await admin.query(definition);}
   });
   await t.test('V127 disabled forced RLS or changed owner policy cannot attest a healthy backend',async()=>{
@@ -963,7 +963,10 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132 real
   const graphRecord=tenantId=>({tenantId,subscriptionId:uuid(),notificationFingerprint:crypto.createHash('sha256').update(uuid()).digest('hex'),sourceEvidenceHash:reason,sourceVersionHash:artifactHash,eventType:'CREATED'});
   const graphKey=r=>({tenantId:r.tenantId,subscriptionId:r.subscriptionId,notificationFingerprint:r.notificationFingerprint});
   await t.test('V132 actual PostgreSQL graph roles verify exact column grants forced tenant RLS and pinned triggers',async()=>{
-    for(const adapter of [graphProducer,graphWorker,graphReader])assert.equal((await adapter.probe()).ok,true);
+    const diagnostics=[];
+    const diagnosticPool={connect:async()=>{const client=await graphProducerPool.connect();return {release:value=>client.release(value),query:async(sql,values)=>{try{const result=await client.query(sql,values);if(/AS member|AS grants_safe|FROM pg_roles|FROM pg_class|FROM pg_policies|FROM pg_proc|FROM pg_trigger/.test(sql))diagnostics.push({sql,rows:result.rows});return result;}catch(error){diagnostics.push({sql,code:error.code,message:error.message});throw error;}}};}};
+    assert.equal((await new PostgresGraphInboxProducer({...graphProducerOptions,pool:diagnosticPool}).probe()).ok,true,JSON.stringify(diagnostics));
+    for(const adapter of [graphWorker,graphReader])assert.equal((await adapter.probe()).ok,true);
     for(const pool of [graphProducerPool,graphWorkerPool,graphReaderPool])assert.equal((await pool.query('SELECT * FROM graph_security.notifications')).rows.length,0);
     for(const pool of [runtime,brokerOne,queueProducerPool,queueWorkerPool,queueReaderPool,relayPool,domainReaderPool,drainWorkerPool,drainOperatorPool,drainReaderPool])assert.equal(await pool.query('SELECT * FROM graph_security.notifications').then(()=>false,e=>e.code==='42501'),true);
   });
@@ -1035,7 +1038,7 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132 real
     await admin.query('ALTER POLICY graph_notification_read ON graph_security.notifications USING(true)');try{assert.equal((await graphReader.probe()).ok,false);}finally{await admin.query('ALTER POLICY graph_notification_read ON graph_security.notifications USING(tenant_id=public.app_current_tenant_id())');}
     await admin.query('ALTER TABLE graph_security.notifications DISABLE TRIGGER graph_notification_transition');try{assert.equal((await graphProducer.probe()).ok,false);}finally{await admin.query('ALTER TABLE graph_security.notifications ENABLE TRIGGER graph_notification_transition');}
     const definition=(await admin.query("SELECT pg_get_functiondef('graph_security.protect_notification()'::regprocedure) AS sql")).rows[0].sql;
-    await admin.query(definition.replace('AS $function$','AS $function$\n-- synthetic catalog tamper'));try{assert.equal((await graphWorker.probe()).ok,false);}finally{await admin.query(definition);}
+    await admin.query(definition.replace('AS $function$','AS $function$\n-- synthetic catalog tamper\n'));try{assert.equal((await graphWorker.probe()).ok,false);}finally{await admin.query(definition);}
   });
   await resumeDurable();
   function actualGraphFixture(extra={}){
