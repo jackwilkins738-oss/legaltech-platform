@@ -1,3 +1,4 @@
+import {reviewUiConfig,reviewBrowserGuard,reviewAsset,sendReviewAsset} from './reviewUi.js';
 import {isManagedReviewReads} from './managedReviewReads.js';
 import {isManagedReviewDecisions} from './managedReviewDecisions.js';
 import {isManagedGraphWebhookIntake} from './managedGraphWebhookIntake.js';
@@ -27,7 +28,7 @@ function body(req,signal,max){return new Promise((resolve,reject)=>{
   req.on('data',data);req.on('end',end);req.on('error',errorHandler);signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
 });}
 function send(res,status,payload,traceId){if(res.destroyed||res.writableEnded)return;const bytes=JSON.stringify(payload);res.writeHead(status,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(bytes),'cache-control':'no-store','x-content-type-options':'nosniff','x-trace-id':traceId});res.end(bytes);}
-function headers(req){const counts=new Map();for(let i=0;i<req.rawHeaders.length;i+=2){const name=req.rawHeaders[i].toLowerCase();if(['authorization','cookie','idempotency-key','content-type','content-length','transfer-encoding'].includes(name)){counts.set(name,(counts.get(name)??0)+1);if(counts.get(name)>1)throw invalid();}}
+function headers(req){const counts=new Map();for(let i=0;i<req.rawHeaders.length;i+=2){const name=req.rawHeaders[i].toLowerCase();if(['authorization','cookie','idempotency-key','content-type','content-length','transfer-encoding','origin','sec-fetch-site','x-review-ui'].includes(name)){counts.set(name,(counts.get(name)??0)+1);if(counts.get(name)>1)throw invalid();}}
   if(req.headers['content-encoding']!==undefined)throw invalid();}
 function receipt(value,expected){shape(value,['tenantId','commandId','jobId','kind','objectId','status','replayed']);
   if(Object.entries(expected).some(([k,v])=>value[k]!==v)||value.status!=='ACCEPTED'||typeof value.replayed!=='boolean')throw new Error('PROCESSING_RECEIPT_UNVERIFIED');
@@ -36,12 +37,13 @@ function receipt(value,expected){shape(value,['tenantId','commandId','jobId','ki
 // Dedicated metadata command API. It never falls back to the synthetic platform
 // or exposes worker, adoption, provider, drain-admin or raw result endpoints.
 export function createProcessingHttp({handlers,authProvider,abuseLimiter,readiness,drain,authorizeRequest,audit,accepting=()=>true,
-  requestTimeoutMs=10000,readinessTimeoutMs=1500,maxBodyBytes=16384,maxInFlight=100,allowDirectCommands=true,graphIntake,reviewIntake,reviewReads,maxGraphBodyBytes=256*1024}={}){
+  requestTimeoutMs=10000,readinessTimeoutMs=1500,maxBodyBytes=16384,maxInFlight=100,allowDirectCommands=true,graphIntake,reviewIntake,reviewReads,reviewUi,maxGraphBodyBytes=256*1024}={}){
   if(!isProductionReadiness(readiness)||!isManagedDeploymentDrain(drain)||['registerInbound','requestPolicyEvaluation'].some(k=>typeof handlers?.[k]!=='function')
     ||typeof authProvider?.authenticate!=='function'||authProvider instanceof StaticAuthProvider||usesReferenceSessionStore(authProvider)
     ||abuseLimiter instanceof InMemoryAbuseLimiter||['checkIp','checkTenant'].some(k=>typeof abuseLimiter?.[k]!=='function')
     ||typeof authorizeRequest!=='function'||typeof audit!=='function'||typeof accepting!=='function'||typeof allowDirectCommands!=='boolean'||graphIntake!==undefined&&!isManagedGraphWebhookIntake(graphIntake)||reviewIntake!==undefined&&!isManagedReviewDecisions(reviewIntake)||reviewReads!==undefined&&!isManagedReviewReads(reviewReads))throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
   for(const [v,min,max] of [[maxGraphBodyBytes,1024,1024*1024],[requestTimeoutMs,100,60000],[readinessTimeoutMs,100,6000],[maxBodyBytes,1024,65536],[maxInFlight,1,1000]])if(!Number.isInteger(v)||v<min||v>max)throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
+  const ui=reviewUiConfig(reviewUi);if(ui&&(!reviewReads||!reviewIntake))throw new Error('REVIEW_UI_COMPONENTS_REQUIRED');
   const graphReceive=graphIntake?.receive.bind(graphIntake),reviewDecide=reviewIntake?.decide.bind(reviewIntake),reviewList=reviewReads?.list.bind(reviewReads),reviewGet=reviewReads?.get.bind(reviewReads);
   const bound=Object.freeze({registerInbound:handlers.registerInbound.bind(handlers),requestPolicyEvaluation:handlers.requestPolicyEvaluation.bind(handlers),authenticate:authProvider.authenticate.bind(authProvider),checkIp:abuseLimiter.checkIp.bind(abuseLimiter),checkTenant:abuseLimiter.checkTenant.bind(abuseLimiter)});
   const pending=new Set(),controllers=new Set();let closed=false,uncertain=false;
@@ -64,6 +66,17 @@ export function createProcessingHttp({handlers,authProvider,abuseLimiter,readine
       try{
         headers(req);check(signal);await bound.checkIp(req);check(signal);
         const url=new URL(req.url,'http://processing.invalid');
+        if(ui&&(url.pathname==='/review'||url.pathname.startsWith('/review/')||url.pathname.startsWith('/api/v1/processing/reviews')||url.pathname==='/api/v1/processing/review-decisions'))reviewBrowserGuard(req,ui);
+        if(url.pathname==='/review'||url.pathname.startsWith('/review/')){
+          const asset=ui&&req.method==='GET'&&!url.search?reviewAsset(url.pathname):null;
+          if(!asset)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+          if(req.headers['transfer-encoding']||req.headers['content-length']&&req.headers['content-length']!=='0')throw invalid();
+          await admitted(signal);const session=normalizeSession(await bound.authenticate(req.headers,{method:req.method,url:req.url}));check(signal);
+          if(session.authContext.method!=='SERVER_SESSION')throw appError('authentication required',{status:401,code:'AUTH_REQUIRED'});
+          uuid(session.tenantId);uuid(session.actorId);requireCapability(session,'inbound:review');await bound.checkTenant(session);check(signal);
+          if(await authorizeRequest(Object.freeze({tenantId:session.tenantId,actorId:session.actorId,kind:'REVIEW_UI',phase:'ADMIT',signal}))!==true)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+          await admitted(signal);sendReviewAsset(res,asset,traceId);return;
+        }
         if(req.method==='POST'&&url.pathname==='/api/v1/integrations/graph/webhooks'){
           if(!graphReceive)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
           if(url.searchParams.has('validationToken')){
