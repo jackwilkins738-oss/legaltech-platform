@@ -45,3 +45,26 @@ test('V144 rejects invalid deadline configuration',()=>{
     assert.throws(()=>new LiveSupportSessionBoundary({check:async()=>active,timeoutMs}),/LIVE_SUPPORT_SESSION_CONFIGURATION_INVALID/);
   }
 });
+
+test('V145 preserves budget for a timed-out provider until it settles',async()=>{
+  let finish;
+  let calls=0;
+  const boundary=new LiveSupportSessionBoundary({timeoutMs:50,maxConcurrent:1,check:()=>{
+    calls++;
+    if(calls===1)return new Promise(resolve=>{finish=resolve;});
+    return active;
+  }});
+  await assert.rejects(boundary.assertCurrent(session),/LIVE_SUPPORT_SESSION_UNAVAILABLE/);
+  await assert.rejects(boundary.assertCurrent(session),/LIVE_SUPPORT_SESSION_UNAVAILABLE/);
+  assert.equal(calls,1);
+  finish(active);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(await boundary.assertCurrent(session),true);
+  assert.equal(calls,2);
+});
+
+test('V145 rejects invalid concurrent-provider budget',()=>{
+  for(const maxConcurrent of [0,17,1.5,NaN]){
+    assert.throws(()=>new LiveSupportSessionBoundary({check:async()=>active,maxConcurrent}),/LIVE_SUPPORT_SESSION_CONFIGURATION_INVALID/);
+  }
+});
