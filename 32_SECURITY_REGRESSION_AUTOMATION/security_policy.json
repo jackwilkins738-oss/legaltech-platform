@@ -259,6 +259,7 @@
     "V124 verified worker execution",
     "V125 managed processing adoption and canary",
     "V126 processing HTTP and managed shutdown",
-    "V127 durable deployment drain"
+    "V127 durable deployment drain",
+    "V128 artifact resource containment"
   ]
 }

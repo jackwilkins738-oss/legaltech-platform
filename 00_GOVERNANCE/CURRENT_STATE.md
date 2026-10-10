@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V128 — Artifact resource containment
+
+V128 moves final immutable version, evidence and permission checks after stream cleanup, propagates bounded read cancellation while retaining actual provider ownership, shares bounded payload/policy read capacity and rejects optimistic readiness during cancelled or saturated reads. Workers wipe authentic managed loader buffers after actual execution and settlement; legacy provider-owned buffers remain copied. Probes retain non-overlap ownership until callbacks settle. See `40_PLATFORM_FOUNDATION_BUILD/docs/V128_ARTIFACT_RESOURCE_CONTAINMENT.md`.
+
+Local suites pass 2,161 platform and 140 scaffold tests, including 27 new adversarial boundary regressions. Four connected PostgreSQL cases are added; actual database execution is skipped locally and must pass in CI. All 55 migrations remain unchanged. Cancellation never expires a resource slot or proves a drain complete. Real cloud/provider behavior, business permission evidence and deployment remain outstanding. This continues the authorized D-018 integration exception; the pre-TO freeze and customer-data gate remain in force.
+
 ## V127 — Durable PostgreSQL deployment drain
 
 V127 adds a durable, deployment-scoped PostgreSQL drain store with separate worker/operator/reader credentials, immutable operation and lease bindings, persistent release/absence receipts, generation-fenced operator controls and append-only metadata events. Migration 055 forces owner-only RLS and exposes one tightly bounded security-definer API with current session-principal scopes and pinned function definitions. The nine-pool composition connects it to HTTP, workers, relay, canary and readiness. Readiness also rejects uncertainty introduced during a pending status read. See `40_PLATFORM_FOUNDATION_BUILD/docs/V127_DURABLE_DEPLOYMENT_DRAIN.md`.

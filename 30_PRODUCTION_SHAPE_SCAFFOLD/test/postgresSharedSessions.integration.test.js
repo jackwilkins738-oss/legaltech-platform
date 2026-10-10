@@ -25,6 +25,7 @@ import {REQUIRED_PRODUCTION_PROBES} from '../../40_PLATFORM_FOUNDATION_BUILD/src
 import {createPostgresWorkerPipeline} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerPipeline.js';
 import {PostgresWorkerDomainLoader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerDomain.js';
 import {PostgresDeploymentDrainBackend} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresDeploymentDrain.js';
+import {ManagedWorkerArtifacts} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedWorkerArtifacts.js';
 import {ManagedDeploymentDrain} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedDeploymentDrain.js';
 import {createDurablePostgresProcessingService} from '../../40_PLATFORM_FOUNDATION_BUILD/src/durableProcessingService.js';
 import {DeploymentDrainController} from '../../40_PLATFORM_FOUNDATION_BUILD/src/deploymentDrain.js';
@@ -35,7 +36,7 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
@@ -818,5 +819,34 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127 real PostgreSQL shared i
       assert.equal(response.status,200);stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true);
       const global=await durable.status(scope);assert.equal(global.state,'DRAINED');assert.equal(global.inFlight,0);assert.equal(root.server.listening,false);
     }finally{if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
+  });
+
+  function containedArtifacts(input,{cleanup,authorizeVersion=async()=>true,readTimeoutMs=10000}={}){
+    const manifest={tenantId:tenantA,id:input.payloadId,kind:'PAYLOAD',hash:artifactHash,objectKey:`${tenantA}/v128/${input.payloadId}`,versionId:'immutable-v128',size:bytes.length,state:'PROCESSING_ALLOWED',evidenceHash:reason,region:'synthetic-region',revision:1};
+    return new ManagedWorkerArtifacts({manifest:{resolveVersion:async()=>({...manifest}),probe:async()=>({ok:true})},storage:{probe:async()=>({ok:true}),readVersion:async m=>{let sent=false;return {tenantId:m.tenantId,objectKey:m.objectKey,versionId:m.versionId,hash:m.hash,contentLength:m.size,body:{[Symbol.asyncIterator]:()=>({next:async()=>sent?{done:true}:(sent=true,{done:false,value:bytes}),return:async()=>{await cleanup?.();return {done:true};}})}};}},authorizeVersion,verifyEvidence:async()=>true,maxConcurrentReads:1,readTimeoutMs});
+  }
+  await t.test('V128 cleanup-time permission revocation cannot execute or commit a PostgreSQL job result',async()=>{
+    const input=await createInbound();let allowed=true,executions=0;const provider=containedArtifacts(input,{cleanup:async()=>{allowed=false;},authorizeVersion:async()=>allowed});
+    const worker=createPostgresWorkerPipeline({...workerOptions,loadPayload:provider.loadPayload.bind(provider),processInbound:async()=>{executions++;return {resultCode:'CLASSIFIED',resultHash};}});
+    const outcome=await worker.runtime.processNext({tenantId:tenantA,serviceActorId:serviceActor,kind:'PROCESS_INBOUND'});assert.equal(outcome.status,'FAILED');assert.equal(executions,0);
+    assert.equal(await queueReader.getResult({tenantId:tenantA,jobId:input.jobId}),null);assert.equal((await queueReader.get({tenantId:tenantA,jobId:input.jobId})).status,'DEAD');
+  });
+  for(const failed of [false,true])await t.test(`V128 managed byte ownership is released after actual PostgreSQL ${failed?'failure':'completion'}`,async()=>{
+    const input=await createInbound(),provider=containedArtifacts(input);let artifact;
+    const worker=createPostgresWorkerPipeline({...workerOptions,loadPayload:async r=>(artifact=await provider.loadPayload(r)),processInbound:async()=>{if(failed)throw new Error('synthetic-processor-failure');return {resultCode:'CLASSIFIED',resultHash};}});
+    const outcome=await worker.runtime.processNext({tenantId:tenantA,serviceActorId:serviceActor,kind:'PROCESS_INBOUND'});assert.equal(outcome.status,failed?'FAILED':'SUCCEEDED');assert.ok(artifact.bytes.every(b=>b===0));
+    assert.equal((await queueReader.get({tenantId:tenantA,jobId:input.jobId})).status,failed?'DEAD':'SUCCEEDED');assert.equal((await queueReader.getResult({tenantId:tenantA,jobId:input.jobId}))?.commandId??null,failed?null:input.commandId);
+  });
+  await t.test('V128 stalled artifact cleanup retains the PostgreSQL deployment lease beyond cancellation',async()=>{
+    await resumeDurable();const input=await createInbound();let finish,entered=false;const gate=new Promise(r=>{finish=r}),provider=containedArtifacts(input,{cleanup:async()=>{entered=true;await gate;}});
+    const drain=new ManagedDeploymentDrain({backend:durable,authorize:async()=>true,deploymentId:drainDeployment});
+    const worker=createPostgresWorkerPipeline({...workerOptions,drain,loadPayload:provider.loadPayload.bind(provider)});supervisors.push(worker.supervisor);
+    try{worker.supervisor.start();const deadline=Date.now()+5000;while(!entered&&Date.now()<deadline)await new Promise(r=>setTimeout(r,10));assert.equal(entered,true);
+      assert.equal((await worker.supervisor.stop({timeoutMs:50})).drained,false);assert.equal((await provider.probe()).ok,false);
+      const closing=await beginDurable();assert.equal(closing.state,'DRAINING');assert.equal(closing.inFlight,1);await assert.rejects(resumeDurable(),/UNVERIFIED/);
+      assert.equal(await queueReader.getResult({tenantId:tenantA,jobId:input.jobId}),null);finish();const end=Date.now()+5000;let status;
+      do{status=await durable.status(scope);if(status.state==='DRAINED')break;await new Promise(r=>setTimeout(r,10));}while(Date.now()<end);
+      assert.equal(status.state,'DRAINED');assert.equal(status.inFlight,0);assert.equal(await queueReader.getResult({tenantId:tenantA,jobId:input.jobId}),null);assert.equal((await provider.probe()).ok,true);
+    }finally{finish();await worker.supervisor.stop({timeoutMs:5000});}
   });
 });
