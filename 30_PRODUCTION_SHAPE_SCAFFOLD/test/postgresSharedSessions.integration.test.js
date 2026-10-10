@@ -1,3 +1,5 @@
+import {PostgresReviewReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresReviewReader.js';
+import {ManagedReviewReads} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedReviewReads.js';
 import {PostgresGraphInboxProducer,PostgresGraphInboxWorker,PostgresGraphInboxReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresGraphInbox.js';
 import {ManagedGraphWebhookIntake,graphSourceDeliveryFingerprint} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedGraphWebhookIntake.js';
 // Runs only against a disposable PostgreSQL CI database, never a deployed customer database.
@@ -43,7 +45,7 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133/V134 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
@@ -86,8 +88,8 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
   const one=new PostgresServerSessionStore({...options,brokerPool:brokerOne}),two=new PostgresServerSessionStore({...options,brokerPool:brokerTwo});
   const session=(providerSessionId=`provider-${uuid()}`)=>({tenantId:tenantA,actorId:actorA,capabilities:['matter:read'],roles:[],authContext:{method:'OIDC',mfaVerified:true,authTime:null,expiresAt:new Date(Date.now()+3600000).toISOString(),providerSessionId}});
 
-  await t.test('all 58 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
-    assert.equal(manifest.migrations.length,58);
+  await t.test('all 59 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
+    assert.equal(manifest.migrations.length,59);
     const result=await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({});assert.equal(result.ok,true);
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
@@ -1118,6 +1120,10 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
   await admin.query('GRANT SELECT ON public.actors,public.tenants,public.inbound_events,public.matters TO legaltech_reviewer_ci');
   await admin.query('GRANT SELECT ON public.matter_actor_access,public.matter_break_glass_grants,public.actor_security_zones TO legaltech_reviewer_ci');
   const reviewerPool=makePool('legaltech_reviewer_ci',2);
+  await admin.query(`CREATE ROLE legaltech_review_reader_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+  await admin.query('GRANT legaltech_review_reader TO legaltech_review_reader_ci');
+  const reviewReaderPool=makePool('legaltech_review_reader_ci',2),reviewReaderOptions={pool:reviewReaderPool,expectedRole:'legaltech_review_reader_ci',cursorKey:crypto.randomBytes(32),authorizeRead:async()=>true};
+  const reviewReader=new PostgresReviewReader(reviewReaderOptions),readerTransactions=new PostgresTenantTransactions({pool:reviewReaderPool,expectedRole:'legaltech_review_reader_ci'});
   const reviewerTransactions=new PostgresTenantTransactions({pool:reviewerPool,expectedRole:'legaltech_reviewer_ci'});
   let decisionAllowed=true;
   const reviews=new PostgresReviewDecisions({domainOutbox:new PostgresDomainOutbox({pool:reviewerPool,expectedRole:'legaltech_reviewer_ci',authorizeAppend:async()=>true}),authorizeDecision:async()=>decisionAllowed});
@@ -1134,6 +1140,48 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
   const decisionsFor=async eventId=>(await admin.query('SELECT * FROM public.domain_review_decisions WHERE event_id=$1',[eventId])).rows;
   const writebacksFor=async eventId=>(await admin.query("SELECT job_id FROM public.domain_outbox_events WHERE kind='PROCLAIM_WRITEBACK' AND object_id=$1",[eventId])).rows;
   const pinnedDecision=async(input,over={})=>{const result=(await admin.query('SELECT result_hash FROM public.domain_job_results WHERE job_id=$1',[input.jobId])).rows[0];return decisionFor(input.eventId,{expectedResultJobId:input.jobId,expectedResultHash:result.result_hash,...over});};
+  await t.test('V134 actual reader has exact column grants and no decision helper or write privileges',async()=>{
+    assert.equal((await reviewReader.probe()).ok,true);
+    for(const sql of ['SELECT * FROM public.inbound_events','SELECT * FROM public.domain_job_results',"UPDATE public.inbound_events SET status='REJECTED'",'DELETE FROM public.domain_review_decisions'])assert.equal(await reviewReaderPool.query(sql).then(()=>false,e=>e.code==='42501'),true);
+    assert.equal((await admin.query("SELECT has_function_privilege('legaltech_review_reader_ci','review_security.lock_scope(uuid,uuid,uuid)','EXECUTE') AS allowed")).rows[0].allowed,false);
+  });
+  await t.test('V134 actual metadata detail supplies the exact adopted pins with no raw document or actor fields',async()=>{
+    const input=await adoptNew(),expected=await pinnedDecision(input),out=await reviewReader.get({tenantId:tenantA,actorId:actorA,eventId:input.eventId});
+    assert.equal(out.resultJobId,input.jobId);assert.equal(out.resultHash,expected.expectedResultHash);assert.equal(out.status,'PROCESSED');assert.deepEqual(Object.keys(out),['eventId','status','resultJobId','resultHash','resultCode','artifactHash','decision','matterId','writebackJobId']);
+    assert.equal((await decisionsFor(input.eventId)).length,0);assert.equal((await writebacksFor(input.eventId)).length,0);
+    const foreign=await readerTransactions.run({tenantId:tenantB,actorId:actorB},tx=>tx.query('SELECT event_id FROM public.domain_review_decisions'));assert.ok(foreign.rows.every(r=>r.event_id!==input.eventId));
+    await assert.rejects(reviewReader.get({tenantId:tenantB,actorId:actorB,eventId:input.eventId}),/FORBIDDEN/);
+  });
+  await t.test('V134 actual keyset pages bind tenant actor filters and survive reader reconstruction',async()=>{
+    const first=await reviewReader.list({tenantId:tenantA,actorId:actorA,limit:1});assert.equal(first.items.length,1);assert.ok(first.nextCursor);
+    const reconstructed=new PostgresReviewReader(reviewReaderOptions),second=await reconstructed.list({tenantId:tenantA,actorId:actorA,limit:1,cursor:first.nextCursor});assert.equal(second.items.length,1);assert.notEqual(second.items[0].eventId,first.items[0].eventId);
+    for(const change of [{tenantId:tenantB},{actorId:actorB},{status:'ALL'}])await assert.rejects(reviewReader.list({tenantId:tenantA,actorId:actorA,limit:1,cursor:first.nextCursor,...change}),/INPUT_INVALID/);
+  });
+  await t.test('V134 current object denial filters list rows and keeps detail absence opaque',async()=>{
+    const input=await adoptNew(),denied=new PostgresReviewReader({...reviewReaderOptions,authorizeRead:async c=>c.eventId!==input.eventId});
+    await assert.rejects(denied.get({tenantId:tenantA,actorId:actorA,eventId:input.eventId}),/FORBIDDEN/);await assert.rejects(denied.get({tenantId:tenantA,actorId:actorA,eventId:uuid()}),/FORBIDDEN/);
+    const page=await denied.list({tenantId:tenantA,actorId:actorA,status:'ALL',limit:100});assert.equal(page.items.some(r=>r.eventId===input.eventId),false);
+  });
+  await t.test('V134 final authority withdrawal denies actual result release',async()=>{
+    const input=await adoptNew(),phases=[],denied=new PostgresReviewReader({...reviewReaderOptions,authorizeRead:async c=>{phases.push(c.phase);return c.phase!=='RELEASE';}});
+    await assert.rejects(denied.get({tenantId:tenantA,actorId:actorA,eventId:input.eventId}),/FORBIDDEN/);assert.deepEqual(phases,['ADMIT','ITEM','RELEASE']);assert.equal(await eventStatus(input.eventId),'PROCESSED');
+  });
+  await t.test('V134 prepared audit rechecks actual actor revocation before metadata release',async()=>{
+    const input=await adoptNew(),drain=fixtureDrain(),reads=new ManagedReviewReads({reader:reviewReader,drain:drain.drain,readiness:syntheticReady(),probeRead:async()=>({ok:true}),audit:async c=>{if(c.phase==='PREPARED')await admin.query("UPDATE public.actors SET status='DISABLED' WHERE id=$1",[actorA]);}});
+    try{await assert.rejects(reads.get({tenantId:tenantA,actorId:actorA,eventId:input.eventId}),/FORBIDDEN/);assert.equal(drain.held.size,0);}finally{await admin.query("UPDATE public.actors SET status='ACTIVE' WHERE id=$1",[actorA]);await reads.stop();}
+  });
+  await t.test('V134 widened raw-result grants and permissive read policies fail actual health',async()=>{
+    await admin.query('GRANT SELECT ON public.domain_job_results TO legaltech_review_reader_ci');try{assert.equal((await reviewReader.probe()).ok,false);}finally{await admin.query('REVOKE SELECT ON public.domain_job_results FROM legaltech_review_reader_ci');}
+    await admin.query('CREATE POLICY synthetic_review_reader_widen ON public.domain_job_results FOR SELECT TO PUBLIC USING(true)');try{assert.equal((await reviewReader.probe()).ok,false);}finally{await admin.query('DROP POLICY synthetic_review_reader_widen ON public.domain_job_results');}
+    await admin.query('ALTER POLICY domain_result_human_read ON public.domain_job_results USING(true)');try{assert.equal((await reviewReader.probe()).ok,false);}finally{await admin.query('ALTER POLICY domain_result_human_read ON public.domain_job_results USING(tenant_id=public.app_current_tenant_id())');}
+    assert.equal((await reviewReader.probe()).ok,true);
+  });
+  await t.test('V134 review reader role mixing is rejected across writable runtime session and drain credentials',async()=>{
+    for(const [role,probe] of [['legaltech_runtime_ci',()=>createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({})],['legaltech_broker_ci',()=>one.probe()],['legaltech_drain_reader_ci',()=>durable.probe()]]){
+      await admin.query(`GRANT legaltech_review_reader TO ${role}`);try{assert.equal((await probe()).ok,false);}finally{await admin.query(`REVOKE legaltech_review_reader FROM ${role}`);}
+    }
+    await admin.query('GRANT legaltech_domain_reviewer TO legaltech_review_reader_ci');try{assert.equal((await reviewReader.probe()).ok,false);}finally{await admin.query('REVOKE legaltech_domain_reviewer FROM legaltech_review_reader_ci');}
+  });
   await t.test('V133 actual review posture attests pinned functions policies triggers and narrow grants',async()=>{
     assert.equal((await reviews.probe()).ok,true);
     const rights=await reviewerPool.query("SELECT has_function_privilege(current_user,'public.check_domain_review_decision()','EXECUTE') OR has_function_privilege(current_user,'public.check_inbound_review_transition()','EXECUTE') AS executable");assert.equal(rights.rows[0].executable,false);
@@ -1147,13 +1195,13 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     assert.equal((await check(foreign)).rows[0].locked,false);assert.equal((await check(local)).rows[0].locked,true);
     const rights=(await reviewerPool.query("SELECT has_any_column_privilege(current_user,'public.actors','UPDATE') OR has_any_column_privilege(current_user,'public.matters','UPDATE') AS writable")).rows[0];assert.equal(rights.writable,false);
   });
-  await t.test('V133 ten-pool service exposes human review HTTP durable lost-ack replay and global shutdown',async()=>{
+  await t.test('V133/V134 eleven-pool service exposes review browsing decisions lost-ack replay and global shutdown',async()=>{
     await resumeDurable();const input=await adoptNew(),request=await pinnedDecision(input,{decision:'REJECT'});let lost=true,reviewHealthy=true;
     const {drain:unusedDomain,...serviceDomain}=pipelineOptions,{drain:unusedWorker,...serviceWorker}=managedWorker;
     const review={pool:reviewerPool,expectedRole:'legaltech_reviewer_ci',authorizeAppend:async()=>true,authorizeDecision:async()=>true,authorizeReview:async()=>true,
       audit:async c=>{if(c.phase==='ACCEPTED'&&lost){lost=false;throw new Error('synthetic-lost-review-ack');}},probeReview:async()=>({ok:reviewHealthy})};
     const session={tenantId:tenantA,actorId:actorA,capabilities:['inbound:review'],authContext:{method:'OIDC',mfaVerified:false},status:'ACTIVE'};
-    const options={drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},ingress:ingressOptions,review,processing:{domain:serviceDomain,worker:serviceWorker,
+    const options={drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},ingress:ingressOptions,review,reviewRead:{...reviewReaderOptions,audit:async()=>{},probeRead:async()=>({ok:reviewHealthy})},processing:{domain:serviceDomain,worker:serviceWorker,
       queueReaderPool,expectedQueueReaderRole:'legaltech_queue_reader_ci',authorizeResultRead:async()=>true,authorizeAdoption:async()=>true,
       artifacts:{manifest:{resolveVersion:async r=>manifests.get(r.id),probe:async()=>({ok:true})},storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.hash,contentLength:r.size,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},authorizeVersion:async()=>true,verifyEvidence:async()=>true},
       canary:{tenantId:tenantA,actorId:actorA,serviceActorId:serviceActor,authorizeCanary:async()=>true,createFixture:async()=>{const f=approvedUpload(),m=approvedSources.get(f.uploadId);return {confirmedSynthetic:true,payloadId:m.payloadId,payloadHash:m.payloadHash,expectedResultCode:'CLASSIFIED',expectedResultHash:resultHash};},timeoutMs:5000,maxAgeMs:30000}},
@@ -1164,6 +1212,11 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     const root=createDurablePostgresProcessingService(options);let stopped;
     try{await root.start({port:0});const base=`http://127.0.0.1:${root.server.address().port}`;
       const ready=async()=>{let r;const end=Date.now()+15000;do{r=await fetch(base+'/api/v1/ready');await r.arrayBuffer();if(r.status===200)return;await new Promise(resolve=>setTimeout(resolve,50));}while(Date.now()<end);assert.equal(r.status,200,JSON.stringify({service:root.status(),review:root.reviewIntake.status(),probe:await root.reviewIntake.probe()}));};await ready();
+      const readMetadata=async path=>{let response;const deadline=Date.now()+10000;do{response=await fetch(base+path);if(response.status!==503)return response;await response.arrayBuffer();await new Promise(resolve=>setTimeout(resolve,100));}while(Date.now()<deadline);return response;};
+      const detail=await readMetadata('/api/v1/processing/reviews/'+input.eventId);assert.equal(detail.status,200);const metadata=await detail.json();assert.equal(metadata.resultHash,request.expectedResultHash);assert.equal(metadata.resultJobId,request.expectedResultJobId);
+      const listing=await readMetadata('/api/v1/processing/reviews?limit=100');assert.equal(listing.status,200);assert.ok((await listing.json()).items.some(item=>item.eventId===input.eventId));
+      assert.throws(()=>createDurablePostgresProcessingService({...options,reviewRead:{...options.reviewRead,pool:reviewerPool}}),/REVIEW_READ_SEPARATE_POOL_REQUIRED/);
+      for(const field of ['reader','drain','readiness'])assert.throws(()=>createDurablePostgresProcessingService({...options,reviewRead:{...options.reviewRead,[field]:{}}}),/REVIEW_READ_OVERRIDE_FORBIDDEN/);
       const body={eventId:request.eventId,decision:'REJECT',matterId:null,decisionKey:request.decisionKey,expectedResultJobId:request.expectedResultJobId,expectedResultHash:request.expectedResultHash};
       const send=()=>fetch(base+'/api/v1/processing/review-decisions',{method:'POST',headers:{'content-type':'application/json','idempotency-key':body.decisionKey},body:JSON.stringify(body)});
       let first;const end=Date.now()+10000;do{first=await send();await first.arrayBuffer();if(!lost)break;assert.equal(first.status,503);await new Promise(resolve=>setTimeout(resolve,100));}while(Date.now()<end);
