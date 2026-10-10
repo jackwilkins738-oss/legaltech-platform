@@ -8,6 +8,7 @@ function render(s){
   el('message').textContent=s.busy?'Waiting for the server…':s.error?errors[s.error]:s.receipt?s.receipt.decision==='APPROVE'?'Approval recorded. Writeback intent queued; execution remains paused.':'Rejection recorded.':s.items.length?`${s.items.length} result(s) in this scan.`:s.nextCursor?'No authorized results in this scan. Continue to the next page.':'No results in this scan.';
   el('items').replaceChildren();for(const item of s.items){const li=document.createElement('li'),button=document.createElement('button');button.type='button';button.textContent=`${item.eventId} · ${item.status} · ${item.resultCode}`;button.disabled=s.busy||!!s.pending;button.addEventListener('click',()=>run(()=>client.select(item.eventId)));li.append(button);el('items').append(li);}
   el('detail').hidden=!s.selected;el('metadata').replaceChildren();if(s.selected)for(const [key,label] of Object.entries(labels)){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=s.selected[key]??'—';el('metadata').append(dt,dd);}
+  const download=el('document-download');download.hidden=download.dataset.available!=='true'||!s.selected||s.busy||!!s.pending;if(download.hidden)download.removeAttribute('href');else download.href=`/api/v1/processing/reviews/${s.selected.eventId}/document?`+new URLSearchParams({resultJobId:s.selected.resultJobId,resultHash:s.selected.resultHash});
   el('decision').hidden=s.selected?.status!=='PROCESSED';el('retry-panel').hidden=!s.pending;
 }
 const client=new ReviewClient({onChange:render});

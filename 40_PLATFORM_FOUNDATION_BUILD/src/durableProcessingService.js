@@ -4,7 +4,7 @@ import {createPostgresProcessingService} from './processingService.js';
 
 // Same six processing pools plus three isolated drain principals. Deployment
 // provisioning/initialization remain explicit; construction never opens pools.
-export function createDurablePostgresProcessingService({processing,drain,http,probes,readiness,ingress,webhooks,review,reviewRead,canaryIntervalMs}={}){
+export function createDurablePostgresProcessingService({processing,drain,http,probes,readiness,ingress,webhooks,review,reviewRead,reviewDocuments,canaryIntervalMs}={}){
   if(!drain||Object.hasOwn(drain,'backend'))throw new Error('DURABLE_PROCESSING_DRAIN_OVERRIDE_FORBIDDEN');
   const {authorize,...options}=drain;
   const pools=[processing?.domain?.domainPool,processing?.domain?.relayPool,processing?.domain?.producerPool,
@@ -35,5 +35,5 @@ export function createDurablePostgresProcessingService({processing,drain,http,pr
   const bound={...probes,DEPLOYMENT_DRAIN:async({signal}={})=>{
     if(signal?.aborted||(await original({signal}))?.ok!==true)return {ok:false,code:'POSTGRES_DRAIN_UNVERIFIED'};return backend.probe({signal});
   }};
-  return createPostgresProcessingService({processing,drain:{backend,authorize,deploymentId:options.deploymentId},http,probes:bound,readiness,ingress,webhooks,review,reviewRead,canaryIntervalMs});
+  return createPostgresProcessingService({processing,drain:{backend,authorize,deploymentId:options.deploymentId},http,probes:bound,readiness,ingress,webhooks,review,reviewRead,reviewDocuments,canaryIntervalMs});
 }

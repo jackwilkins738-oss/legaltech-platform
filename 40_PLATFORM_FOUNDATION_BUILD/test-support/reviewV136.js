@@ -1,0 +1,11 @@
+import crypto from 'node:crypto';
+import {ManagedReviewDocuments} from '../src/managedReviewDocuments.js';
+import {readerFixture,row,request,id,fixtureDrain,ready} from './reviewV134.js';
+export {request,id};
+export const sourceBytes=Buffer.from('Synthetic reviewed source, no customer data.'),artifactHash=crypto.createHash('sha256').update(sourceBytes).digest('hex');
+export const input={...request,eventId:id(3),expectedResultJobId:id(103),expectedResultHash:'a'.repeat(64)};
+export function documentFixture({manifestOverride={},resolveVersion,readVersion,authorizeDocument=async()=>true,verifyEvidence=async()=>true,audit=async()=>{},probeDocuments=async()=>({ok:true}),manifestProbe=async()=>({ok:true}),storageProbe=async()=>({ok:true}),readerOptions={},drainOptions={},...options}={}){
+  const store=readerFixture({rows:[row(3,{artifact_hash:artifactHash})],...readerOptions}),drain=fixtureDrain(drainOptions),calls=[],audits=[];
+  const state={manifest:{tenantId:request.tenantId,eventId:id(3),resultJobId:id(103),resultHash:'a'.repeat(64),artifactHash,objectKey:request.tenantId+'/review/source',versionId:'immutable-v1',size:sourceBytes.length,contentType:'text/plain',evidenceHash:'e'.repeat(64),region:'uk-south',revision:1,state:'REVIEW_ALLOWED',malwareScan:'CLEAN',parserIsolation:'ISOLATED',...manifestOverride},providerBuffer:Buffer.from(sourceBytes)};
+  const documents=new ManagedReviewDocuments({reader:store.reader,drain:drain.drain,readiness:ready(),manifest:{resolveVersion:async r=>{calls.push(['resolve',r]);return resolveVersion?resolveVersion(r,state):{...state.manifest};},probe:manifestProbe},storage:{readVersion:async r=>{calls.push(['read',r]);return readVersion?readVersion(r,state):{tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.artifactHash,contentLength:r.size,body:(async function*(){yield state.providerBuffer;})()};},probe:storageProbe},authorizeDocument:async r=>{calls.push(['authorize',r]);return authorizeDocument(r,state);},verifyEvidence:async r=>{calls.push(['verify',r]);return verifyEvidence(r,state);},audit:async r=>{audits.push(r);return audit(r,state,store.state);},probeDocuments,...options});return {documents,store,drain,calls,audits,state};
+}

@@ -265,6 +265,7 @@
     "V132 durable Graph intake",
     "V133 production review boundary",
     "V134 production review browsing",
-    "V135 authenticated browser review"
+    "V135 authenticated browser review",
+    "V136 authenticated review documents"
   ]
 }

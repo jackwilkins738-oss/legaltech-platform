@@ -1,3 +1,4 @@
+import {ManagedReviewDocuments} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedReviewDocuments.js';
 import {ReviewClient} from '../../40_PLATFORM_FOUNDATION_BUILD/browser/reviewClient.js';
 import {PostgresReviewReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresReviewReader.js';
 import {ManagedReviewReads} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedReviewReads.js';
@@ -1205,13 +1206,44 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     assert.equal((await check(foreign)).rows[0].locked,false);assert.equal((await check(local)).rows[0].locked,true);
     const rights=(await reviewerPool.query("SELECT has_any_column_privilege(current_user,'public.actors','UPDATE') OR has_any_column_privilege(current_user,'public.matters','UPDATE') AS writable")).rows[0];assert.equal(rights.writable,false);
   });
-  await t.test('V133/V134/V135 eleven-pool service exposes review browsing decisions lost-ack replay and global shutdown',async()=>{
-    await resumeDurable();const input=await adoptNew(),request=await pinnedDecision(input,{decision:'REJECT'});let lost=true,reviewHealthy=true;
+  const reviewDocumentProviders={
+    manifest:{resolveVersion:async r=>({tenantId:r.tenantId,eventId:r.eventId,resultJobId:r.expectedResultJobId,resultHash:r.expectedResultHash,artifactHash:r.artifactHash,
+      objectKey:`${r.tenantId}/review/synthetic-source`,versionId:'immutable-v136',size:bytes.length,contentType:'text/plain',evidenceHash:reason,region:'synthetic-region',revision:1,state:'REVIEW_ALLOWED',malwareScan:'CLEAN',parserIsolation:'ISOLATED'}),probe:async()=>({ok:true})},
+    storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.artifactHash,contentLength:bytes.length,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},
+    authorizeDocument:async()=>true,verifyEvidence:async()=>true,audit:async()=>{},probeDocuments:async()=>({ok:true}),
+  };
+  const documentRequest=async()=>{const event=await adoptNew(),pin=await pinnedDecision(event);return {tenantId:tenantA,actorId:actorA,eventId:event.eventId,expectedResultJobId:event.jobId,expectedResultHash:pin.expectedResultHash};};
+  const actualDocuments=(over={})=>{const drain=fixtureDrain();return {drain,documents:new ManagedReviewDocuments({...reviewDocumentProviders,...over,reader:reviewReader,drain:drain.drain,readiness:syntheticReady()})};};
+  await t.test('V136 actual adopted document bytes preserve the exact source digest and reader-only database grants',async()=>{
+    const request=await documentRequest(),f=actualDocuments();let owned;
+    try{await f.documents.deliver(request,{consume:async doc=>{owned=doc.bytes;assert.equal(doc.artifactHash,artifactHash);assert.deepEqual(doc.bytes,bytes);assert.equal(f.drain.held.size,1);}});assert.deepEqual(owned,Buffer.alloc(owned.length));assert.equal(f.drain.held.size,0);assert.equal((await decisionsFor(request.eventId)).length,0);assert.equal((await writebacksFor(request.eventId)).length,0);assert.equal((await f.documents.probe()).ok,true);}finally{await f.documents.stop();}
+  });
+  await t.test('V136 actual foreign tenant and stale result pins never resolve source storage',async()=>{
+    const request=await documentRequest();let resolves=0;const f=actualDocuments({manifest:{...reviewDocumentProviders.manifest,resolveVersion:async r=>{resolves++;return reviewDocumentProviders.manifest.resolveVersion(r);}}});
+    try{for(const change of [{tenantId:tenantB,actorId:actorB},{expectedResultJobId:uuid()},{expectedResultHash:'0'.repeat(64)}])await assert.rejects(f.documents.deliver({...request,...change},{consume:async()=>{assert.fail('unauthorized source transfer');}}),/FORBIDDEN/);assert.equal(resolves,0);}finally{await f.documents.stop();}
+  });
+  await t.test('V136 prepared source audit observes actual actor revocation before byte release',async()=>{
+    const request=await documentRequest(),f=actualDocuments({audit:async c=>{if(c.phase==='PREPARED')await admin.query("UPDATE public.actors SET status='DISABLED' WHERE id=$1",[actorA]);}});
+    try{await assert.rejects(f.documents.deliver(request,{consume:async()=>assert.fail('revoked source transfer')}),/FORBIDDEN/);assert.equal(f.drain.held.size,0);}finally{await admin.query("UPDATE public.actors SET status='ACTIVE' WHERE id=$1",[actorA]);await f.documents.stop();}
+  });
+  await t.test('V136 actual reader final document authority withdrawal releases no source',async()=>{
+    const request=await documentRequest(),f=actualDocuments({authorizeDocument:async c=>c.phase!=='RELEASE'});
+    try{await assert.rejects(f.documents.deliver(request,{consume:async()=>assert.fail('withdrawn source transfer')}),/FORBIDDEN/);assert.equal(f.drain.held.size,0);}finally{await f.documents.stop();}
+  });
+  await t.test('V136 source manifest change during prepared audit rejects actual adopted transfer',async()=>{
+    const request=await documentRequest();let version='immutable-v136';const f=actualDocuments({audit:async c=>{if(c.phase==='PREPARED')version='replacement-v136';},manifest:{...reviewDocumentProviders.manifest,resolveVersion:async r=>({...await reviewDocumentProviders.manifest.resolveVersion(r),versionId:version})}});
+    try{await assert.rejects(f.documents.deliver(request,{consume:async()=>assert.fail('replaced source transfer')}),/UNAVAILABLE/);assert.equal(f.drain.held.size,0);}finally{await f.documents.stop();}
+  });
+  await t.test('V136 source probe attests actual reader privileges and fails wider raw data access',async()=>{
+    const f=actualDocuments();try{assert.equal((await f.documents.probe()).ok,true);await admin.query('GRANT SELECT ON public.domain_job_results TO legaltech_review_reader_ci');assert.equal((await f.documents.probe()).ok,false);}finally{await admin.query('REVOKE SELECT ON public.domain_job_results FROM legaltech_review_reader_ci');await f.documents.stop();}
+  });
+  await t.test('V133/V134/V135/V136 eleven-pool service exposes review browsing decisions lost-ack replay and global shutdown',async()=>{
+    await resumeDurable();const input=await adoptNew(),request=await pinnedDecision(input,{decision:'REJECT'});let lost=true,reviewHealthy=true,documentHealthy=true;
     const {drain:unusedDomain,...serviceDomain}=pipelineOptions,{drain:unusedWorker,...serviceWorker}=managedWorker;
     const review={pool:reviewerPool,expectedRole:'legaltech_reviewer_ci',authorizeAppend:async()=>true,authorizeDecision:async()=>true,authorizeReview:async()=>true,
       audit:async c=>{if(c.phase==='ACCEPTED'&&lost){lost=false;throw new Error('synthetic-lost-review-ack');}},probeReview:async()=>({ok:reviewHealthy})};
-    const session={tenantId:tenantA,actorId:actorA,capabilities:['inbound:review'],authContext:{method:'SERVER_SESSION',mfaVerified:false},status:'ACTIVE'};
-    const options={drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},ingress:ingressOptions,review,reviewRead:{...reviewReaderOptions,audit:async()=>{},probeRead:async()=>({ok:reviewHealthy})},processing:{domain:serviceDomain,worker:serviceWorker,
+    const session={tenantId:tenantA,actorId:actorA,capabilities:['inbound:review','document:read'],authContext:{method:'SERVER_SESSION',mfaVerified:false},status:'ACTIVE'};
+    const options={drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},ingress:ingressOptions,review,reviewDocuments:{...reviewDocumentProviders,maxPending:1,probeDocuments:async()=>({ok:documentHealthy})},reviewRead:{...reviewReaderOptions,audit:async()=>{},probeRead:async()=>({ok:reviewHealthy})},processing:{domain:serviceDomain,worker:serviceWorker,
       queueReaderPool,expectedQueueReaderRole:'legaltech_queue_reader_ci',authorizeResultRead:async()=>true,authorizeAdoption:async()=>true,
       artifacts:{manifest:{resolveVersion:async r=>manifests.get(r.id),probe:async()=>({ok:true})},storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.hash,contentLength:r.size,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},authorizeVersion:async()=>true,verifyEvidence:async()=>true},
       canary:{tenantId:tenantA,actorId:actorA,serviceActorId:serviceActor,authorizeCanary:async()=>true,createFixture:async()=>{const f=approvedUpload(),m=approvedSources.get(f.uploadId);return {confirmedSynthetic:true,payloadId:m.payloadId,payloadHash:m.payloadHash,expectedResultCode:'CLASSIFIED',expectedResultHash:resultHash};},timeoutMs:5000,maxAgeMs:30000}},
@@ -1223,11 +1255,14 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     try{await root.start({port:0});const base=`http://127.0.0.1:${root.server.address().port}`;
       const ready=async()=>{let r;const end=Date.now()+15000;do{r=await fetch(base+'/api/v1/ready');await r.arrayBuffer();if(r.status===200)return;await new Promise(resolve=>setTimeout(resolve,50));}while(Date.now()<end);assert.equal(r.status,200,JSON.stringify({service:root.status(),review:root.reviewIntake.status(),probe:await root.reviewIntake.probe()}));};await ready();
       const readMetadata=async path=>{let response;const deadline=Date.now()+10000;do{response=await fetch(base+path);if(response.status!==503)return response;await response.arrayBuffer();await new Promise(resolve=>setTimeout(resolve,100));}while(Date.now()<deadline);return response;};
-      const shell=await readMetadata('/review');assert.equal(shell.status,200);assert.ok((await shell.text()).includes('Review adopted results'));assert.ok(shell.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
+      const shell=await readMetadata('/review');assert.equal(shell.status,200);const shellText=await shell.text();assert.ok(shellText.includes('Review adopted results'));assert.ok(shellText.includes('data-available="true"'));assert.ok(shell.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
       const module=await readMetadata('/review/assets/reviewClient.js');assert.equal(module.status,200);assert.ok((await module.text()).includes('export class ReviewClient'));
       const crossRead=await fetch(base+'/api/v1/processing/reviews/'+input.eventId,{headers:{origin:'https://evil.example.test'}});assert.equal(crossRead.status,403);await crossRead.arrayBuffer();
       const crossWrite=await fetch(base+'/api/v1/processing/review-decisions',{method:'POST',headers:{origin:'https://evil.example.test','content-type':'application/json'},body:'{}'});assert.equal(crossWrite.status,403);await crossWrite.arrayBuffer();assert.equal((await decisionsFor(input.eventId)).length,0);
       const detail=await readMetadata('/api/v1/processing/reviews/'+input.eventId);assert.equal(detail.status,200);const metadata=await detail.json();assert.equal(metadata.resultHash,request.expectedResultHash);assert.equal(metadata.resultJobId,request.expectedResultJobId);
+      const download=await readMetadata('/api/v1/processing/reviews/'+input.eventId+'/document?resultJobId='+metadata.resultJobId+'&resultHash='+metadata.resultHash);assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),bytes);assert.equal(download.headers.get('x-content-sha256'),artifactHash);assert.ok(download.headers.get('content-disposition').startsWith('attachment;'));assert.equal((await decisionsFor(input.eventId)).length,0);
+      for(const field of ['reader','drain','readiness','pool','expectedRole'])assert.throws(()=>createDurablePostgresProcessingService({...options,reviewDocuments:{...options.reviewDocuments,[field]:{}}}),/REVIEW_DOCUMENT_OVERRIDE_FORBIDDEN/);
+      assert.throws(()=>createDurablePostgresProcessingService({...options,http:{...options.http,reviewDocuments:{}}}),/HTTP_OVERRIDE_FORBIDDEN/);
       const listing=await readMetadata('/api/v1/processing/reviews?limit=100');assert.equal(listing.status,200);assert.ok((await listing.json()).items.some(item=>item.eventId===input.eventId));
       assert.throws(()=>createDurablePostgresProcessingService({...options,reviewRead:{...options.reviewRead,pool:reviewerPool}}),/REVIEW_READ_SEPARATE_POOL_REQUIRED/);
       for(const field of ['reader','drain','readiness'])assert.throws(()=>createDurablePostgresProcessingService({...options,reviewRead:{...options.reviewRead,[field]:{}}}),/REVIEW_READ_OVERRIDE_FORBIDDEN/);
@@ -1242,9 +1277,10 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       assert.equal(lost,false);assert.equal(browser.state().error,'OUTCOME_UNKNOWN');assert.equal(browser.state().pending.decisionKey,retryKey);assert.equal((await decisionsFor(input.eventId)).length,1);
       const retryEnd=Date.now()+10000;do{await browser.retry();if(browser.state().receipt)break;await new Promise(resolve=>setTimeout(resolve,100));}while(Date.now()<retryEnd);
       const output=browser.state().receipt;assert.ok(output);assert.equal(output.replayed,true);assert.equal(output.resultHash,request.expectedResultHash);assert.equal(output.tenantId,undefined);assert.equal(browser.state().pending,null);assert.equal(await eventStatus(input.eventId),'REJECTED');assert.equal((await writebacksFor(input.eventId)).length,0);browser.dispose();
-      reviewHealthy=false;root.readiness.invalidate();const unavailable=await fetch(base+'/api/v1/ready');assert.equal(unavailable.status,503);await unavailable.arrayBuffer();reviewHealthy=true;root.readiness.invalidate();await ready();
+      reviewHealthy=false;root.readiness.invalidate();const unavailable=await fetch(base+'/api/v1/ready');assert.equal(unavailable.status,503);await unavailable.arrayBuffer();reviewHealthy=true;documentHealthy=true;root.readiness.invalidate();await ready();
+      documentHealthy=false;root.readiness.invalidate();const deniedSource=await fetch(base+'/api/v1/ready');assert.equal(deniedSource.status,503);await deniedSource.arrayBuffer();documentHealthy=true;root.readiness.invalidate();await ready();
       stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true,JSON.stringify({stopped,review:root.reviewIntake.status(),drain:await durable.status(scope)}));assert.equal((await durable.status(scope)).inFlight,0);assert.equal((await durable.status(scope)).state,'DRAINED');
-    }finally{reviewHealthy=true;if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
+    }finally{reviewHealthy=true;documentHealthy=true;if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
   });
   await t.test('V133 stale result pins cannot decide an actual adopted event',async()=>{
     const input=await adoptNew(),request=await pinnedDecision(input,{matterId:await openMatter()});

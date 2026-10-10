@@ -28,7 +28,7 @@ path,domain,status,authority,type,bytes
 .gitignore,governance,current,high,file,649
 00_GOVERNANCE/COMPANY_OPERATING_MODEL.md,governance,reference,medium,md,1703
 00_GOVERNANCE/CONSOLIDATION_NOTES.md,governance,reference,medium,md,1106
-00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,86053
+00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,87252
 00_GOVERNANCE/DECISION_GATES.md,governance,reference,medium,md,1121
 00_GOVERNANCE/DECISIONS.md,governance,reference,high,md,3857
 00_GOVERNANCE/FILE_PRIORITY_BUILD_ORDER.md,governance,reference,medium,md,1298
@@ -500,7 +500,7 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/test/offboarding-export-v113.test.js,production_shape,reference,low,js,979
 30_PRODUCTION_SHAPE_SCAFFOLD/test/onboarding-readiness-v109.test.js,production_shape,reference,low,js,766
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresRuntimeV117.test.js,production_shape,reference,low,js,4603
-30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,177844
+30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,184111
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresTransactionsV118.test.js,production_shape,reference,low,js,7779
 30_PRODUCTION_SHAPE_SCAFFOLD/test/secret-rotation-v111.test.js,production_shape,reference,low,js,1044
 30_PRODUCTION_SHAPE_SCAFFOLD/test/security-contract.test.js,engineering,reference,medium,js,228816
@@ -532,9 +532,9 @@ path,domain,status,authority,type,bytes
 32_SECURITY_REGRESSION_AUTOMATION/dependency_review.md,engineering,reference,medium,md,429
 32_SECURITY_REGRESSION_AUTOMATION/run_security_policy_tests.py,engineering,reference,medium,py,526
 32_SECURITY_REGRESSION_AUTOMATION/schema_drift_policy.md,engineering,reference,medium,md,400
-32_SECURITY_REGRESSION_AUTOMATION/security_policy.json,engineering,reference,medium,json,8796
+32_SECURITY_REGRESSION_AUTOMATION/security_policy.json,engineering,reference,medium,json,8839
 32_SECURITY_REGRESSION_AUTOMATION/security_regression_scan.py,engineering,reference,medium,py,5772
-32_SECURITY_REGRESSION_AUTOMATION/security_test_manifest.json,engineering,reference,medium,json,6693
+32_SECURITY_REGRESSION_AUTOMATION/security_test_manifest.json,engineering,reference,medium,json,6831
 32_SECURITY_REGRESSION_AUTOMATION/semgrep/ci-rules.json,security_regression,reference,medium,json,121805
 32_SECURITY_REGRESSION_AUTOMATION/semgrep/README.md,security_regression,reference,medium,md,2091
 32_SECURITY_REGRESSION_AUTOMATION/test_dependency_audit.py,security_regression,reference,medium,py,2755
@@ -656,8 +656,8 @@ path,domain,status,authority,type,bytes
 39_POST_TO_EVIDENCE/06_INTEGRATION_EVIDENCE/README.md,evidence,reference,medium,md,269
 40_PLATFORM_FOUNDATION_BUILD/browser/review.css,platform_build,current,medium,css,1124
 40_PLATFORM_FOUNDATION_BUILD/browser/reviewClient.js,platform_build,current,medium,js,7004
-40_PLATFORM_FOUNDATION_BUILD/browser/reviewPage.html,platform_build,current,medium,html,2160
-40_PLATFORM_FOUNDATION_BUILD/browser/reviewPage.js,platform_build,current,medium,js,3352
+40_PLATFORM_FOUNDATION_BUILD/browser/reviewPage.html,platform_build,current,medium,html,2282
+40_PLATFORM_FOUNDATION_BUILD/browser/reviewPage.js,platform_build,current,medium,js,3703
 40_PLATFORM_FOUNDATION_BUILD/docs/ADR-001_AUTH_DERIVED_TENANT.md,engineering,current,high,md,939
 40_PLATFORM_FOUNDATION_BUILD/docs/API_SECURITY_BOUNDARY.md,engineering,current,high,md,1112
 40_PLATFORM_FOUNDATION_BUILD/docs/BUILD_BOUNDARY.md,engineering,current,high,md,639
@@ -698,6 +698,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/docs/V133_PRODUCTION_REVIEW_BOUNDARY.md,platform_build,current,medium,md,6918
 40_PLATFORM_FOUNDATION_BUILD/docs/V134_PRODUCTION_REVIEW_BROWSING.md,platform_build,current,medium,md,9062
 40_PLATFORM_FOUNDATION_BUILD/docs/V135_AUTHENTICATED_REVIEW_INTERFACE.md,platform_build,current,medium,md,6552
+40_PLATFORM_FOUNDATION_BUILD/docs/V136_AUTHENTICATED_SOURCE_DOWNLOADS.md,platform_build,current,medium,md,9289
 40_PLATFORM_FOUNDATION_BUILD/docs/V31_OPERATOR_REVIEW_SURFACE.md,engineering,current,medium,md,915
 40_PLATFORM_FOUNDATION_BUILD/docs/V32_OPERATIONS_COCKPIT.md,engineering,current,medium,md,912
 40_PLATFORM_FOUNDATION_BUILD/docs/V33_HIGH_TECH_COMMAND_CENTRE.md,engineering,current,medium,md,866
@@ -795,7 +796,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/documentDelivery.js,platform_build,current,medium,js,7940
 40_PLATFORM_FOUNDATION_BUILD/src/documentSecurity.js,platform_build,current,medium,js,12968
 40_PLATFORM_FOUNDATION_BUILD/src/domainCommandBinding.js,platform_build,current,medium,js,2026
-40_PLATFORM_FOUNDATION_BUILD/src/durableProcessingService.js,platform_build,current,medium,js,3963
+40_PLATFORM_FOUNDATION_BUILD/src/durableProcessingService.js,platform_build,current,medium,js,3995
 40_PLATFORM_FOUNDATION_BUILD/src/egressPolicy.js,platform_build,current,medium,js,4378
 40_PLATFORM_FOUNDATION_BUILD/src/errors.js,engineering,current,high,js,714
 40_PLATFORM_FOUNDATION_BUILD/src/exportSafety.js,platform_build,current,medium,js,11345
@@ -819,6 +820,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/managedGraphWebhookIntake.js,platform_build,current,medium,js,16236
 40_PLATFORM_FOUNDATION_BUILD/src/managedProcessingIngress.js,platform_build,current,medium,js,14334
 40_PLATFORM_FOUNDATION_BUILD/src/managedReviewDecisions.js,platform_build,current,medium,js,7459
+40_PLATFORM_FOUNDATION_BUILD/src/managedReviewDocuments.js,platform_build,current,medium,js,12249
 40_PLATFORM_FOUNDATION_BUILD/src/managedReviewReads.js,platform_build,current,medium,js,4928
 40_PLATFORM_FOUNDATION_BUILD/src/managedWorkerArtifacts.js,platform_build,current,medium,js,8902
 40_PLATFORM_FOUNDATION_BUILD/src/matcher.js,engineering,current,high,js,1741
@@ -855,8 +857,8 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerRuntime.js,platform_build,current,medium,js,12135
 40_PLATFORM_FOUNDATION_BUILD/src/processingCanary.js,platform_build,current,medium,js,7500
 40_PLATFORM_FOUNDATION_BUILD/src/processingEvidence.js,platform_build,current,medium,js,1292
-40_PLATFORM_FOUNDATION_BUILD/src/processingHttp.js,platform_build,current,medium,js,19965
-40_PLATFORM_FOUNDATION_BUILD/src/processingService.js,platform_build,current,medium,js,17427
+40_PLATFORM_FOUNDATION_BUILD/src/processingHttp.js,platform_build,current,medium,js,22243
+40_PLATFORM_FOUNDATION_BUILD/src/processingService.js,platform_build,current,medium,js,18878
 40_PLATFORM_FOUNDATION_BUILD/src/proclaimValidation.js,platform_build,current,medium,js,6588
 40_PLATFORM_FOUNDATION_BUILD/src/productionAdmission.js,platform_build,current,medium,js,2397
 40_PLATFORM_FOUNDATION_BUILD/src/productionIdentity.js,platform_build,current,medium,js,17070
@@ -864,9 +866,10 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/recoverySafety.js,platform_build,current,medium,js,10843
 40_PLATFORM_FOUNDATION_BUILD/src/releaseProvenance.js,platform_build,current,medium,js,7596
 40_PLATFORM_FOUNDATION_BUILD/src/reviewCursor.js,platform_build,current,medium,js,2136
+40_PLATFORM_FOUNDATION_BUILD/src/reviewDocumentHttp.js,platform_build,current,medium,js,1617
 40_PLATFORM_FOUNDATION_BUILD/src/reviewEvidence.js,platform_build,current,medium,js,2877
 40_PLATFORM_FOUNDATION_BUILD/src/reviewRequest.js,platform_build,current,medium,js,1208
-40_PLATFORM_FOUNDATION_BUILD/src/reviewUi.js,platform_build,current,medium,js,2495
+40_PLATFORM_FOUNDATION_BUILD/src/reviewUi.js,platform_build,current,medium,js,2705
 40_PLATFORM_FOUNDATION_BUILD/src/secretManagement.js,platform_build,current,medium,js,9122
 40_PLATFORM_FOUNDATION_BUILD/src/secretRotation.js,platform_build,current,medium,js,6733
 40_PLATFORM_FOUNDATION_BUILD/src/securityInterlock.js,platform_build,current,medium,js,5046
@@ -900,6 +903,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/test-support/processingV126.js,platform_build,current,medium,js,3335
 40_PLATFORM_FOUNDATION_BUILD/test-support/reviewV133.js,platform_build,current,medium,js,5364
 40_PLATFORM_FOUNDATION_BUILD/test-support/reviewV134.js,platform_build,current,medium,js,3703
+40_PLATFORM_FOUNDATION_BUILD/test-support/reviewV136.js,platform_build,current,medium,js,2223
 40_PLATFORM_FOUNDATION_BUILD/test/accessReviewV104.test.js,platform_build,current,medium,js,3986
 40_PLATFORM_FOUNDATION_BUILD/test/api.test.js,engineering,current,high,js,15098
 40_PLATFORM_FOUNDATION_BUILD/test/artifactContainmentV128.test.js,platform_build,current,medium,js,11531
@@ -961,9 +965,10 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/test/reviewBoundarySafety.test.js,platform_build,current,medium,js,20205
 40_PLATFORM_FOUNDATION_BUILD/test/reviewBoundaryV133.test.js,platform_build,current,medium,js,12911
 40_PLATFORM_FOUNDATION_BUILD/test/reviewDecisionV130.test.js,platform_build,current,medium,js,7641
+40_PLATFORM_FOUNDATION_BUILD/test/reviewDocumentsV136.test.js,platform_build,current,medium,js,19943
 40_PLATFORM_FOUNDATION_BUILD/test/reviewReadV134.test.js,platform_build,current,medium,js,13593
 40_PLATFORM_FOUNDATION_BUILD/test/reviewRequestSafety.test.js,platform_build,current,medium,js,8354
-40_PLATFORM_FOUNDATION_BUILD/test/reviewUiV135.test.js,platform_build,current,medium,js,14167
+40_PLATFORM_FOUNDATION_BUILD/test/reviewUiV135.test.js,platform_build,current,medium,js,14615
 40_PLATFORM_FOUNDATION_BUILD/test/secretManagementV61.test.js,platform_build,current,medium,js,6706
 40_PLATFORM_FOUNDATION_BUILD/test/secretRotationV111.test.js,platform_build,current,medium,js,3863
 40_PLATFORM_FOUNDATION_BUILD/test/securityFixesV116.test.js,platform_build,current,medium,js,14167
@@ -1031,6 +1036,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V133.md,platform_build,current,medium,md,701
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V134.md,platform_build,current,medium,md,849
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V135.md,platform_build,current,medium,md,958
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V136.md,platform_build,current,medium,md,822
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V29.md,engineering,current,high,md,687
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V30.md,engineering,current,high,md,575
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V31.md,engineering,current,medium,md,1385

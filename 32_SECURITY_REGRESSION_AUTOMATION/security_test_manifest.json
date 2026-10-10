@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V136-REVIEW-DOCUMENTS",
+      "concept": "V136 authenticated review documents",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V135-REVIEW-UI",
       "concept": "V135 authenticated browser review",
       "severity": "BLOCKER"
