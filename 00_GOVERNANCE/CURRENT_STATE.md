@@ -4,6 +4,12 @@
 
 A partner-firm user reports (second hand, SINGLE USER REPORT) that handlers' tasks stall for hours waiting on supervisor approval by email. Desk research found that the SRA's June 2026 post-*Mazur* supervision guidance expects escalation routes, available supervisors and management information on case flow. That makes the hypothesis worth testing, not validated. It changes no wedge or priority. The partner is logging approvals for a week. See `01_RESEARCH_EVIDENCE/APPROVAL_WAIT_DESK_RESEARCH_2026-10.md` (actions A1–A8) and the raw note in `39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/`. V131 (durable writeback execution) is paused until that evidence is in.
 
+## V136 — Authenticated adopted-source downloads
+
+V136 groups exact adopted-artifact downloads, immutable source version/evidence checks, current human/object/document authority, prepared metadata audit and stream/HTTP transfer ownership. A capability-gated review-page control requests the exact selected result pins. Optional production document providers join the existing eleven-pool reader/readiness/drain/shutdown composition without a new migration, privilege, dependency or executor. See `40_PLATFORM_FOUNDATION_BUILD/docs/V136_AUTHENTICATED_SOURCE_DOWNLOADS.md`.
+
+Local suites pass 2,645 platform and 140 scaffold tests, including 83 new document regressions. Six PostgreSQL cases are added; all 147 PostgreSQL 17 CI tests must pass before merge. Native PostgreSQL is unavailable locally. Downloads contain the exact adopted artifact, which may be an envelope; no transformed attachment or inline viewer is substituted. Live source/scan/permission/audit/session providers, inline viewing, browser/retention and operating/release evidence remain outstanding. V131 writeback execution stays paused pending partner evidence; D-018, the pre-TO freeze and customer-data gate remain in force.
+
 ## V135 — Authenticated browser review interface
 
 V135 groups the opt-in verified-server-session review page, protected local assets, strict CSP/origin admission, fresh adopted detail pins, explicit source-review acknowledgement and manual identical-key decision retry. The interface uses the existing V133/V134 read/decision providers and eleven-pool root; no migration, dependency, external executor or identity provider is introduced. See `40_PLATFORM_FOUNDATION_BUILD/docs/V135_AUTHENTICATED_REVIEW_INTERFACE.md`.

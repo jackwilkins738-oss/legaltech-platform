@@ -13,7 +13,8 @@ export function reviewBrowserGuard(req,config){
   if(req.method==='POST'&&(req.headers.origin!==config.origin||req.headers['x-review-ui']!=='1'))throw appError('resource unavailable',{status:403,code:'BROWSER_ORIGIN_DENIED'});
 }
 export const reviewAsset=path=>assets[path]??null;
-export function sendReviewAsset(res,asset,traceId){
+export function sendReviewAsset(res,asset,traceId,{documentAvailable=false}={}){
   if(res.destroyed||res.writableEnded)return;
-  res.writeHead(200,{'content-type':asset.type,'content-length':asset.bytes.length,'cache-control':'no-store','x-content-type-options':'nosniff','x-trace-id':traceId,'content-security-policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",'referrer-policy':'no-referrer','cross-origin-resource-policy':'same-origin','cross-origin-opener-policy':'same-origin','permissions-policy':'camera=(), microphone=(), geolocation=()'});res.end(asset.bytes);
+  const bytes=asset.type.startsWith('text/html')?Buffer.from(asset.bytes.toString('utf8').replace('data-available="false"',`data-available="${documentAvailable?'true':'false'}"`)):asset.bytes;
+  res.writeHead(200,{'content-type':asset.type,'content-length':bytes.length,'cache-control':'no-store','x-content-type-options':'nosniff','x-trace-id':traceId,'content-security-policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",'referrer-policy':'no-referrer','cross-origin-resource-policy':'same-origin','cross-origin-opener-policy':'same-origin','permissions-policy':'camera=(), microphone=(), geolocation=()'});res.end(bytes);
 }

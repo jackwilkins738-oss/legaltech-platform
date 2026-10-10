@@ -1,3 +1,5 @@
+import {isManagedReviewDocuments} from './managedReviewDocuments.js';
+import {sendReviewDocument} from './reviewDocumentHttp.js';
 import {reviewUiConfig,reviewBrowserGuard,reviewAsset,sendReviewAsset} from './reviewUi.js';
 import {isManagedReviewReads} from './managedReviewReads.js';
 import {isManagedReviewDecisions} from './managedReviewDecisions.js';
@@ -27,7 +29,7 @@ function body(req,signal,max){return new Promise((resolve,reject)=>{
   const errorHandler=()=>finish(invalid()),abort=()=>finish(notReady());
   req.on('data',data);req.on('end',end);req.on('error',errorHandler);signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
 });}
-function send(res,status,payload,traceId){if(res.destroyed||res.writableEnded)return;const bytes=JSON.stringify(payload);res.writeHead(status,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(bytes),'cache-control':'no-store','x-content-type-options':'nosniff','x-trace-id':traceId});res.end(bytes);}
+function send(res,status,payload,traceId){if(res.destroyed||res.writableEnded)return;if(res.headersSent){res.destroy();return;}const bytes=JSON.stringify(payload);res.writeHead(status,{'content-type':'application/json; charset=utf-8','content-length':Buffer.byteLength(bytes),'cache-control':'no-store','x-content-type-options':'nosniff','x-trace-id':traceId});res.end(bytes);}
 function headers(req){const counts=new Map();for(let i=0;i<req.rawHeaders.length;i+=2){const name=req.rawHeaders[i].toLowerCase();if(['authorization','cookie','idempotency-key','content-type','content-length','transfer-encoding','origin','sec-fetch-site','x-review-ui'].includes(name)){counts.set(name,(counts.get(name)??0)+1);if(counts.get(name)>1)throw invalid();}}
   if(req.headers['content-encoding']!==undefined)throw invalid();}
 function receipt(value,expected){shape(value,['tenantId','commandId','jobId','kind','objectId','status','replayed']);
@@ -37,13 +39,14 @@ function receipt(value,expected){shape(value,['tenantId','commandId','jobId','ki
 // Dedicated metadata command API. It never falls back to the synthetic platform
 // or exposes worker, adoption, provider, drain-admin or raw result endpoints.
 export function createProcessingHttp({handlers,authProvider,abuseLimiter,readiness,drain,authorizeRequest,audit,accepting=()=>true,
-  requestTimeoutMs=10000,readinessTimeoutMs=1500,maxBodyBytes=16384,maxInFlight=100,allowDirectCommands=true,graphIntake,reviewIntake,reviewReads,reviewUi,maxGraphBodyBytes=256*1024}={}){
+  requestTimeoutMs=10000,readinessTimeoutMs=1500,maxBodyBytes=16384,maxInFlight=100,allowDirectCommands=true,graphIntake,reviewIntake,reviewReads,reviewDocuments,reviewUi,maxGraphBodyBytes=256*1024}={}){
   if(!isProductionReadiness(readiness)||!isManagedDeploymentDrain(drain)||['registerInbound','requestPolicyEvaluation'].some(k=>typeof handlers?.[k]!=='function')
     ||typeof authProvider?.authenticate!=='function'||authProvider instanceof StaticAuthProvider||usesReferenceSessionStore(authProvider)
     ||abuseLimiter instanceof InMemoryAbuseLimiter||['checkIp','checkTenant'].some(k=>typeof abuseLimiter?.[k]!=='function')
-    ||typeof authorizeRequest!=='function'||typeof audit!=='function'||typeof accepting!=='function'||typeof allowDirectCommands!=='boolean'||graphIntake!==undefined&&!isManagedGraphWebhookIntake(graphIntake)||reviewIntake!==undefined&&!isManagedReviewDecisions(reviewIntake)||reviewReads!==undefined&&!isManagedReviewReads(reviewReads))throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
+    ||typeof authorizeRequest!=='function'||typeof audit!=='function'||typeof accepting!=='function'||typeof allowDirectCommands!=='boolean'||graphIntake!==undefined&&!isManagedGraphWebhookIntake(graphIntake)||reviewIntake!==undefined&&!isManagedReviewDecisions(reviewIntake)||reviewReads!==undefined&&!isManagedReviewReads(reviewReads)||reviewDocuments!==undefined&&!isManagedReviewDocuments(reviewDocuments))throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
   for(const [v,min,max] of [[maxGraphBodyBytes,1024,1024*1024],[requestTimeoutMs,100,60000],[readinessTimeoutMs,100,6000],[maxBodyBytes,1024,65536],[maxInFlight,1,1000]])if(!Number.isInteger(v)||v<min||v>max)throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
   const ui=reviewUiConfig(reviewUi);if(ui&&(!reviewReads||!reviewIntake))throw new Error('REVIEW_UI_COMPONENTS_REQUIRED');
+  const documentDeliver=reviewDocuments?.deliver.bind(reviewDocuments);
   const graphReceive=graphIntake?.receive.bind(graphIntake),reviewDecide=reviewIntake?.decide.bind(reviewIntake),reviewList=reviewReads?.list.bind(reviewReads),reviewGet=reviewReads?.get.bind(reviewReads);
   const bound=Object.freeze({registerInbound:handlers.registerInbound.bind(handlers),requestPolicyEvaluation:handlers.requestPolicyEvaluation.bind(handlers),authenticate:authProvider.authenticate.bind(authProvider),checkIp:abuseLimiter.checkIp.bind(abuseLimiter),checkTenant:abuseLimiter.checkTenant.bind(abuseLimiter)});
   const pending=new Set(),controllers=new Set();let closed=false,uncertain=false;
@@ -75,7 +78,7 @@ export function createProcessingHttp({handlers,authProvider,abuseLimiter,readine
           if(session.authContext.method!=='SERVER_SESSION')throw appError('authentication required',{status:401,code:'AUTH_REQUIRED'});
           uuid(session.tenantId);uuid(session.actorId);requireCapability(session,'inbound:review');await bound.checkTenant(session);check(signal);
           if(await authorizeRequest(Object.freeze({tenantId:session.tenantId,actorId:session.actorId,kind:'REVIEW_UI',phase:'ADMIT',signal}))!==true)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
-          await admitted(signal);sendReviewAsset(res,asset,traceId);return;
+          await admitted(signal);sendReviewAsset(res,asset,traceId,{documentAvailable:!!documentDeliver&&session.capabilities.includes('document:read')});return;
         }
         if(req.method==='POST'&&url.pathname==='/api/v1/integrations/graph/webhooks'){
           if(!graphReceive)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
@@ -89,6 +92,19 @@ export function createProcessingHttp({handlers,authProvider,abuseLimiter,readine
           const result=await graphReceive(payload,{signal});check(signal);
           shape(result,['status','accepted','replayed']);if(result.status!==202||!Number.isInteger(result.accepted)||result.accepted<1||result.accepted>100||!Number.isInteger(result.replayed)||result.replayed<0||result.replayed>result.accepted)throw new Error('GRAPH_INBOX_UNVERIFIED');
           send(res,202,{status:'ACCEPTED',accepted:result.accepted,replayed:result.replayed},traceId);return;
+        }
+        if(req.method==='GET'&&/^\/api\/v1\/processing\/reviews\/[^/]+\/document$/.test(url.pathname)){
+          if(!documentDeliver)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+          if(req.headers['transfer-encoding']||req.headers['content-length']&&req.headers['content-length']!=='0'||req.headers.range!==undefined)throw invalid();
+          const eventId=url.pathname.split('/')[5];uuid(eventId);
+          const names=[...url.searchParams.keys()];if(names.length!==2||new Set(names).size!==2||names.some(k=>!['resultJobId','resultHash'].includes(k)))throw invalid();
+          const expectedResultJobId=uuid(url.searchParams.get('resultJobId')),expectedResultHash=hash(url.searchParams.get('resultHash'));
+          await admitted(signal);const session=normalizeSession(await bound.authenticate(req.headers,{method:req.method,url:req.url}));check(signal);
+          if(!['OIDC','SERVER_SESSION'].includes(session.authContext.method))throw appError('authentication required',{status:401,code:'AUTH_REQUIRED'});
+          uuid(session.tenantId);uuid(session.actorId);requireCapability(session,'inbound:review');requireCapability(session,'document:read');await bound.checkTenant(session);check(signal);
+          const input=Object.freeze({tenantId:session.tenantId,actorId:session.actorId,eventId,expectedResultJobId,expectedResultHash});
+          if(await authorizeRequest({...input,kind:'REVIEW_DOCUMENT',phase:'ADMIT',signal})!==true)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});await admitted(signal);
+          await documentDeliver(input,{signal,consume:document=>sendReviewDocument(res,document,traceId)});return;
         }
         if(req.method==='GET'&&(url.pathname==='/api/v1/processing/reviews'||url.pathname.startsWith('/api/v1/processing/reviews/'))){
           if(!reviewList)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
@@ -146,9 +162,10 @@ export function createProcessingHttp({handlers,authProvider,abuseLimiter,readine
         await audit({...context,phase:'ACCEPTED'});if(!signal.aborted)send(res,202,output,traceId);
       }catch(error){
         if(!res.writableEnded){
-          if(['REVIEW_READ_INPUT_INVALID','MANAGED_REVIEW_INPUT_INVALID','REVIEW_DECISION_INPUT_INVALID'].includes(error?.message))send(res,400,{code:'INVALID_REQUEST'},traceId);
+          if(['REVIEW_DOCUMENT_INPUT_INVALID','REVIEW_READ_INPUT_INVALID','MANAGED_REVIEW_INPUT_INVALID','REVIEW_DECISION_INPUT_INVALID'].includes(error?.message))send(res,400,{code:'INVALID_REQUEST'},traceId);
           else if(error?.message==='REVIEW_DECISION_CONFLICT')send(res,409,{code:'REVIEW_CONFLICT'},traceId);
-          else if(['REVIEW_READ_FORBIDDEN','REVIEW_DECISION_FORBIDDEN','MANAGED_REVIEW_FORBIDDEN'].includes(error?.message))send(res,404,{code:'NOT_FOUND'},traceId);
+          else if(['REVIEW_DOCUMENT_FORBIDDEN','REVIEW_READ_FORBIDDEN','REVIEW_DECISION_FORBIDDEN','MANAGED_REVIEW_FORBIDDEN'].includes(error?.message))send(res,404,{code:'NOT_FOUND'},traceId);
+          else if(error?.message==='REVIEW_DOCUMENT_UNAVAILABLE')send(res,503,{status:'NOT_READY'},traceId);
           else if(error?.message==='GRAPH_INBOX_INPUT_INVALID')send(res,400,{code:'INVALID_REQUEST'},traceId);
           else if(committing&&(accepted||!['DOMAIN_COMMAND_CONFLICT','DOMAIN_COMMAND_FORBIDDEN'].includes(error?.message)))send(res,503,{status:'OUTCOME_UNVERIFIED'},traceId);
           else if(error?.message==='DOMAIN_COMMAND_CONFLICT')send(res,409,{code:'COMMAND_CONFLICT'},traceId);
