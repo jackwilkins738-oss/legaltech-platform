@@ -1,7 +1,6 @@
-// V143 foundation: a fail-closed, async live-session authorization boundary.
-// This is not a grant registry and must not be used as a substitute for durable
-// database transaction fencing, row-level security, or end-of-read checks.
+// V144: fail-closed, bounded live session proof. This is NOT durable grant authority.
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const denied=()=>new Error('LIVE_SUPPORT_SESSION_UNAVAILABLE');
 function validId(value){return typeof value==='string'&&UUID.test(value);}
 function validProof(proof,session){
   if(!proof||Object.getPrototypeOf(proof)!==Object.prototype)return false;
@@ -10,19 +9,31 @@ function validProof(proof,session){
   return proof.tenantId===session.tenantId&&proof.actorId===session.actorId&&proof.sessionId===session.sessionId&&proof.active===true&&proof.stepUpValid===true;
 }
 export class LiveSupportSessionBoundary {
-  #check;
-  constructor({check}={}){
-    if(typeof check!=='function')throw new Error('LIVE_SUPPORT_SESSION_CONFIGURATION_INVALID');
-    this.#check=check;
+  #check;#timeoutMs;
+  constructor({check,timeoutMs=3000}={}){
+    if(typeof check!=='function'||!Number.isSafeInteger(timeoutMs)||timeoutMs<50||timeoutMs>10000)throw new Error('LIVE_SUPPORT_SESSION_CONFIGURATION_INVALID');
+    this.#check=check;this.#timeoutMs=timeoutMs;
   }
   async assertCurrent(session,{signal}={}){
-    if(!session||Object.getPrototypeOf(session)!==Object.prototype||!['tenantId','actorId','sessionId'].every(k=>Object.hasOwn(session,k)&&validId(Object.getOwnPropertyDescriptor(session,k)?.value)))throw new Error('LIVE_SUPPORT_SESSION_UNAVAILABLE');
-    if(signal?.aborted)throw new Error('LIVE_SUPPORT_SESSION_UNAVAILABLE');
-    let proof;
+    if(!session||Object.getPrototypeOf(session)!==Object.prototype||!['tenantId','actorId','sessionId'].every(k=>Object.hasOwn(session,k)&&validId(Object.getOwnPropertyDescriptor(session,k)?.value)))throw denied();
+    if(signal?.aborted)throw denied();
+    const controller=new AbortController();
+    let timer,onAbort;
+    const stopped=new Promise((_,reject)=>{
+      onAbort=()=>{controller.abort();reject(denied());};
+      if(signal)signal.addEventListener('abort',onAbort,{once:true});
+      timer=setTimeout(onAbort,this.#timeoutMs);
+    });
     try{
-      proof=await this.#check(Object.freeze({tenantId:session.tenantId,actorId:session.actorId,sessionId:session.sessionId,signal}));
-    }catch{throw new Error('LIVE_SUPPORT_SESSION_UNAVAILABLE');}
-    if(signal?.aborted||!validProof(proof,session))throw new Error('LIVE_SUPPORT_SESSION_UNAVAILABLE');
-    return true;
+      if(signal?.aborted)throw denied();
+      // Promise.resolve().then() catches synchronous provider throws and consumes late rejection.
+      const check=Promise.resolve().then(()=>this.#check(Object.freeze({
+        tenantId:session.tenantId,actorId:session.actorId,sessionId:session.sessionId,signal:controller.signal
+      })));
+      const proof=await Promise.race([check,stopped]);
+      if(controller.signal.aborted||signal?.aborted||!validProof(proof,session))throw denied();
+      return true;
+    }catch{throw denied();}
+    finally{clearTimeout(timer);if(signal)signal.removeEventListener('abort',onAbort);controller.abort();}
   }
 }

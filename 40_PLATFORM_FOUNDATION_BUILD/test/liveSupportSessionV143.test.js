@@ -21,3 +21,27 @@ test('V143 denies expired and mismatched proofs',async()=>{
     await assert.rejects(boundary.assertCurrent(session),/LIVE_SUPPORT_SESSION_UNAVAILABLE/);
   }
 });
+
+test('V144 deadline denies stalled provider and aborts provider signal',async()=>{
+  let providerSignal;
+  const boundary=new LiveSupportSessionBoundary({timeoutMs:50,check:({signal})=>{
+    providerSignal=signal;
+    return new Promise(()=>{});
+  }});
+  await assert.rejects(boundary.assertCurrent(session),/LIVE_SUPPORT_SESSION_UNAVAILABLE/);
+  assert.equal(providerSignal.aborted,true);
+});
+
+test('V144 caller abort denies unresolved provider immediately',async()=>{
+  const controller=new AbortController();
+  const boundary=new LiveSupportSessionBoundary({timeoutMs:1000,check:()=>new Promise(()=>{})});
+  const pending=boundary.assertCurrent(session,{signal:controller.signal});
+  controller.abort();
+  await assert.rejects(pending,/LIVE_SUPPORT_SESSION_UNAVAILABLE/);
+});
+
+test('V144 rejects invalid deadline configuration',()=>{
+  for(const timeoutMs of [0,49,10001,NaN,1.5]){
+    assert.throws(()=>new LiveSupportSessionBoundary({check:async()=>active,timeoutMs}),/LIVE_SUPPORT_SESSION_CONFIGURATION_INVALID/);
+  }
+});
