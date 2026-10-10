@@ -1,3 +1,4 @@
+import {PostgresTenantTransactions} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 // V149 database lookup adapter for V146 reader.
 // transact MUST supply a tenant-scoped read-only PostgreSQL transaction using
 // an RLS-restricted account. This module does not create database credentials.
@@ -30,7 +31,7 @@ export function createPostgresSupportGrantLookup({transact}={}){
         !SCOPES.has(input.scope)||input.signal?.aborted||
         (input.scope==='DOCUMENT_READ'?!/^[a-f0-9]{64}$/.test(input.documentRefHash??''):input.documentRefHash!==null))throw denied();
       const args=[input.tenantId,input.actorId,input.requestId,input.matterId,input.scope,input.documentRefHash];
-      const result=await transact(Object.freeze({tenantId:input.tenantId,readOnly:true,signal:input.signal}),async tx=>{
+      const result=await transact(Object.freeze({tenantId:input.tenantId,actorId:input.actorId,readOnly:true,signal:input.signal}),async tx=>{
         const rows=await tx.query(SUPPORT_GRANT_LOOKUP_SQL,args);
         if(rows.rows?.length!==1)throw denied();
         const r=rows.rows[0];
@@ -44,4 +45,17 @@ export function createPostgresSupportGrantLookup({transact}={}){
       return Object.freeze(decision);
     }catch{throw denied();}
   };
+}
+
+/** V150: binds the V149 lookup to the existing tenant-isolated transaction driver.
+ * Caller must provision a dedicated non-bypass-RLS reader with SELECT-only rights
+ * to the four V88 tables; integration tests and grants verification remain required.
+ */
+export function createTenantScopedPostgresSupportGrantLookup({pool,expectedRole,timeoutMs=3000}={}){
+  if(expectedRole!=='legaltech_support_reader')throw new Error('DURABLE_SUPPORT_GRANT_CONFIGURATION_INVALID');
+  const transactions=new PostgresTenantTransactions({pool,expectedRole,timeoutMs});
+  return createPostgresSupportGrantLookup({transact:(context,work)=>{
+    if(context.readOnly!==true||!context.tenantId||!context.actorId)throw new Error('DURABLE_SUPPORT_GRANT_UNAVAILABLE');
+    return transactions.run({tenantId:context.tenantId,actorId:context.actorId,readOnly:true,signal:context.signal},work);
+  }});
 }
