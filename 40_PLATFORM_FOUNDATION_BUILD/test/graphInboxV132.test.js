@@ -84,3 +84,7 @@ test('V132 cancellation awaits an acknowledged lease acquisition before releasin
   const task=delayed.intake.receive(delayed.payload).catch(e=>e);await until(()=>acquisition);assert.equal(acquisition.signal,undefined);
   assert.equal((await delayed.intake.stop({timeoutMs:10})).drained,false);gate.resolve();await task;assert.equal(f.fixture.held.size,0);assert.equal(delayed.sources.length,0);assert.equal(delayed.intake.status().uncertain,false);assert.equal((await delayed.intake.stop()).drained,true);
 });
+
+test('V132 a rejected health check retains ownership of the other live probes',async()=>{const gate=deferred();let settled=false;const f=graphFixture({state:{probe:async()=>{await gate.promise;return {ok:true};}},config:{probeGraph:()=>{throw new Error('synthetic-probe-failure');}}});
+  const first=f.intake.probe().then(v=>{settled=true;return v;});await tick();assert.equal(settled,false);assert.equal((await f.intake.probe()).ok,false);assert.equal((await f.intake.stop({timeoutMs:10})).drained,false);gate.resolve();assert.equal((await first).ok,false);assert.equal((await f.intake.stop()).drained,true);
+});

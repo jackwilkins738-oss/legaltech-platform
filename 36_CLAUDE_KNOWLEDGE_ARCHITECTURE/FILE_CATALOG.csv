@@ -807,7 +807,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/jobIntent.js,platform_build,current,medium,js,2468
 40_PLATFORM_FOUNDATION_BUILD/src/keyLifecycle.js,platform_build,current,medium,js,6870
 40_PLATFORM_FOUNDATION_BUILD/src/managedDeploymentDrain.js,platform_build,current,medium,js,6822
-40_PLATFORM_FOUNDATION_BUILD/src/managedGraphWebhookIntake.js,platform_build,current,medium,js,16145
+40_PLATFORM_FOUNDATION_BUILD/src/managedGraphWebhookIntake.js,platform_build,current,medium,js,16236
 40_PLATFORM_FOUNDATION_BUILD/src/managedProcessingIngress.js,platform_build,current,medium,js,14334
 40_PLATFORM_FOUNDATION_BUILD/src/managedWorkerArtifacts.js,platform_build,current,medium,js,8902
 40_PLATFORM_FOUNDATION_BUILD/src/matcher.js,engineering,current,high,js,1741
@@ -909,7 +909,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/test/exportSafetyV81.test.js,platform_build,current,medium,js,6962
 40_PLATFORM_FOUNDATION_BUILD/test/graphBoundary.test.js,platform_build,current,medium,js,15707
 40_PLATFORM_FOUNDATION_BUILD/test/graphDeltaRecoveryV92.test.js,platform_build,current,medium,js,8512
-40_PLATFORM_FOUNDATION_BUILD/test/graphInboxV132.test.js,platform_build,current,medium,js,25199
+40_PLATFORM_FOUNDATION_BUILD/test/graphInboxV132.test.js,platform_build,current,medium,js,25814
 40_PLATFORM_FOUNDATION_BUILD/test/graphSubscriptionLifecycleV90.test.js,platform_build,current,medium,js,8642
 40_PLATFORM_FOUNDATION_BUILD/test/graphWebhookIngressV89.test.js,platform_build,current,medium,js,5330
 40_PLATFORM_FOUNDATION_BUILD/test/graphWebhookQueueV91.test.js,platform_build,current,medium,js,6473

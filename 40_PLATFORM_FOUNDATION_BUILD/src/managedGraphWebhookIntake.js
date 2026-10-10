@@ -143,7 +143,7 @@ export class ManagedGraphWebhookIntake {
     signalValid(signal);const unhealthy=()=>signal?.aborted||this.#closed||this.#uncertain||[...this.#pending].some(p=>p.controller.signal.aborted);
     if(this.#probePending||unhealthy())return Object.freeze({ok:false,code:'GRAPH_INBOX_UNVERIFIED'});
     const task=Promise.resolve().then(async()=>{
-      try{const values=await Promise.all([this.#producer.probe({signal}),this.#worker.probe({signal}),this.#reader.probe({signal}),this.#probeGraph(Object.freeze({signal}))]);const ok=!unhealthy()&&values.every(v=>v?.ok===true);return Object.freeze({ok,code:ok?'GRAPH_INBOX_VERIFIED':'GRAPH_INBOX_UNVERIFIED'});}catch{return Object.freeze({ok:false,code:'GRAPH_INBOX_UNVERIFIED'});}
+      try{const values=await Promise.allSettled([()=>this.#producer.probe({signal}),()=>this.#worker.probe({signal}),()=>this.#reader.probe({signal}),()=>this.#probeGraph(Object.freeze({signal}))].map(run=>Promise.resolve().then(run)));const ok=!unhealthy()&&values.every(v=>v.status==='fulfilled'&&v.value?.ok===true);return Object.freeze({ok,code:ok?'GRAPH_INBOX_VERIFIED':'GRAPH_INBOX_UNVERIFIED'});}catch{return Object.freeze({ok:false,code:'GRAPH_INBOX_UNVERIFIED'});}
     });this.#probePending=task;
     try{return await task;}finally{if(this.#probePending===task)this.#probePending=null;}
   }

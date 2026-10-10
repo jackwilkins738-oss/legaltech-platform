@@ -1,6 +1,6 @@
 # V132 test results
 
-- Platform: 2,367 passing tests, including 106 new V132 boundary regressions.
+- Platform: 2,368 passing tests, including 107 new V132 boundary regressions.
 - Production-shape scaffold: 140 passing tests; the actual PostgreSQL integration parent is skipped locally.
 - Seventeen new enabled PostgreSQL cases are included in the full disposable PostgreSQL 17 CI suite; actual database CI must pass before merge.
 - All 57 checksum-pinned migrations are verified locally. Migration 057 is additive; earlier migration bytes are unchanged.
