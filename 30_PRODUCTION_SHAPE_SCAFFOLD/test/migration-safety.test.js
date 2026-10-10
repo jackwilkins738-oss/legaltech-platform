@@ -17,7 +17,7 @@ function cleanup(dir){ fs.rmSync(dir,{recursive:true,force:true}); }
 test('V77 committed migration manifest exactly verifies the canonical migration directory',()=>{
   const manifest=loadMigrationManifest(manifestPath);
   const result=verifyMigrationDirectory({directory:migrationDir,manifest});
-  assert.deepEqual(result,{status:'VERIFIED',count:59,latest:'059_review_reader_boundary.sql'});
+  assert.deepEqual(result,{status:'VERIFIED',count:60,latest:'060_support_reader_boundary.sql'});
 });
 
 test('V77 changed migration bytes are detected as checksum drift',()=>{
@@ -90,7 +90,7 @@ test('V77 current applied migration set verifies without exposing SQL',()=>{
   const manifest=loadMigrationManifest(manifestPath);
   const applied=manifest.migrations.map(({file,sha256})=>({file,sha256}));
   const state=verifyAppliedMigrations({manifest,applied});
-  assert.deepEqual(state,{status:'CURRENT',appliedCount:59,pending:[],latestRequired:'059_review_reader_boundary.sql'});
+  assert.deepEqual(state,{status:'CURRENT',appliedCount:60,pending:[],latestRequired:'060_support_reader_boundary.sql'});
   assert.equal(JSON.stringify(state).includes('CREATE TABLE'),false);
 });
 
