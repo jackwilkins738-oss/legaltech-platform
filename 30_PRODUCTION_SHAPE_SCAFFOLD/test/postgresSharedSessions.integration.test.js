@@ -1037,6 +1037,10 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132 real
     await admin.query('ALTER TABLE graph_security.notifications NO FORCE ROW LEVEL SECURITY');try{assert.equal((await graphWorker.probe()).ok,false);}finally{await admin.query('ALTER TABLE graph_security.notifications FORCE ROW LEVEL SECURITY');}
     await admin.query('ALTER POLICY graph_notification_read ON graph_security.notifications USING(true)');try{assert.equal((await graphReader.probe()).ok,false);}finally{await admin.query('ALTER POLICY graph_notification_read ON graph_security.notifications USING(tenant_id=public.app_current_tenant_id())');}
     await admin.query('ALTER TABLE graph_security.notifications DISABLE TRIGGER graph_notification_transition');try{assert.equal((await graphProducer.probe()).ok,false);}finally{await admin.query('ALTER TABLE graph_security.notifications ENABLE TRIGGER graph_notification_transition');}
+    const triggerDefinition=(await admin.query("SELECT pg_get_triggerdef(oid) AS sql FROM pg_trigger WHERE tgname='graph_notification_transition' AND tgrelid='graph_security.notifications'::regclass")).rows[0].sql;
+    await admin.query('DROP TRIGGER graph_notification_transition ON graph_security.notifications');
+    try{await admin.query(triggerDefinition.replace('EXECUTE FUNCTION','WHEN (false) EXECUTE FUNCTION'));assert.equal((await graphProducer.probe()).ok,false);}
+    finally{await admin.query('DROP TRIGGER IF EXISTS graph_notification_transition ON graph_security.notifications');await admin.query(triggerDefinition);}
     const definition=(await admin.query("SELECT pg_get_functiondef('graph_security.protect_notification()'::regprocedure) AS sql")).rows[0].sql;
     await admin.query(definition.replace('AS $function$','AS $function$\n-- synthetic catalog tamper\n'));try{assert.equal((await graphWorker.probe()).ok,false);}finally{await admin.query(definition);}
   });
