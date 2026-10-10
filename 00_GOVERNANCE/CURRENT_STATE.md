@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V160 — Shared PostgreSQL transaction identity pinning
+
+The shared transaction driver now copies and validates tenant/actor UUIDs before any connection checkout or SQL await. Both entry points reject accessor, inherited, hidden and coercible identity fields without executing caller code. Runtime-role configuration requires a primitive string. Existing connection destruction, transaction-local context, abort and ambiguous-commit behavior are preserved. This is an independent D-018 authorization defect fix; no migrations or privileges change.
+
+V156 / #78, V157 / #79 and V158 / #81 merged after all four CI/security workflows passed, including PostgreSQL 17. V158 verifies independent reader processes, revocation after commit, restart denial and transactional rollback of support mutations/audit on final session denial. V159 / #82 is held unmerged for issue #80 after PostgreSQL 17 CI confirmed actor-spoofed inserts are accepted in all four support mutation tables. The probes rolled back; no cross-tenant or HTTP exploit was established. Support consumer adoption and final handoff fencing remain blocked pending that review. V131, pre-TO/customer-data restrictions and production-readiness evidence requirements remain in force.
+
 ## V157 — Immutable support authorization identity
 
 The live-session boundary, durable grant reader, PostgreSQL lookup and request/approve/revoke adapters now copy validated identity fields before asynchronous work. Caller mutation cannot change the tenant, actor, session or grant binding after admission. Identity accessors, inherited fields and hidden fields are rejected without evaluating getters. Session callbacks receive a frozen minimal identity record. This fixes a mutable-input boundary defect; it introduces no workflow, database privilege or migration.

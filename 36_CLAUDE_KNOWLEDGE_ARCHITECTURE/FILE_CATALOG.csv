@@ -28,7 +28,7 @@ path,domain,status,authority,type,bytes
 .gitignore,governance,current,high,file,649
 00_GOVERNANCE/COMPANY_OPERATING_MODEL.md,governance,reference,medium,md,1703
 00_GOVERNANCE/CONSOLIDATION_NOTES.md,governance,reference,medium,md,1106
-00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,95637
+00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,96880
 00_GOVERNANCE/DECISION_GATES.md,governance,reference,medium,md,1121
 00_GOVERNANCE/DECISIONS.md,governance,reference,high,md,3857
 00_GOVERNANCE/FILE_PRIORITY_BUILD_ORDER.md,governance,reference,medium,md,1298
@@ -491,7 +491,7 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/src/migrationSafety.js,production_shape,reference,low,js,5515
 30_PRODUCTION_SHAPE_SCAFFOLD/src/observability.js,engineering,reference,medium,js,978
 30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresRuntime.js,production_shape,reference,low,js,2314
-30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js,production_shape,reference,low,js,5035
+30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js,production_shape,reference,low,js,5598
 30_PRODUCTION_SHAPE_SCAFFOLD/src/workerPolicy.js,engineering,reference,medium,js,859
 30_PRODUCTION_SHAPE_SCAFFOLD/test-support/supportReaderProcess.js,production_shape,reference,low,js,971
 30_PRODUCTION_SHAPE_SCAFFOLD/test/access-review-v104.test.js,production_shape,reference,low,js,786
@@ -504,7 +504,7 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/test/onboarding-readiness-v109.test.js,production_shape,reference,low,js,766
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresRuntimeV117.test.js,production_shape,reference,low,js,4603
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,208751
-30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresTransactionsV118.test.js,production_shape,reference,low,js,7779
+30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresTransactionsV118.test.js,production_shape,reference,low,js,10616
 30_PRODUCTION_SHAPE_SCAFFOLD/test/secret-rotation-v111.test.js,production_shape,reference,low,js,1044
 30_PRODUCTION_SHAPE_SCAFFOLD/test/security-contract.test.js,engineering,reference,medium,js,228816
 30_PRODUCTION_SHAPE_SCAFFOLD/test/service-level-v107.test.js,production_shape,reference,low,js,764
