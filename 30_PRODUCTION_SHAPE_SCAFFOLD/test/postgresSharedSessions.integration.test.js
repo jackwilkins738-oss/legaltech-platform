@@ -78,8 +78,8 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127 real PostgreSQL shared i
   const one=new PostgresServerSessionStore({...options,brokerPool:brokerOne}),two=new PostgresServerSessionStore({...options,brokerPool:brokerTwo});
   const session=(providerSessionId=`provider-${uuid()}`)=>({tenantId:tenantA,actorId:actorA,capabilities:['matter:read'],roles:[],authContext:{method:'OIDC',mfaVerified:true,authTime:null,expiresAt:new Date(Date.now()+3600000).toISOString(),providerSessionId}});
 
-  await t.test('all 54 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
-    assert.equal(manifest.migrations.length,54);
+  await t.test('all 55 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
+    assert.equal(manifest.migrations.length,55);
     const result=await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({});assert.equal(result.ok,true);
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
