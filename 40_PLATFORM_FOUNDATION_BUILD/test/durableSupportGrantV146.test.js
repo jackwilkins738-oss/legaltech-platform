@@ -44,3 +44,25 @@ test('V147 rejects non-true live session proof before or after grant read',async
     assert.equal(checks,2);
   }
 });
+
+test('V148 timed-out database lookup retains capacity until provider settles',async()=>{
+  let settle,requests=0;
+  const reader=new DurableSupportGrantReader({timeoutMs:50,maxConcurrent:1,
+    liveSession:{assertCurrent:async()=>true},
+    readCurrent:async()=>{requests++;if(requests===1)return new Promise(resolve=>{settle=resolve;});return decision;}
+  });
+  await assert.rejects(reader.assertCurrent(session,request),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+  await assert.rejects(reader.assertCurrent(session,request),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+  assert.equal(requests,1);
+  settle(decision);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(await reader.assertCurrent(session,request),true);
+});
+
+test('V148 rejects invalid lookup limits',()=>{
+  for(const options of [{timeoutMs:49},{timeoutMs:10001},{maxConcurrent:0},{maxConcurrent:17}]){
+    assert.throws(()=>new DurableSupportGrantReader({
+      readCurrent:async()=>decision,liveSession:{assertCurrent:async()=>true},...options
+    }),/DURABLE_SUPPORT_GRANT_CONFIGURATION_INVALID/);
+  }
+});
