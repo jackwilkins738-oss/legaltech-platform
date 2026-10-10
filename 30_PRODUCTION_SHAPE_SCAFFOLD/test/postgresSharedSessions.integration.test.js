@@ -467,6 +467,39 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     const evidence=await admin.query('SELECT event_type FROM public.support_access_events WHERE tenant_id=$1 AND request_id=$2 ORDER BY id',[tenantA,created.requestId]);
     assert.deepEqual(evidence.rows.map(x=>x.event_type),['REQUESTED','APPROVED','REVOKED']);
   });
+  await t.test('V167 revoked support authority cannot resurrect, but a new approved request remains independent',async()=>{
+    const readerLogin='legaltech_support_reader_v167',operatorLogin='legaltech_support_operator_v167';
+    for(const [login,group] of [[readerLogin,'legaltech_support_reader'],[operatorLogin,'legaltech_support_operator']]){
+      await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+      await admin.query(`GRANT ${group} TO ${login}`);
+    }
+    const reader=createTenantScopedPostgresSupportGrantLookup({pool:makePool(readerLogin,2),expectedRole:readerLogin});
+    const operator=createTenantScopedPostgresSupportGrantMutations({pool:makePool(operatorLogin,2),expectedRole:operatorLogin,liveSession:{assertCurrent:async()=>true}});
+    const requester={tenantId:tenantA,actorId:actorA,sessionId:uuid()},approver={tenantId:tenantA,actorId:'11700000-0000-4000-8000-000000000013',sessionId:uuid()};
+    const matterId='11700000-0000-4000-8000-000000000031';
+    const args={session:requester,matterId,scope:'MATTER_READ',ticketRefHash:'d'.repeat(64),purposeHash:'e'.repeat(64),traceId:'v167'};
+    const first=await operator.request(args);
+    const firstInput={tenantId:tenantA,actorId:actorA,requestId:first.requestId,matterId,scope:'MATTER_READ',documentRefHash:null};
+    await operator.approve({session:approver,requestId:first.requestId,traceId:'v167'});
+    assert.equal((await reader(firstInput)).active,true);
+    await operator.revoke({session:approver,requestId:first.requestId,reasonHash:'f'.repeat(64),traceId:'v167'});
+    await assert.rejects(reader(firstInput),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    await assert.rejects(operator.approve({session:approver,requestId:first.requestId,traceId:'v167'}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+    const next=await operator.request(args);
+    assert.notEqual(next.requestId,first.requestId);
+    const nextInput={...firstInput,requestId:next.requestId};
+    await assert.rejects(reader(nextInput),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    await operator.approve({session:approver,requestId:next.requestId,traceId:'v167'});
+    assert.equal((await reader(nextInput)).active,true);
+    await assert.rejects(reader(firstInput),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    await assert.rejects(reader({...nextInput,tenantId:tenantB,actorId:actorB}),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    const checks=await admin.query(`SELECT r.id,EXISTS(SELECT 1 FROM public.support_access_revocations v WHERE v.tenant_id=r.tenant_id AND v.request_id=r.id) AS revoked
+      FROM public.support_access_requests r WHERE r.tenant_id=$1 AND r.id=ANY($2::uuid[]) ORDER BY id`,[tenantA,[first.requestId,next.requestId]]);
+    assert.equal(checks.rows.length,2);
+    assert.equal(checks.rows.filter(x=>x.revoked).length,1);
+    assert.equal(checks.rows.find(x=>x.id===first.requestId).revoked,true);
+    assert.equal(checks.rows.find(x=>x.id===next.requestId).revoked,false);
+  });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
     const results=await Promise.all(Array.from({length:12},(_,i)=>transactions.run(scopes[i%2],async tx=>{
