@@ -14,6 +14,7 @@ export function discardLifecyclePromise(value){
 export class LifecycleTransitionGuard{
   #now;#prefix;#busy=false;#reentered=false;#lastClock=-1;
   constructor(now,prefix){this.#now=now;this.#prefix=prefix;}
+  assertUninterrupted(){if(this.#reentered)throw new Error(`${this.#prefix}_TRANSITION_REENTERED`);}
   run(work){
     if(this.#busy){this.#reentered=true;throw new Error(`${this.#prefix}_TRANSITION_BUSY`);}
     this.#busy=true;this.#reentered=false;
