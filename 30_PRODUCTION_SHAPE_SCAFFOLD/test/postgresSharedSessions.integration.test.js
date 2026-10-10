@@ -1101,7 +1101,7 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132 real
       assert.equal(processed?.commandId,command.command_id);assert.equal(processed?.resultCode,'CLASSIFIED');
       const replay=await send();assert.equal(replay.status,202);assert.equal((await replay.json()).replayed,1);
       graphHealthy=false;root.readiness.invalidate();const unavailable=await fetch(baseUrl+'/api/v1/ready');assert.equal(unavailable.status,503);await unavailable.arrayBuffer();graphHealthy=true;root.readiness.invalidate();await ready();
-      stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true);assert.equal((await durable.status(scope)).state,'DRAINED');assert.equal((await durable.status(scope)).inFlight,0);
+      stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true,JSON.stringify({stopped,graph:root.graphIntake.status(),drain:await durable.status(scope)}));assert.equal((await durable.status(scope)).state,'DRAINED');assert.equal((await durable.status(scope)).inFlight,0);
     }finally{graphHealthy=true;if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
   });
   // V130 runs last: its approvals queue PROCLAIM_WRITEBACK work that nothing in this

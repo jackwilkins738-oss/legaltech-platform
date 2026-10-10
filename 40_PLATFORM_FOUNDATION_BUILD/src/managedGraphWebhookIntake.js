@@ -43,7 +43,7 @@ function stableOutcome(value,claim,control){
 // references were committed to the inbox, not processed or legally approved.
 export class ManagedGraphWebhookIntake {
   #producer;#worker;#reader;#processing;#resolve;#verify;#register;#authorize;#control;#probeGraph;#readiness;#drain;
-  #timeout;#maxPending;#maxBytes;#pending=new Set();#closed=false;#uncertain=false;#probePending=false;
+  #timeout;#maxPending;#maxBytes;#pending=new Set();#closed=false;#uncertain=false;#probePending=null;
   constructor({producer,worker,reader,processingIngress,resolveSubscription,verifyValidationTokens=null,registerSource,authorizeDispatch,dispatchControl,probeGraph,drain,readiness,
     timeoutMs=10000,maxPending=16,maxBodyBytes=256*1024}={}){
     if(![producer,worker,reader].every(isPostgresGraphInbox)||!(producer instanceof PostgresGraphInboxProducer)||!(worker instanceof PostgresGraphInboxWorker)||!(reader instanceof PostgresGraphInboxReader)
@@ -67,7 +67,7 @@ export class ManagedGraphWebhookIntake {
       let lease,result,error;
       try{
         this.#check(controller.signal);
-        try{lease=await this.#drain.acquire({kind,operationId:`graph-inbox:${crypto.randomUUID()}`,signal:controller.signal});}catch{this.#uncertain=true;throw failure('UNVERIFIED');}
+        try{lease=await this.#drain.acquire({kind,operationId:`graph-inbox:${crypto.randomUUID()}`});}catch{this.#uncertain=true;throw failure('UNVERIFIED');}
         this.#check(controller.signal);result=await work(controller.signal);
       }catch(e){error=e;}
       finally{
@@ -142,13 +142,15 @@ export class ManagedGraphWebhookIntake {
   async probe({signal}={}){
     signalValid(signal);const unhealthy=()=>signal?.aborted||this.#closed||this.#uncertain||[...this.#pending].some(p=>p.controller.signal.aborted);
     if(this.#probePending||unhealthy())return Object.freeze({ok:false,code:'GRAPH_INBOX_UNVERIFIED'});
-    this.#probePending=true;
-    try{const values=await Promise.all([this.#producer.probe({signal}),this.#worker.probe({signal}),this.#reader.probe({signal}),this.#probeGraph(Object.freeze({signal}))]);const ok=!unhealthy()&&values.every(v=>v?.ok===true);return Object.freeze({ok,code:ok?'GRAPH_INBOX_VERIFIED':'GRAPH_INBOX_UNVERIFIED'});}catch{return Object.freeze({ok:false,code:'GRAPH_INBOX_UNVERIFIED'});}finally{this.#probePending=false;}
+    const task=Promise.resolve().then(async()=>{
+      try{const values=await Promise.all([this.#producer.probe({signal}),this.#worker.probe({signal}),this.#reader.probe({signal}),this.#probeGraph(Object.freeze({signal}))]);const ok=!unhealthy()&&values.every(v=>v?.ok===true);return Object.freeze({ok,code:ok?'GRAPH_INBOX_VERIFIED':'GRAPH_INBOX_UNVERIFIED'});}catch{return Object.freeze({ok:false,code:'GRAPH_INBOX_UNVERIFIED'});}
+    });this.#probePending=task;
+    try{return await task;}finally{if(this.#probePending===task)this.#probePending=null;}
   }
   resume(){if(this.#pending.size||this.#uncertain)throw failure('UNVERIFIED');this.#closed=false;}
   async stop({timeoutMs=5000}={}){
     integer(timeoutMs,10,60000);this.#closed=true;for(const p of this.#pending)p.controller.abort();let timer;
-    const settled=await Promise.race([Promise.allSettled([...this.#pending].map(p=>p.task)).then(()=>true),new Promise(resolve=>{timer=setTimeout(()=>resolve(false),timeoutMs);})]);clearTimeout(timer);
+    const settled=await Promise.race([Promise.allSettled([...this.#pending].map(p=>p.task).concat(this.#probePending?[this.#probePending]:[])).then(()=>true),new Promise(resolve=>{timer=setTimeout(()=>resolve(false),timeoutMs);})]);clearTimeout(timer);
     return Object.freeze({drained:settled&&!this.#pending.size&&!this.#uncertain&&!this.#probePending,inFlight:this.#pending.size});
   }
 }

@@ -65,7 +65,7 @@ export class OutboxRelaySupervisor {
       // A failed acquisition may have created a remote lease before its reply
       // was lost. Only a returned lease and successful release reconcile it.
       this.#unreleasedLease=true;
-      lease=await this.#drain.acquire({kind:'BACKGROUND',operationId:`${this.#prefix}:${crypto.randomUUID()}`,signal});
+      lease=await this.#drain.acquire({kind:'BACKGROUND',operationId:`${this.#prefix}:${crypto.randomUUID()}`,...(this.#operation==='GRAPH_WEBHOOK_DISPATCH_CYCLE'?{}:{signal})});
       if(!lease||typeof lease.token!=='string'||lease.token.length<1||lease.token.length>256||!Number.isSafeInteger(lease.generation)||lease.generation<1)throw new Error('RELAY_DRAIN_INVALID');
       check();
       const current=scopes(await this.#getScopes(Object.freeze({signal})),this.#maxScopes);check();
