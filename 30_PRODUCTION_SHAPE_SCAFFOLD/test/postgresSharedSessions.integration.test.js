@@ -1,3 +1,4 @@
+import {createTenantScopedPostgresSupportGrantLookup} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportGrantLookup.js';
 import {ManagedReviewDocuments} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedReviewDocuments.js';
 import {ReviewClient} from '../../40_PLATFORM_FOUNDATION_BUILD/browser/reviewClient.js';
 import {PostgresReviewReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresReviewReader.js';
@@ -100,6 +101,57 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
     assert.equal(await brokerOne.query('SELECT * FROM public.matters').then(()=>false,error=>error.code==='42501'),true);
+  });
+  await t.test('V152 support reader is SELECT-only and tenant RLS isolated',async()=>{
+    const role=await admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname='legaltech_support_reader'");
+    assert.equal(role.rows.length,1);
+    assert.deepEqual(role.rows[0],{rolcanlogin:false,rolsuper:false,rolbypassrls:false,rolcreatedb:false,rolcreaterole:false});
+    const grants=await admin.query(`SELECT
+      has_table_privilege('legaltech_support_reader','public.support_access_requests','INSERT,UPDATE,DELETE,TRUNCATE') AS request_write,
+      has_table_privilege('legaltech_support_reader','public.support_access_approvals','INSERT,UPDATE,DELETE,TRUNCATE') AS approval_write,
+      has_table_privilege('legaltech_support_reader','public.support_access_revocations','INSERT,UPDATE,DELETE,TRUNCATE') AS revoke_write,
+      has_table_privilege('legaltech_support_reader','public.support_access_events','SELECT') AS event_read,
+      has_column_privilege('legaltech_support_reader','public.support_access_requests','tenant_id','SELECT') AS tenant_read,
+      has_column_privilege('legaltech_support_reader','public.support_access_requests','ticket_ref_hash','SELECT') AS ticket_read`);
+    assert.deepEqual(grants.rows[0],{request_write:false,approval_write:false,revoke_write:false,event_read:false,tenant_read:true,ticket_read:false});
+    const requestA=uuid(),requestB=uuid();
+    await admin.query(`INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,ticket_ref_hash,purpose_hash,trace_id,expires_at)
+      VALUES($1,$2,$3,$4,'MATTER_READ',$5,$6,'v152',statement_timestamp()+interval '10 minutes')`,
+      [requestA,tenantA,actorA,'11700000-0000-4000-8000-000000000031','a'.repeat(64),'b'.repeat(64)]);
+    await admin.query(`INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,ticket_ref_hash,purpose_hash,trace_id,expires_at)
+      VALUES($1,$2,$3,$4,'MATTER_READ',$5,$6,'v152',statement_timestamp()+interval '10 minutes')`,
+      [requestB,tenantB,actorB,'11700000-0000-4000-8000-000000000036','a'.repeat(64),'b'.repeat(64)]);
+    await admin.query(`INSERT INTO public.support_access_approvals(tenant_id,request_id,approver_id,trace_id) VALUES($1,$2,$3,'v152')`,
+      [tenantA,requestA,'11700000-0000-4000-8000-000000000013']);
+    const readerLogin='legaltech_support_reader_ci';
+    await admin.query(`CREATE ROLE ${readerLogin} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+    await admin.query(`GRANT legaltech_support_reader TO ${readerLogin}`);
+    const readerPool=makePool(readerLogin);
+    const reader=new PostgresTenantTransactions({pool:readerPool,expectedRole:readerLogin});
+    for(const scope of [{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}]){
+      await reader.run({...scope,readOnly:true},async tx=>{
+        for(const table of ['support_access_requests','support_access_approvals','support_access_revocations']){
+          const result=await tx.query(`SELECT tenant_id FROM public.${table}`);
+          assert.ok(result.rows.every(row=>row.tenant_id===scope.tenantId));
+          if(table==='support_access_requests')assert.deepEqual(result.rows.map(row=>row.tenant_id),[scope.tenantId]);
+        }
+      });
+    }
+    const grantLookup=createTenantScopedPostgresSupportGrantLookup({pool:readerPool,expectedRole:readerLogin});
+    const authorized={tenantId:tenantA,actorId:actorA,requestId:requestA,
+      matterId:'11700000-0000-4000-8000-000000000031',scope:'MATTER_READ',documentRefHash:null};
+    assert.equal((await grantLookup(authorized)).active,true);
+    await assert.rejects(grantLookup({...authorized,tenantId:tenantB,actorId:actorB}),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    await assert.rejects(grantLookup({...authorized,requestId:requestB}),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    await admin.query(`INSERT INTO public.support_access_revocations(tenant_id,request_id,revoked_by,reason_hash,trace_id)
+      VALUES($1,$2,$3,$4,'v152')`,[tenantA,requestA,actorA,'c'.repeat(64)]);
+    await assert.rejects(grantLookup(authorized),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA},async tx=>
+      tx.query('INSERT INTO public.support_access_requests(tenant_id) VALUES($1)',[tenantA])),/UNAVAILABLE/);
+    await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA,readOnly:true},async tx=>
+      tx.query('SELECT ticket_ref_hash FROM public.support_access_requests')),/UNAVAILABLE/);
+    await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA,readOnly:true},async tx=>
+      tx.query('SELECT * FROM public.support_access_events')),/UNAVAILABLE/);
   });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
