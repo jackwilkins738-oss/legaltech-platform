@@ -304,7 +304,7 @@
     },
     {
       "file": "061_support_operator_boundary.sql",
-      "sha256": "737e0e6f3312ea55b1e76c10228e7ad5ecf7f532ec847e0cf2163eb7a7d90f49",
+      "sha256": "b129259c255105d09c1b26ed1a3072ff21f71ed8b1b2a17384fcb01d3d69708f",
       "destructive": false
     }
   ]
