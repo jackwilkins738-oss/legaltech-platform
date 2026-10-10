@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PostgresSupportGrantMutations} from '../src/postgresSupportGrantMutations.js';
+import {PostgresSupportGrantMutations,createTenantScopedPostgresSupportGrantMutations} from '../src/postgresSupportGrantMutations.js';
 const session={tenantId:'11111111-1111-4111-8111-111111111111',actorId:'22222222-2222-4222-8222-222222222222',sessionId:'33333333-3333-4333-8333-333333333333'};
 const matterId='44444444-4444-4444-8444-444444444444';
 const requestId='55555555-5555-4555-8555-555555555555';
@@ -46,4 +46,10 @@ test('V153 no audit confirmation means no successful transition',async()=>{
     return {rows:[{id:requestId}]};
   }})});
   await assert.rejects(service.revoke({session,requestId,reasonHash,traceId}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+});
+
+test('V154 operator factory rejects unprivileged and NOLOGIN role identities',()=>{
+  assert.throws(()=>createTenantScopedPostgresSupportGrantMutations({pool:{connect:async()=>{}},expectedRole:'postgres',liveSession}),/DURABLE_SUPPORT_MUTATION_CONFIGURATION_INVALID/);
+  assert.throws(()=>createTenantScopedPostgresSupportGrantMutations({pool:{connect:async()=>{}},expectedRole:'legaltech_support_operator',liveSession}),/DURABLE_SUPPORT_MUTATION_CONFIGURATION_INVALID/);
+  assert.throws(()=>createTenantScopedPostgresSupportGrantMutations({pool:null,expectedRole:'legaltech_support_operator_ci',liveSession}),/POSTGRES_TRANSACTION_CONFIGURATION_INVALID/);
 });
