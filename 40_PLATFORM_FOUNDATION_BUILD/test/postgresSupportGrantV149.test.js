@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createPostgresSupportGrantLookup,SUPPORT_GRANT_LOOKUP_SQL} from '../src/postgresSupportGrantLookup.js';
+import {createPostgresSupportGrantLookup,createTenantScopedPostgresSupportGrantLookup,SUPPORT_GRANT_LOOKUP_SQL} from '../src/postgresSupportGrantLookup.js';
 const input={tenantId:'11111111-1111-4111-8111-111111111111',actorId:'22222222-2222-4222-8222-222222222222',requestId:'44444444-4444-4444-8444-444444444444',matterId:'55555555-5555-4555-8555-555555555555',scope:'MATTER_READ',documentRefHash:null};
 const row={id:input.requestId,tenant_id:input.tenantId,requester_id:input.actorId,matter_id:input.matterId,scope:input.scope,document_ref_hash:null};
 test('V149 query requires exact approval, DB time, and no revocation',()=>{
@@ -23,4 +23,18 @@ test('V149 denies missing, duplicated, cross-tenant and failed database response
   }
   const down=createPostgresSupportGrantLookup({transact:async()=>{throw Error('offline');}});
   await assert.rejects(down(input),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+});
+
+test('V150 transaction lookup refuses missing or unexpected reader role',()=>{
+  assert.throws(()=>createTenantScopedPostgresSupportGrantLookup({pool:{connect:async()=>{}},expectedRole:'postgres'}),/DURABLE_SUPPORT_GRANT_CONFIGURATION_INVALID/);
+  assert.throws(()=>createTenantScopedPostgresSupportGrantLookup({pool:null,expectedRole:'legaltech_support_reader'}),/POSTGRES_TRANSACTION_CONFIGURATION_INVALID/);
+});
+test('V150 passes actor context to injected transaction adapter',async()=>{
+  const lookup=createPostgresSupportGrantLookup({transact:async(context,work)=>{
+    assert.equal(context.tenantId,input.tenantId);
+    assert.equal(context.actorId,input.actorId);
+    assert.equal(context.readOnly,true);
+    return work({query:async()=>({rows:[row]})});
+  }});
+  assert.equal((await lookup(input)).active,true);
 });
