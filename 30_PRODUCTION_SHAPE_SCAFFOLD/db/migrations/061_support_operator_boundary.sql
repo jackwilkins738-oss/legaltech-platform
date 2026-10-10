@@ -1,5 +1,5 @@
 BEGIN;
--- V154: dedicated append-only support grant operator. No UPDATE, DELETE, TRUNCATE or audit reads.
+-- V154: dedicated append-only support grant operator. No destructive DML or audit reads.
 CREATE ROLE legaltech_support_operator NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 GRANT USAGE ON SCHEMA public TO legaltech_support_operator;
 GRANT SELECT (id,tenant_id,requester_id,matter_id,scope,document_ref_hash,expires_at)
