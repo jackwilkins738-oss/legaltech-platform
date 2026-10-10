@@ -22,6 +22,9 @@ jobs:
       - name: Test current platform
         working-directory: 40_PLATFORM_FOUNDATION_BUILD
         run: npm test
+      - name: Validate synthetic deployment connection plan
+        working-directory: 40_PLATFORM_FOUNDATION_BUILD
+        run: npm run deployment:capacity -- deployment/capacity.synthetic.json
 
   legacy-contracts:
     runs-on: ubuntu-latest

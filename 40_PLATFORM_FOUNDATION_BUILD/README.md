@@ -2,6 +2,11 @@
 
 **Lifecycle:** current engineering foundation, product workflow still evidence-gated.
 
+Latest batch: [V137 deployment capacity](docs/V137_DEPLOYMENT_CAPACITY_BATCH.md).
+The durable PostgreSQL root requires a fleet connection budget and observable
+bounded pools. Check a synthetic plan with
+`npm run deployment:capacity -- deployment/capacity.synthetic.json`.
+
 This is the first coherent implementation of the reusable platform path allowed by D-018:
 
 `synthetic inbound event -> durable queue -> safe attachment gate -> deterministic matter candidate -> controlled AI/classification interface -> exception/human review -> mock Proclaim write -> read-back reconciliation -> audit -> idempotent replay`

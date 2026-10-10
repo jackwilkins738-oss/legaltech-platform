@@ -1,10 +1,11 @@
 import {PostgresDeploymentDrainBackend} from './postgresDeploymentDrain.js';
 import {REQUIRED_PRODUCTION_PROBES} from './productionAdmission.js';
 import {createPostgresProcessingService} from './processingService.js';
+import {DeploymentCapacity,bindDeploymentCapacityService} from './deploymentCapacity.js';
 
 // Same six processing pools plus three isolated drain principals. Deployment
 // provisioning/initialization remain explicit; construction never opens pools.
-export function createDurablePostgresProcessingService({processing,drain,http,probes,readiness,ingress,webhooks,review,reviewRead,reviewDocuments,canaryIntervalMs}={}){
+export function createDurablePostgresProcessingService({processing,drain,http,probes,readiness,ingress,webhooks,review,reviewRead,reviewDocuments,capacity,canaryIntervalMs}={}){
   if(!drain||Object.hasOwn(drain,'backend'))throw new Error('DURABLE_PROCESSING_DRAIN_OVERRIDE_FORBIDDEN');
   const {authorize,...options}=drain;
   const pools=[processing?.domain?.domainPool,processing?.domain?.relayPool,processing?.domain?.producerPool,
@@ -29,11 +30,19 @@ export function createDurablePostgresProcessingService({processing,drain,http,pr
     const allRoles=[...roles,...(webhooks?[webhooks.producerOptions?.expectedRole,webhooks.workerOptions?.expectedRole,webhooks.readerOptions?.expectedRole]:[]),...(review?[review.expectedRole]:[])];
     if(typeof reviewRead?.pool?.connect!=='function'||allPools.includes(reviewRead.pool)||typeof reviewRead.expectedRole!=='string'||allRoles.includes(reviewRead.expectedRole))throw new Error('DURABLE_PROCESSING_REVIEW_READ_SEPARATE_POOL_REQUIRED');
   }
+  const names=['DOMAIN','RELAY','PRODUCER','WORKER','DOMAIN_READER','QUEUE_READER','DRAIN_WORKER','DRAIN_OPERATOR','DRAIN_READER'];
+  const bindings=pools.map((pool,i)=>({name:names[i],pool}));
+  if(webhooks!==undefined)bindings.push({name:'GRAPH_PRODUCER',pool:webhooks.producerOptions.pool},{name:'GRAPH_WORKER',pool:webhooks.workerOptions.pool},{name:'GRAPH_READER',pool:webhooks.readerOptions.pool});
+  if(review!==undefined)bindings.push({name:'REVIEW',pool:review.pool});
+  if(reviewRead!==undefined)bindings.push({name:'REVIEW_READER',pool:reviewRead.pool});
+  const deploymentCapacity=new DeploymentCapacity({profile:capacity,bindings});
   const backend=new PostgresDeploymentDrainBackend(options);
   if(!probes||Reflect.ownKeys(probes).length!==REQUIRED_PRODUCTION_PROBES.length||REQUIRED_PRODUCTION_PROBES.some(k=>typeof Object.getOwnPropertyDescriptor(probes,k)?.value!=='function'))throw new Error('PRODUCTION_READINESS_PROBES_REQUIRED');
   const original=probes.DEPLOYMENT_DRAIN;
-  const bound={...probes,DEPLOYMENT_DRAIN:async({signal}={})=>{
+  const databaseProbe=probes.DATABASE_RUNTIME;
+  const bound={...probes,DATABASE_RUNTIME:args=>deploymentCapacity.probe(databaseProbe,args),DEPLOYMENT_DRAIN:async({signal}={})=>{
     if(signal?.aborted||(await original({signal}))?.ok!==true)return {ok:false,code:'POSTGRES_DRAIN_UNVERIFIED'};return backend.probe({signal});
   }};
-  return createPostgresProcessingService({processing,drain:{backend,authorize,deploymentId:options.deploymentId},http,probes:bound,readiness,ingress,webhooks,review,reviewRead,reviewDocuments,canaryIntervalMs});
+  const service=createPostgresProcessingService({processing,drain:{backend,authorize,deploymentId:options.deploymentId},http,probes:bound,readiness,ingress,webhooks,review,reviewRead,reviewDocuments,canaryIntervalMs});
+  return bindDeploymentCapacityService(service,deploymentCapacity);
 }

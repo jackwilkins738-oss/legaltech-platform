@@ -1,13 +1,14 @@
 {
   "name": "legaltech-platform-foundation",
-  "version": "0.10.69",
+  "version": "0.10.70",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test",
     "demo": "node src/demo.js",
     "dev": "node src/devServer.js",
-    "to:field": "node src/toFieldCli.js"
+    "to:field": "node src/toFieldCli.js",
+    "deployment:capacity": "node bin/checkDeploymentCapacity.js"
   },
   "engines": {
     "node": ">=22"
