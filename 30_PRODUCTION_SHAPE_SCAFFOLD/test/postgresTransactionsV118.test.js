@@ -83,3 +83,41 @@ test('V118 uncleared context after COMMIT is an uncertain result and the backend
   x.client.query=async(...args)=>{const result=await original(...args);if(args[0].startsWith("SELECT NULLIF(current_setting('app.tenant_id'"))result.rows[0].tenant_context=context.tenantId;return result};
   await assert.rejects(boundary(x).run(context,async()=>true),/OUTCOME_UNKNOWN/);assert.deepEqual(x.releases,[true]);
 });
+
+for(const key of ['tenantId','actorId']){
+  for(const stage of ['checkout','role-check']){
+    test(`V160 direct transaction pins ${key} before ${stage}`,async()=>{
+      const supplied={...context},x=driver(),replacement='99999999-9999-4999-8999-999999999999';
+      if(stage==='checkout')x.pool.connect=async()=>{supplied[key]=replacement;await Promise.resolve();return x.client;};
+      else {const query=x.client.query;x.client.query=async(...args)=>{const result=await query(...args);if(args[0].includes('current_user AS effective_role'))supplied[key]=replacement;return result;};}
+      await runPostgresTransaction({pool:x.pool,expectedRole:'runtime',context:supplied},async tx=>tx.query('SELECT 1'));
+      assert.deepEqual(x.calls.find(c=>c.sql.includes("set_config('app.tenant_id'"))?.values,[context.tenantId,context.actorId]);
+      assert.deepEqual(x.releases,[false]);
+    });
+  }
+  for(const kind of ['accessor','inherited','hidden','coercible']){
+    test(`V160 both transaction APIs reject ${kind} ${key} before checkout`,async()=>{
+      let touched=0;const supplied={...context};
+      if(kind==='accessor')Object.defineProperty(supplied,key,{get(){touched++;return context[key];}});
+      if(kind==='inherited'){delete supplied[key];Object.setPrototypeOf(supplied,{[key]:context[key]});}
+      if(kind==='hidden')Object.defineProperty(supplied,key,{value:context[key],enumerable:false});
+      if(kind==='coercible')supplied[key]={toString(){touched++;return context[key];}};
+      const pool={connect:async()=>{touched++;throw Error('unexpected checkout');}};
+      await assert.rejects(runPostgresTransaction({pool,expectedRole:'runtime',context:supplied},async()=>{}),/CONTEXT_INVALID/);
+      await assert.rejects(new PostgresTenantTransactions({pool,expectedRole:'runtime'}).run(supplied,async()=>{}),/CONTEXT_INVALID/);
+      assert.equal(touched,0);
+    });
+  }
+}
+test('V160 role coercion cannot run code or check out a connection',async()=>{
+  let touched=0;const expectedRole={toString(){touched++;return 'runtime';}},pool={connect:async()=>{touched++;}};
+  assert.throws(()=>new PostgresTenantTransactions({pool,expectedRole}),/CONFIGURATION_INVALID/);
+  await assert.rejects(runPostgresTransaction({pool,expectedRole},async()=>{}),/CONFIGURATION_INVALID/);
+  assert.equal(touched,0);
+});
+test('V160 UUID normalization occurs before checkout without changing caller fields',async()=>{
+  const x=driver(),supplied={tenantId:'ABCDEFAB-0000-4000-8000-000000000001',actorId:context.actorId};
+  await runPostgresTransaction({pool:x.pool,expectedRole:'runtime',context:supplied},async()=>{});
+  assert.equal(supplied.tenantId,'ABCDEFAB-0000-4000-8000-000000000001');
+  assert.deepEqual(x.calls.find(c=>c.sql.includes("set_config('app.tenant_id'"))?.values,[supplied.tenantId.toLowerCase(),context.actorId]);
+});

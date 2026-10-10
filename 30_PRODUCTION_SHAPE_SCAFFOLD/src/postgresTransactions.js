@@ -2,11 +2,24 @@ const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const ROLE=/^[a-z_][a-z0-9_]{0,62}$/;
 function unavailable(){return new Error('POSTGRES_TRANSACTION_UNAVAILABLE');}
 
+function pinContext(context){
+  try{
+    if(!context||Object.getPrototypeOf(context)!==Object.prototype)throw new Error();
+    const pinned={};
+    for(const key of ['tenantId','actorId']){
+      const descriptor=Object.getOwnPropertyDescriptor(context,key);
+      if(!descriptor?.enumerable||!Object.hasOwn(descriptor,'value')||typeof descriptor.value!=='string'||!UUID.test(descriptor.value))throw new Error();
+      pinned[key]=descriptor.value.toLowerCase();
+    }
+    return Object.freeze(pinned);
+  }catch{throw new Error('POSTGRES_TRANSACTION_CONTEXT_INVALID');}
+}
+
 // Internal driver boundary. The callback is trusted server code, never client SQL.
 // All statements stay on one checked-out connection; no pool.query inside a transaction.
 export async function runPostgresTransaction({pool,expectedRole,timeoutMs=5000,context=null,readOnly=false,isolation='READ COMMITTED',signal},work) {
-  if(typeof pool?.connect!=='function'||!ROLE.test(expectedRole??'')||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>10000||typeof work!=='function'||typeof readOnly!=='boolean'||!['READ COMMITTED','REPEATABLE READ'].includes(isolation)) throw new Error('POSTGRES_TRANSACTION_CONFIGURATION_INVALID');
-  if(context!==null&&(!UUID.test(context?.tenantId??'')||!UUID.test(context?.actorId??''))) throw new Error('POSTGRES_TRANSACTION_CONTEXT_INVALID');
+  if(typeof pool?.connect!=='function'||(typeof expectedRole!=='string'||!ROLE.test(expectedRole))||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>10000||typeof work!=='function'||typeof readOnly!=='boolean'||!['READ COMMITTED','REPEATABLE READ'].includes(isolation)) throw new Error('POSTGRES_TRANSACTION_CONFIGURATION_INVALID');
+  if(context!==null)context=pinContext(context);
   let client,released=false,closed=false,succeeded=false,pendingQueries=0,timer,releaseFailed=false,commitStarted=false;
   const controller=new AbortController();
   const release=destroy=>{if(client&&!released){released=true;try{client.release(destroy);}catch{releaseFailed=true;}}};
@@ -63,10 +76,12 @@ export async function runPostgresTransaction({pool,expectedRole,timeoutMs=5000,c
 export class PostgresTenantTransactions {
   #options;
   constructor({pool,expectedRole,timeoutMs=5000}={}) {
-    if(typeof pool?.connect!=='function'||!ROLE.test(expectedRole??'')||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>10000)throw new Error('POSTGRES_TRANSACTION_CONFIGURATION_INVALID');
+    if(typeof pool?.connect!=='function'||(typeof expectedRole!=='string'||!ROLE.test(expectedRole))||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>10000)throw new Error('POSTGRES_TRANSACTION_CONFIGURATION_INVALID');
     this.#options={pool,expectedRole,timeoutMs};
   }
-  run({tenantId,actorId,readOnly=false,signal}={},work) {
-    return runPostgresTransaction({...this.#options,context:{tenantId,actorId},readOnly,signal},work);
+  async run(input={},work) {
+    const context=pinContext(input);
+    const {readOnly=false,signal}=input;
+    return runPostgresTransaction({...this.#options,context,readOnly,signal},work);
   }
 }
