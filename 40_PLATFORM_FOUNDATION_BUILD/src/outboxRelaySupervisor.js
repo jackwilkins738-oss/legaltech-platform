@@ -13,12 +13,14 @@ function scopes(values,max){
 // One cycle at a time. A deadline aborts actual effects but never assumes that
 // an uncooperative dependency stopped. Restart is forbidden while it is live.
 export class OutboxRelaySupervisor {
-  #relay;#getScopes;#authorize;#drain;#interval;#deadline;#maxScopes;#limit;
+  #relay;#getScopes;#authorize;#drain;#interval;#deadline;#maxScopes;#limit;#operation;#prefix;
   #state='IDLE';#timer=null;#cycle=null;#controller=null;#externalSignal=null;#externalAbort=null;
   #lastError=null;#cycles=0;#delivered=0;#lastSuccess=null;
   #unreleasedLease=false;
-  constructor({relay,getScopes,authorizeScope,drain,pollIntervalMs=1000,cycleTimeoutMs=30000,maxScopes=100,batchSize=25}={}) {
+  constructor({relay,getScopes,authorizeScope,drain,pollIntervalMs=1000,cycleTimeoutMs=30000,maxScopes=100,batchSize=25,operation='OUTBOX_RELAY_CYCLE'}={}) {
     if(typeof relay?.relay!=='function'||typeof getScopes!=='function'||typeof authorizeScope!=='function'||typeof drain?.acquire!=='function'||typeof drain?.release!=='function')throw new Error('RELAY_SUPERVISOR_CONFIGURATION_INVALID');
+    if(!['OUTBOX_RELAY_CYCLE','WORKER_EXECUTION_CYCLE'].includes(operation))throw new Error('RELAY_SUPERVISOR_CONFIGURATION_INVALID');
+    this.#operation=operation;this.#prefix=operation==='OUTBOX_RELAY_CYCLE'?'outbox-relay':'worker-execution';
     this.#relay=Object.freeze({relay:relay.relay.bind(relay)});this.#getScopes=getScopes;this.#authorize=authorizeScope;
     this.#drain=Object.freeze({acquire:drain.acquire.bind(drain),release:drain.release.bind(drain)});
     this.#interval=integer(pollIntervalMs,100,60000);this.#deadline=integer(cycleTimeoutMs,100,60000);this.#maxScopes=integer(maxScopes,1,1000);this.#limit=integer(batchSize,1,100);
@@ -63,12 +65,12 @@ export class OutboxRelaySupervisor {
       // A failed acquisition may have created a remote lease before its reply
       // was lost. Only a returned lease and successful release reconcile it.
       this.#unreleasedLease=true;
-      lease=await this.#drain.acquire({kind:'BACKGROUND',operationId:`outbox-relay:${crypto.randomUUID()}`,signal});
+      lease=await this.#drain.acquire({kind:'BACKGROUND',operationId:`${this.#prefix}:${crypto.randomUUID()}`,signal});
       if(!lease||typeof lease.token!=='string'||lease.token.length<1||lease.token.length>256||!Number.isSafeInteger(lease.generation)||lease.generation<1)throw new Error('RELAY_DRAIN_INVALID');
       check();
       const current=scopes(await this.#getScopes(Object.freeze({signal})),this.#maxScopes);check();
       for(const scope of current){
-        const allowed=await this.#authorize(Object.freeze({...scope,operation:'OUTBOX_RELAY_CYCLE',signal}));check();
+        const allowed=await this.#authorize(Object.freeze({...scope,operation:this.#operation,signal}));check();
         if(allowed!==true)throw new Error('RELAY_SCOPE_FORBIDDEN');
         const result=await this.#relay.relay({...scope,limit:this.#limit,signal});check();
         if(result?.ok!==true||!Number.isInteger(result.delivered)||!Number.isInteger(result.scanned)||result.delivered<0||result.delivered!==result.scanned||result.scanned>this.#limit)throw new Error('RELAY_RESULT_INVALID');

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import {canonicalAuditPayload} from './securityMonitoring.js';
+import {commandRequestHash} from './domainCommandBinding.js';
 import {prepareJobIntent,intentHash} from './jobIntent.js';
 
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -38,7 +38,7 @@ export class PostgresDomainJobHandlers {
   }
   async #execute(b,{traceId,sourceSystem},signal) {
     const enqueue={tenantId:b.tenantId,jobId:b.jobId,kind:b.kind,objectId:b.objectId,traceId,idempotencyKey:`domain-command:${b.commandId}`};
-    const digest=intentHash(prepareJobIntent(enqueue)),requestHash=sha(canonicalAuditPayload({...b,sourceSystem}));
+    const digest=intentHash(prepareJobIntent(enqueue)),requestHash=commandRequestHash(b,sourceSystem);
     let failure;
     try{return await this.#outbox.run({tenantId:b.tenantId,actorId:b.actorId,signal},async tx=>{
       try{

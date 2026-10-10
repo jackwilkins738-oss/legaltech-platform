@@ -13,7 +13,7 @@ BEGIN
   IF current_setting('row_security') <> 'on' THEN
     RAISE EXCEPTION 'RUNTIME_ROW_SECURITY_REQUIRED';
   END IF;
-  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname IN ('legaltech_session_broker','legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_relay')
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname IN ('legaltech_session_broker','legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_relay','legaltech_job_domain_reader')
     AND pg_catalog.pg_has_role(current_user,r.oid,'MEMBER')) THEN
     RAISE EXCEPTION 'RUNTIME_SESSION_BROKER_ROLE_FORBIDDEN';
   END IF;
@@ -69,7 +69,7 @@ BEGIN
   FOREACH required_name IN ARRAY ARRAY[
     'actors','matters','external_mappings','inbound_events','exceptions','idempotency_records',
     'audit_events','jobs','security_zones','actor_security_zones','matter_actor_access',
-    'matter_break_glass_grants','document_security','document_actor_access','domain_outbox_events','domain_outbox_receipts','domain_job_commands'
+    'matter_break_glass_grants','document_security','document_actor_access','domain_outbox_events','domain_outbox_receipts','domain_job_commands','domain_job_results'
   ] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
