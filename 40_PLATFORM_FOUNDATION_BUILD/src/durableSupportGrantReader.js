@@ -18,7 +18,7 @@ export class DurableSupportGrantReader{
       !uuid(requestId)||!uuid(matterId)||!SCOPES.has(scope)||
       (scope==='DOCUMENT_READ'?!/^[a-f0-9]{64}$/.test(documentRefHash??''):documentRefHash!==null)||signal?.aborted)throw denied();
     try{
-      await this.#session.assertCurrent(session,{signal});
+      if(await this.#session.assertCurrent(session,{signal})!==true)throw denied();
       if(signal?.aborted)throw denied();
       const decision=await this.#readCurrent(Object.freeze({
         tenantId:session.tenantId,actorId:session.actorId,requestId,matterId,scope,documentRefHash,signal
@@ -29,7 +29,7 @@ export class DurableSupportGrantReader{
         decision.requestId!==requestId||decision.matterId!==matterId||
         decision.scope!==scope||decision.documentRefHash!==documentRefHash||
         decision.active!==true)throw denied();
-      await this.#session.assertCurrent(session,{signal});
+      if(await this.#session.assertCurrent(session,{signal})!==true)throw denied();
       if(signal?.aborted)throw denied();
       return true;
     }catch{throw denied();}
