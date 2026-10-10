@@ -1,4 +1,4 @@
-import {pinSupportSession} from './supportAuthorityInput.js';
+import {pinSupportSession,pinSupportFields} from './supportAuthorityInput.js';
 import {PostgresTenantTransactions} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 import crypto from 'node:crypto';
 // V153 reference durable mutation adapter. transact MUST be a trusted,
@@ -8,6 +8,7 @@ const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TRACE=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 const SCOPES=new Set(['MATTER_READ','DOCUMENT_READ','DIAGNOSTIC_READ']);
 const denied=()=>new Error('DURABLE_SUPPORT_MUTATION_UNAVAILABLE');
+function hash(value){return typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);}
 function uuid(x){return typeof x==='string'&&UUID.test(x);}
 function base(s,traceId){if(!s||!uuid(s.tenantId)||!uuid(s.actorId)||!uuid(s.sessionId)||typeof traceId!=='string'||!TRACE.test(traceId))throw denied();}
 async function live(boundary,session){if(await boundary.assertCurrent(session)!==true)throw denied();}
@@ -17,12 +18,13 @@ export class PostgresSupportGrantMutations {
     if(typeof transact!=='function'||typeof liveSession?.assertCurrent!=='function')throw new Error('DURABLE_SUPPORT_MUTATION_CONFIGURATION_INVALID');
     this.#transact=transact;this.#live=liveSession;
   }
-  async request({session,matterId,scope,documentRefHash=null,ticketRefHash,purposeHash,traceId}={}){
+  async request(input={}){
+    let {session,matterId,scope,documentRefHash=null,ticketRefHash,purposeHash,traceId}=pinSupportFields(input,['session','matterId','scope','ticketRefHash','purposeHash','traceId'],['documentRefHash'],denied);
     session=pinSupportSession(session,denied);
     base(session,traceId);
-    if(!uuid(matterId)||!SCOPES.has(scope)||!/^([a-f0-9]{64})$/.test(ticketRefHash??'')||
-      !/^([a-f0-9]{64})$/.test(purposeHash??'')||
-      (scope==='DOCUMENT_READ'?!/^[a-f0-9]{64}$/.test(documentRefHash??''):documentRefHash!==null))throw denied();
+    if(!uuid(matterId)||!SCOPES.has(scope)||!hash(ticketRefHash)||
+      !hash(purposeHash)||
+      (scope==='DOCUMENT_READ'?!hash(documentRefHash):documentRefHash!==null))throw denied();
     try {
       await live(this.#live,session);
       return await this.#transact({tenantId:session.tenantId,actorId:session.actorId,readOnly:false},async tx=>{
@@ -42,7 +44,8 @@ export class PostgresSupportGrantMutations {
       });
     }catch{throw denied();}
   }
-  async approve({session,requestId,traceId}={}){
+  async approve(input={}){
+    let {session,requestId,traceId}=pinSupportFields(input,['session','requestId','traceId'],[],denied);
     session=pinSupportSession(session,denied);
     base(session,traceId);if(!uuid(requestId))throw denied();
     try{
@@ -67,9 +70,10 @@ export class PostgresSupportGrantMutations {
       });
     }catch{throw denied();}
   }
-  async revoke({session,requestId,reasonHash,traceId}={}){
+  async revoke(input={}){
+    let {session,requestId,reasonHash,traceId}=pinSupportFields(input,['session','requestId','reasonHash','traceId'],[],denied);
     session=pinSupportSession(session,denied);
-    base(session,traceId);if(!uuid(requestId)||!/^([a-f0-9]{64})$/.test(reasonHash??''))throw denied();
+    base(session,traceId);if(!uuid(requestId)||!hash(reasonHash))throw denied();
     try{
       await live(this.#live,session);
       return await this.#transact({tenantId:session.tenantId,actorId:session.actorId,readOnly:false},async tx=>{

@@ -1,4 +1,4 @@
-import {pinSupportSession} from './supportAuthorityInput.js';
+import {pinSupportSession,pinSupportFields} from './supportAuthorityInput.js';
 // V146 reference: fail-closed tenant-bound read of durable support grant rows.
 // readCurrent must use a tenant-scoped RLS-enforced PostgreSQL transaction.
 // This module never caches authority.
@@ -14,10 +14,11 @@ export class DurableSupportGrantReader{
     if(typeof readCurrent!=='function'||typeof liveSession?.assertCurrent!=='function'||!Number.isSafeInteger(timeoutMs)||timeoutMs<50||timeoutMs>10000||!Number.isSafeInteger(maxConcurrent)||maxConcurrent<1||maxConcurrent>16)throw new Error('DURABLE_SUPPORT_GRANT_CONFIGURATION_INVALID');
     this.#readCurrent=readCurrent;this.#session=liveSession;this.#timeoutMs=timeoutMs;this.#maxConcurrent=maxConcurrent;
   }
-  async assertCurrent(session,{requestId,matterId,scope,documentRefHash=null,signal}={}){
+  async assertCurrent(session,input={}){
+    const {requestId,matterId,scope,documentRefHash=null,signal}=pinSupportFields(input,['requestId','matterId','scope'],['documentRefHash','signal'],denied);
     session=pinSupportSession(session,denied);
     if(!uuid(requestId)||!uuid(matterId)||!SCOPES.has(scope)||
-      (scope==='DOCUMENT_READ'?!/^[a-f0-9]{64}$/.test(documentRefHash??''):documentRefHash!==null)||signal?.aborted)throw denied();
+      (scope==='DOCUMENT_READ'?!(typeof documentRefHash==='string'&&/^[a-f0-9]{64}$/.test(documentRefHash)):documentRefHash!==null)||signal?.aborted)throw denied();
     try{
       if(await this.#session.assertCurrent(session,{signal})!==true)throw denied();
       if(signal?.aborted)throw denied();

@@ -31,7 +31,7 @@ export function createPostgresSupportGrantLookup({transact}={}){
       if(!input||Object.getPrototypeOf(input)!==Object.prototype||
         !['tenantId','actorId','requestId','matterId'].every(k=>typeof input[k]==='string'&&UUID.test(input[k]))||
         !SCOPES.has(input.scope)||input.signal?.aborted||
-        (input.scope==='DOCUMENT_READ'?!/^[a-f0-9]{64}$/.test(input.documentRefHash??''):input.documentRefHash!==null))throw denied();
+        (input.scope==='DOCUMENT_READ'?!(typeof input.documentRefHash==='string'&&/^[a-f0-9]{64}$/.test(input.documentRefHash)):input.documentRefHash!==null))throw denied();
       const args=[input.tenantId,input.actorId,input.requestId,input.matterId,input.scope,input.documentRefHash];
       const result=await transact(Object.freeze({tenantId:input.tenantId,actorId:input.actorId,readOnly:true,signal:input.signal}),async tx=>{
         const rows=await tx.query(SUPPORT_GRANT_LOOKUP_SQL,args);
