@@ -9,14 +9,14 @@ function validProof(proof,session){
   return proof.tenantId===session.tenantId&&proof.actorId===session.actorId&&proof.sessionId===session.sessionId&&proof.active===true&&proof.stepUpValid===true;
 }
 export class LiveSupportSessionBoundary {
-  #check;#timeoutMs;
-  constructor({check,timeoutMs=3000}={}){
-    if(typeof check!=='function'||!Number.isSafeInteger(timeoutMs)||timeoutMs<50||timeoutMs>10000)throw new Error('LIVE_SUPPORT_SESSION_CONFIGURATION_INVALID');
-    this.#check=check;this.#timeoutMs=timeoutMs;
+  #check;#timeoutMs;#maxConcurrent;#outstanding=new Set();
+  constructor({check,timeoutMs=3000,maxConcurrent=4}={}){
+    if(typeof check!=='function'||!Number.isSafeInteger(timeoutMs)||timeoutMs<50||timeoutMs>10000||!Number.isSafeInteger(maxConcurrent)||maxConcurrent<1||maxConcurrent>16)throw new Error('LIVE_SUPPORT_SESSION_CONFIGURATION_INVALID');
+    this.#check=check;this.#timeoutMs=timeoutMs;this.#maxConcurrent=maxConcurrent;
   }
   async assertCurrent(session,{signal}={}){
     if(!session||Object.getPrototypeOf(session)!==Object.prototype||!['tenantId','actorId','sessionId'].every(k=>Object.hasOwn(session,k)&&validId(Object.getOwnPropertyDescriptor(session,k)?.value)))throw denied();
-    if(signal?.aborted)throw denied();
+    if(signal?.aborted||this.#outstanding.size>=this.#maxConcurrent)throw denied();
     const controller=new AbortController();
     let timer,onAbort;
     const stopped=new Promise((_,reject)=>{
@@ -27,9 +27,17 @@ export class LiveSupportSessionBoundary {
     try{
       if(signal?.aborted)throw denied();
       // Promise.resolve().then() catches synchronous provider throws and consumes late rejection.
-      const check=Promise.resolve().then(()=>this.#check(Object.freeze({
-        tenantId:session.tenantId,actorId:session.actorId,sessionId:session.sessionId,signal:controller.signal
-      })));
+      const token={};
+      this.#outstanding.add(token);
+      const check=Promise.resolve().then(()=>{
+        if(controller.signal.aborted)throw denied();
+        return this.#check(Object.freeze({
+          tenantId:session.tenantId,actorId:session.actorId,sessionId:session.sessionId,signal:controller.signal
+        }));
+      });
+      // Keep budget owned until the provider ACTUALLY settles, not merely until
+      // our timeout returns. Aborted but stuck providers must not be replaced.
+      void check.then(()=>this.#outstanding.delete(token),()=>this.#outstanding.delete(token));
       const proof=await Promise.race([check,stopped]);
       if(controller.signal.aborted||signal?.aborted||!validProof(proof,session))throw denied();
       return true;
