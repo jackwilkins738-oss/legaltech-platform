@@ -12,7 +12,7 @@ const brokerSql=`SELECT pg_has_role(current_user,'legaltech_session_broker','MEM
   EXISTS (SELECT 1 FROM pg_roles z WHERE pg_has_role(current_user,z.oid,'MEMBER')
     AND (z.rolsuper OR z.rolbypassrls OR z.rolcreatedb OR z.rolcreaterole OR z.rolreplication
       OR z.rolname IN ('pg_read_all_data','pg_write_all_data','pg_read_server_files','pg_write_server_files','pg_execute_server_program',
-        'legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_writer','legaltech_outbox_relay','legaltech_domain_commands')))
+        'legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_audit_writer','legaltech_audit_reader','legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_writer','legaltech_outbox_relay','legaltech_domain_commands','legaltech_job_domain_reader','legaltech_domain_result_writer')))
     OR has_database_privilege(current_user,current_database(),'CREATE') AS privileged,
   EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='identity_security' AND pg_has_role(current_user,c.relowner,'MEMBER')) AS owns_relations,
@@ -59,7 +59,7 @@ export class PostgresServerSessionStore {
       const result=await tx.query(`WITH moment AS MATERIALIZED (SELECT clock_timestamp() AS stamp)
         INSERT INTO identity_security.server_sessions
         (token_hash,session_id,tenant_id,actor_id,mfa_verified,auth_time,provider_session_hash,created_at,expires_at,idle_timeout_ms,last_seen_at)
-        SELECT $1,$2::uuid,$3::uuid,$4::uuid,$5,$6::timestamptz,$7,stamp,
+        SELECT $1,$2::uuid,$3::uuid,$4::uuid,$5,$6::timestamptz,$7::text,stamp,
           LEAST(stamp+($8::bigint*interval '1 millisecond'),$9::timestamptz),$10,stamp
         FROM moment
         WHERE LEAST(stamp+($8::bigint*interval '1 millisecond'),$9::timestamptz)>stamp

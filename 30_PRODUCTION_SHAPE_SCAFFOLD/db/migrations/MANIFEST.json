@@ -261,6 +261,16 @@
       "file": "052_domain_job_commands.sql",
       "sha256": "4fad21c1e6d6cf8de3ba28e5656ab945533ae4bf7cd5d584a5a39905a96c15c0",
       "destructive": false
+    },
+    {
+      "file": "053_worker_execution_results.sql",
+      "sha256": "51fca9cb5614340c05e69e804bf7925ba5c19a23360d3c13376adf8dc1d6a8ef",
+      "destructive": false
+    },
+    {
+      "file": "054_domain_result_adoption.sql",
+      "sha256": "68fc47d306372dbeb75eb4c067aa1390a60fa66163906b19f7cc0cf9a1e031d6",
+      "destructive": false
     }
   ]
 }

@@ -24,7 +24,8 @@ function normalizeProbeResult(value) {
   if(value.code!==undefined&&!SAFE_CODE.test(value.code)) return {ok:false,code:'CHECK_FAILED'};
   return {ok:value.ok,code:value.ok?(value.code??'OK'):(value.code??'CHECK_FAILED')};
 }
-async function runBounded(check,timeoutMs) {
+async function runBounded(check,timeoutMs,pending) {
+  if(pending.has(check.name))return Object.freeze({name:check.name,critical:check.critical,ok:false,code:'CHECK_BUSY'});
   const controller=new AbortController();
   let timer;
   try {
@@ -32,6 +33,8 @@ async function runBounded(check,timeoutMs) {
       timer=setTimeout(()=>{ controller.abort(); resolve({timedOut:true}); },timeoutMs);
     });
     const probe=Promise.resolve().then(()=>check.probe({signal:controller.signal})).then(value=>({value}),()=>({failed:true}));
+    pending.set(check.name,probe);
+    probe.finally(()=>{if(pending.get(check.name)===probe)pending.delete(check.name);}).catch(()=>{});
     const outcome=await Promise.race([probe,timeout]);
     if(outcome?.timedOut) return Object.freeze({name:check.name,critical:check.critical,ok:false,code:'CHECK_TIMEOUT'});
     if(outcome?.failed) return Object.freeze({name:check.name,critical:check.critical,ok:false,code:'CHECK_FAILED'});
@@ -44,6 +47,7 @@ function freezeResult(value) {
 }
 
 export class ReadinessCoordinator {
+  #pending=new Map();#lastClock=-Infinity;
   constructor({checks=[],probeTimeoutMs=1000,cacheTtlMs=1000,now=()=>Date.now()}={}) {
     if(!Array.isArray(checks)||checks.length<1||checks.length>32) throw new Error('INVALID_READINESS_CHECKS');
     this.checks=Object.freeze(checks.map(normalizeCheck));
@@ -58,6 +62,10 @@ export class ReadinessCoordinator {
   }
   async evaluate({force=false}={}) {
     const at=this.now();
+    if(!Number.isFinite(at)||at<this.#lastClock){
+      this.invalidate();return freezeResult({status:'NOT_READY',checks:this.checks.map(check=>({name:check.name,critical:check.critical,ok:false,code:'CLOCK_INVALID'}))});
+    }
+    this.#lastClock=at;
     if(!force&&this.cached&&at<this.cached.expiresAt) return this.cached.result;
     if(!force&&this.inFlight) {
       const generation=this.generation;
@@ -66,10 +74,13 @@ export class ReadinessCoordinator {
     }
     const generation=this.generation;
     const run=(async()=>{
-      const checks=await Promise.all(this.checks.map(check=>runBounded(check,this.probeTimeoutMs)));
+      const checks=await Promise.all(this.checks.map(check=>runBounded(check,this.probeTimeoutMs,this.#pending)));
       const status=checks.some(check=>check.critical&&!check.ok)?'NOT_READY':checks.some(check=>!check.ok)?'DEGRADED':'READY';
       const result=freezeResult({status,checks});
-      if(generation===this.generation) this.cached={expiresAt:this.now()+this.cacheTtlMs,result};
+      const finishedAt=this.now();
+      if(!Number.isFinite(finishedAt)||finishedAt<this.#lastClock){this.invalidate();return freezeResult({status:'NOT_READY',checks:checks.map(check=>({...check,ok:false,code:'CLOCK_INVALID'}))});}
+      this.#lastClock=finishedAt;
+      if(generation===this.generation) this.cached={expiresAt:finishedAt+this.cacheTtlMs,result};
       return result;
     })();
     if(!force) this.inFlight=run;

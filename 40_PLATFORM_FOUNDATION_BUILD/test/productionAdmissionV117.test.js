@@ -107,7 +107,8 @@ test('V117 invalidation prevents an older concurrent healthy probe from restorin
   const one=ready.publicStatus(),two=ready.publicStatus();await start;
   ready.invalidate();assert.equal((await ready.publicStatus()).status,'NOT_READY');resolveOld(true);
   assert.equal((await one).status,'NOT_READY');assert.equal((await two).status,'NOT_READY');
-  assert.equal((await ready.publicStatus()).status,'NOT_READY');assert.equal(calls,2);
+  assert.equal((await ready.publicStatus()).status,'NOT_READY');assert.equal(calls,1);
+  ready.invalidate();assert.equal((await ready.publicStatus()).status,'NOT_READY');assert.equal(calls,2);
 });
 test('V117 concurrent request admission coalesces probes and invalidation closes every request',async()=>{
   let ready=true,calls=0;

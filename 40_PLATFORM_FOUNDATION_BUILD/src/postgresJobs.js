@@ -18,12 +18,24 @@ function view(row){
   if(!row||!UUID.test(row.tenant_id)||!UUID.test(row.job_id)||!UUID.test(row.object_id)||!KINDS.has(row.kind)
     ||!['QUEUED','RUNNING','SUCCEEDED','DEAD','RECONCILE'].includes(row.status)||!Number.isInteger(row.attempts)||row.attempts<0||row.attempts>10||!HEX.test(row.trace_hash))throw unavailable();
   return Object.freeze({tenantId:row.tenant_id,jobId:row.job_id,kind:row.kind,objectId:row.object_id,traceHash:row.trace_hash,status:row.status,
+    requestHash:row.request_hash,leaseMs:row.lease_ms,maxRunMs:row.max_run_ms,maxAttempts:row.max_attempts,
     attempt:row.attempts,workerId:row.worker_id,leaseUntil:date(row.lease_until),runUntil:date(row.run_until),availableAt:date(row.available_at),createdAt:date(row.created_at),lastErrorCode:row.last_error_code,resultCode:row.result_code});
+}
+function resultView(row){
+  if(!row||!UUID.test(row.tenant_id)||!UUID.test(row.job_id)||!UUID.test(row.object_id)||!UUID.test(row.command_id)||!UUID.test(row.worker_id)
+    ||!['PROCESS_INBOUND','POLICY_EVALUATION'].includes(row.kind)||!HEX.test(row.command_hash)||!HEX.test(row.artifact_hash)||!HEX.test(row.result_hash)
+    ||!CODE.test(row.result_code)||!Number.isInteger(row.attempt)||row.attempt<1||row.attempt>10)throw unavailable();
+  return Object.freeze({tenantId:row.tenant_id,jobId:row.job_id,kind:row.kind,objectId:row.object_id,commandId:row.command_id,commandHash:row.command_hash,
+    artifactHash:row.artifact_hash,resultHash:row.result_hash,resultCode:row.result_code,attempt:row.attempt,workerId:row.worker_id,completedAt:date(row.completed_at)});
 }
 async function trigger(tx){
   const found=await tx.query(`SELECT t.tgenabled FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE n.nspname='queue_security' AND c.relname='jobs' AND t.tgname='protect_shared_job_transition' AND NOT t.tgisinternal`);
   if(found.rows.length!==1||!['O','A'].includes(found.rows[0].tgenabled))throw unavailable();
+  const results=await tx.query(`SELECT t.tgname,t.tgenabled,t.tgdeferrable,t.tginitdeferred FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='queue_security' AND c.relname='job_results' AND t.tgname IN ('worker_result_claim','worker_result_completion') AND NOT t.tgisinternal`);
+  if(results.rows.length!==2||!results.rows.some(r=>r.tgname==='worker_result_claim')||!results.rows.some(r=>r.tgname==='worker_result_completion'&&r.tgdeferrable===true&&r.tginitdeferred===true)
+    ||results.rows.some(r=>!['O','A'].includes(r.tgenabled)))throw unavailable();
 }
 async function run(options,group,authorize,binding,work,{signal,readOnly=false}={}) {
   let denied;
@@ -138,6 +150,35 @@ export class PostgresJobWorker {
   }
   renew(claim,options={}){return this.#settle(claim,'RENEW',options);}
   complete(claim,{resultCode='COMPLETED',signal}={}){return this.#settle(claim,'COMPLETE',{resultCode,signal});}
+  async completeWithResult(claim,input,{signal}={}) {
+    const b=this.#binding(claim,'COMPLETE_RESULT');
+    if(!['PROCESS_INBOUND','POLICY_EVALUATION'].includes(b.kind)||!input||Object.getPrototypeOf(input)!==Object.prototype
+      ||Reflect.ownKeys(input).length!==5||Reflect.ownKeys(input).some(k=>!['commandId','commandHash','artifactHash','resultHash','resultCode'].includes(k)))throw new Error('QUEUE_INPUT_INVALID');
+    const metadata={commandId:uuid(input.commandId),commandHash:input.commandHash,artifactHash:input.artifactHash,resultHash:input.resultHash,resultCode:code(input.resultCode)};
+    for(const key of ['commandHash','artifactHash','resultHash'])if(typeof metadata[key]!=='string'||!HEX.test(metadata[key]))throw new Error('QUEUE_INPUT_INVALID');
+    const objectId=uuid(claim.objectId);
+    if(typeof claim.requestHash!=='string'||!HEX.test(claim.requestHash))throw new Error('QUEUE_INPUT_INVALID');
+    const matches=row=>row&&row.tenant_id===b.tenantId&&row.job_id===b.jobId&&row.kind===b.kind&&row.object_id===objectId&&row.command_id===metadata.commandId
+      &&row.command_hash===metadata.commandHash&&row.artifact_hash===metadata.artifactHash&&row.result_hash===metadata.resultHash&&row.result_code===metadata.resultCode
+      &&row.attempt===b.attempt&&row.worker_id===b.workerId&&row.token_hash===b.tokenHash;
+    try{return await run(this.#options,worker,this.#authorize,{...b,objectId},async tx=>{
+      const locked=await tx.query(`SELECT * FROM queue_security.jobs WHERE tenant_id=$1::uuid AND job_id=$2::uuid AND kind=$3 AND attempts=$4
+        AND worker_id=$5::uuid AND lease_token_hash=$6 AND object_id=$7::uuid AND request_hash=$8 FOR UPDATE`,[b.tenantId,b.jobId,b.kind,b.attempt,b.workerId,b.tokenHash,objectId,claim.requestHash]);
+      if(locked.rows.length===0)return false;if(locked.rows.length!==1)throw unavailable();
+      const prior=await tx.query('SELECT * FROM queue_security.job_results WHERE tenant_id=$1::uuid AND job_id=$2::uuid',[b.tenantId,b.jobId]);
+      if(prior.rows.length){if(prior.rows.length!==1||!matches(prior.rows[0])||locked.rows[0].status!=='SUCCEEDED'||locked.rows[0].result_code!==metadata.resultCode)throw unavailable();return resultView(prior.rows[0]);}
+      if(locked.rows[0].status!=='RUNNING')return false;
+      const saved=await tx.query(`INSERT INTO queue_security.job_results(tenant_id,job_id,kind,object_id,command_id,command_hash,artifact_hash,result_hash,result_code,attempt,worker_id,token_hash)
+        VALUES($1::uuid,$2::uuid,$3,$4::uuid,$5::uuid,$6,$7,$8,$9,$10,$11::uuid,$12) RETURNING *`,
+        [b.tenantId,b.jobId,b.kind,objectId,metadata.commandId,metadata.commandHash,metadata.artifactHash,metadata.resultHash,metadata.resultCode,b.attempt,b.workerId,b.tokenHash]);
+      if(saved.rows.length!==1||!matches(saved.rows[0]))throw unavailable();
+      const settled=await tx.query(`WITH moment AS MATERIALIZED (SELECT clock_timestamp() AS stamp)
+        UPDATE queue_security.jobs j SET status='SUCCEEDED',lease_until=NULL,run_until=NULL,result_code=$7,last_error_code=NULL,updated_at=m.stamp FROM moment m
+        WHERE j.tenant_id=$1::uuid AND j.job_id=$2::uuid AND j.kind=$3 AND j.attempts=$4 AND j.worker_id=$5::uuid AND j.lease_token_hash=$6
+        AND j.status='RUNNING' AND j.lease_until>m.stamp RETURNING j.job_id`,[b.tenantId,b.jobId,b.kind,b.attempt,b.workerId,b.tokenHash,metadata.resultCode]);
+      if(settled.rows.length!==1||settled.rows[0].job_id!==b.jobId)throw unavailable();return resultView(saved.rows[0]);
+    },{signal});}catch(error){if(error.message==='QUEUE_TRANSACTION_OUTCOME_UNKNOWN')throw new Error('QUEUE_SETTLEMENT_OUTCOME_UNKNOWN');throw error;}
+  }
   fail(claim,options={}){return this.#settle(claim,'FAIL',options);}
   async recoverExpired({tenantId,kind:type,limit=25,signal}={}) {
     tenantId=uuid(tenantId);type=kind(type);integer(limit,1,100);
@@ -169,6 +210,15 @@ export class PostgresJobReader {
     return run(this.#options,reader,this.#authorize,{tenantId,jobId,operation:'READ'},async tx=>{
       const result=await tx.query('SELECT * FROM queue_security.jobs WHERE tenant_id=$1::uuid AND job_id=$2::uuid',[tenantId,jobId]);
       if(result.rows.length>1||result.rows.length===1&&(result.rows[0].tenant_id!==tenantId||result.rows[0].job_id!==jobId))throw unavailable();return result.rows.length?view(result.rows[0]):null;
+    },{readOnly:true,signal});
+  }
+  async getResult({tenantId,jobId,signal}={}) {
+    tenantId=uuid(tenantId);jobId=uuid(jobId);
+    return run(this.#options,reader,this.#authorize,{tenantId,jobId,operation:'READ_RESULT'},async(tx,check)=>{
+      const result=await tx.query('SELECT * FROM queue_security.job_results WHERE tenant_id=$1::uuid AND job_id=$2::uuid',[tenantId,jobId]);
+      if(result.rows.length>1||result.rows.length===1&&(result.rows[0].tenant_id!==tenantId||result.rows[0].job_id!==jobId))throw unavailable();
+      if(!result.rows.length)return null;
+      const value=resultView(result.rows[0]);await check({kind:value.kind,objectId:value.objectId});return value;
     },{readOnly:true,signal});
   }
 }
