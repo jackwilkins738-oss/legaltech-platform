@@ -1,7 +1,6 @@
+import {pinSupportSession} from './supportAuthorityInput.js';
 // V144: fail-closed, bounded live session proof. This is NOT durable grant authority.
-const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const denied=()=>new Error('LIVE_SUPPORT_SESSION_UNAVAILABLE');
-function validId(value){return typeof value==='string'&&UUID.test(value);}
 function validProof(proof,session){
   if(!proof||Object.getPrototypeOf(proof)!==Object.prototype)return false;
   const keys=Reflect.ownKeys(proof);
@@ -15,7 +14,7 @@ export class LiveSupportSessionBoundary {
     this.#check=check;this.#timeoutMs=timeoutMs;this.#maxConcurrent=maxConcurrent;
   }
   async assertCurrent(session,{signal}={}){
-    if(!session||Object.getPrototypeOf(session)!==Object.prototype||!['tenantId','actorId','sessionId'].every(k=>Object.hasOwn(session,k)&&validId(Object.getOwnPropertyDescriptor(session,k)?.value)))throw denied();
+    session=pinSupportSession(session,denied);
     if(signal?.aborted||this.#outstanding.size>=this.#maxConcurrent)throw denied();
     const controller=new AbortController();
     let timer,onAbort;
