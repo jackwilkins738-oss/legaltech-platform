@@ -1,7 +1,7 @@
 // Explicit opt-in adapter for ManagedReviewDocuments.authorizeDocument.
 // The caller supplies a server-trusted binding and a live PostgreSQL grant lookup.
 // Normal review permissions remain mandatory: durable support access never replaces them.
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const deny=()=>new Error('SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE');
 const same=(a,b)=>typeof a==='string'&&typeof b==='string'&&UUID.test(a)&&UUID.test(b)&&a===b;
 function snapshot(value,keys,required=keys){
