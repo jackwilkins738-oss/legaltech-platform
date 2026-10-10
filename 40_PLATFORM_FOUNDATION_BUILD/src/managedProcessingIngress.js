@@ -50,6 +50,13 @@ export class ManagedProcessingIngress {
     const {signal,value}=extract(input,['subscriptionId','notificationFingerprint']);shape(value,['subscriptionId','notificationFingerprint']);uuid(value.subscriptionId);digest(value.notificationFingerprint);
     return this.#run('GRAPH',Object.freeze(value),signal);
   }
+  // Internal durable-inbox route pins authoritative tenant and exact source
+  // evidence before either resolution can create a domain command.
+  dispatchGraphBound(input){
+    const {signal,value}=extract(input,['tenantId','sourceEvidenceHash','sourceVersionHash','subscriptionId','notificationFingerprint']);
+    shape(value,['tenantId','sourceEvidenceHash','sourceVersionHash','subscriptionId','notificationFingerprint']);uuid(value.tenantId);uuid(value.subscriptionId);digest(value.sourceEvidenceHash);digest(value.sourceVersionHash);digest(value.notificationFingerprint);
+    return this.#run('GRAPH',Object.freeze(value),signal);
+  }
   submitPolicy(input){
     const {signal,value}=extract(input,['tenantId','actorId','matterId','requestId']);shape(value,['tenantId','actorId','matterId','requestId']);for(const k of Object.keys(value))uuid(value[k]);
     return this.#run('POLICY',Object.freeze(value),signal);
@@ -62,6 +69,7 @@ export class ManagedProcessingIngress {
       ||/^[A-Za-z][A-Za-z0-9+.-]*:/.test(binding.versionId)||['latest','current','null','undefined','head'].includes(binding.versionId.toLowerCase())
       ||!Number.isSafeInteger(binding.revision)||binding.revision<1)throw failure('UNAVAILABLE');
     if(kind==='GRAPH'){
+      if(input.tenantId!==undefined&&(binding.tenantId!==input.tenantId||binding.evidenceHash!==input.sourceEvidenceHash||graphApprovedSourceVersionHash(binding)!==input.sourceVersionHash))throw failure('FORBIDDEN');
       if(!['created','updated'].includes(binding.changeType)||binding.subscriptionId!==input.subscriptionId||binding.sourceKey!==input.notificationFingerprint)throw failure('FORBIDDEN');
     }else if(binding.tenantId!==input.tenantId||binding.actorId!==input.actorId||binding.sourceKey!==(kind==='POLICY'?input.requestId:input.uploadId))throw failure('FORBIDDEN');
     if(kind==='POLICY'){
@@ -85,7 +93,7 @@ export class ManagedProcessingIngress {
       // global drain appear complete while a source/provider is still owned.
       try{lease=await this.#drain.acquire({operationId:`ingress:${crypto.randomUUID()}`,kind:'INGRESS',signal});}catch{this.#uncertain=true;throw failure('UNAVAILABLE');}
       check();await authorize(input,'RESOLVE');
-      const request=Object.freeze({...input,signal});
+      const request=Object.freeze(kind==='GRAPH'?{subscriptionId:input.subscriptionId,notificationFingerprint:input.notificationFingerprint,signal}:{...input,signal});
       const binding=this.#binding(kind,await this.#resolve[kind](request),input);check();
       if(await this.#verify(Object.freeze({...binding,kind,signal}))!==true)throw failure('FORBIDDEN');check();
       const source=kind==='UPLOAD'?'MANUAL_UPLOAD':kind==='GRAPH'?'MICROSOFT_GRAPH':'POLICY_EVALUATION';
@@ -147,4 +155,10 @@ export function createGraphProcessingDispatch(ingress){
     try{return await dispatch({subscriptionId:value.subscriptionId,notificationFingerprint:value.notificationFingerprint});}
     catch{throw new Error('GRAPH_WEBHOOK_DISPATCH_FAILED');}
   };
+}
+
+// Source key is excluded: delivery identity is derived from this immutable
+// version hash, then durably registered as that key by the source provider.
+export function graphApprovedSourceVersionHash(binding){
+  return crypto.createHash('sha256').update(JSON.stringify(['graph-approved-source-v132',binding.tenantId,binding.actorId,binding.subscriptionId,binding.changeType,binding.payloadId,binding.payloadHash,binding.versionId,binding.evidenceHash,binding.revision])).digest('hex');
 }

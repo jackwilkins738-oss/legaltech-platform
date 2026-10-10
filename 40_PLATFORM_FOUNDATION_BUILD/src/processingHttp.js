@@ -1,3 +1,5 @@
+import {isManagedGraphWebhookIntake} from './managedGraphWebhookIntake.js';
+import {graphValidationResponse} from './graphWebhookIngress.js';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import {isUtf8} from 'node:buffer';
@@ -32,12 +34,13 @@ function receipt(value,expected){shape(value,['tenantId','commandId','jobId','ki
 // Dedicated metadata command API. It never falls back to the synthetic platform
 // or exposes worker, adoption, provider, drain-admin or raw result endpoints.
 export function createProcessingHttp({handlers,authProvider,abuseLimiter,readiness,drain,authorizeRequest,audit,accepting=()=>true,
-  requestTimeoutMs=10000,readinessTimeoutMs=1500,maxBodyBytes=16384,maxInFlight=100,allowDirectCommands=true}={}){
+  requestTimeoutMs=10000,readinessTimeoutMs=1500,maxBodyBytes=16384,maxInFlight=100,allowDirectCommands=true,graphIntake,maxGraphBodyBytes=256*1024}={}){
   if(!isProductionReadiness(readiness)||!isManagedDeploymentDrain(drain)||['registerInbound','requestPolicyEvaluation'].some(k=>typeof handlers?.[k]!=='function')
     ||typeof authProvider?.authenticate!=='function'||authProvider instanceof StaticAuthProvider||usesReferenceSessionStore(authProvider)
     ||abuseLimiter instanceof InMemoryAbuseLimiter||['checkIp','checkTenant'].some(k=>typeof abuseLimiter?.[k]!=='function')
-    ||typeof authorizeRequest!=='function'||typeof audit!=='function'||typeof accepting!=='function'||typeof allowDirectCommands!=='boolean')throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
-  for(const [v,min,max] of [[requestTimeoutMs,100,60000],[readinessTimeoutMs,100,6000],[maxBodyBytes,1024,65536],[maxInFlight,1,1000]])if(!Number.isInteger(v)||v<min||v>max)throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
+    ||typeof authorizeRequest!=='function'||typeof audit!=='function'||typeof accepting!=='function'||typeof allowDirectCommands!=='boolean'||graphIntake!==undefined&&!isManagedGraphWebhookIntake(graphIntake))throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
+  for(const [v,min,max] of [[maxGraphBodyBytes,1024,1024*1024],[requestTimeoutMs,100,60000],[readinessTimeoutMs,100,6000],[maxBodyBytes,1024,65536],[maxInFlight,1,1000]])if(!Number.isInteger(v)||v<min||v>max)throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
+  const graphReceive=graphIntake?.receive.bind(graphIntake);
   const bound=Object.freeze({registerInbound:handlers.registerInbound.bind(handlers),requestPolicyEvaluation:handlers.requestPolicyEvaluation.bind(handlers),authenticate:authProvider.authenticate.bind(authProvider),checkIp:abuseLimiter.checkIp.bind(abuseLimiter),checkTenant:abuseLimiter.checkTenant.bind(abuseLimiter)});
   const pending=new Set(),controllers=new Set();let closed=false,uncertain=false;
   const available=()=>{try{return !closed&&!uncertain&&accepting()===true;}catch{return false;}};
@@ -57,7 +60,22 @@ export function createProcessingHttp({handlers,authProvider,abuseLimiter,readine
     const task=Promise.resolve().then(async()=>{
       let lease,committing=false,accepted=false;
       try{
-        headers(req);check(signal);await bound.checkIp(req);await admitted(signal);
+        headers(req);check(signal);await bound.checkIp(req);check(signal);
+        const url=new URL(req.url,'http://processing.invalid');
+        if(req.method==='POST'&&url.pathname==='/api/v1/integrations/graph/webhooks'){
+          if(!graphReceive)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+          if(url.searchParams.has('validationToken')){
+            if([...url.searchParams.keys()].some(k=>k!=='validationToken')||url.searchParams.getAll('validationToken').length!==1)throw invalid();
+            let validation;try{validation=graphValidationResponse(url.searchParams.get('validationToken'));}catch{throw invalid();}
+            check(signal);if(!res.destroyed&&!res.writableEnded){res.writeHead(validation.status,{'content-type':validation.contentType,'cache-control':'no-store','x-content-type-options':'nosniff','content-length':Buffer.byteLength(validation.body)});res.end(validation.body);}return;
+          }
+          if(url.search||!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers['content-type']??''))throw invalid();
+          await admitted(signal);const payload=await body(req,signal,maxGraphBodyBytes);check(signal);committing=true;
+          const result=await graphReceive(payload,{signal});check(signal);
+          shape(result,['status','accepted','replayed']);if(result.status!==202||!Number.isInteger(result.accepted)||result.accepted<1||result.accepted>100||!Number.isInteger(result.replayed)||result.replayed<0||result.replayed>result.accepted)throw new Error('GRAPH_INBOX_UNVERIFIED');
+          send(res,202,{status:'ACCEPTED',accepted:result.accepted,replayed:result.replayed},traceId);return;
+        }
+        await admitted(signal);
         const kind=!allowDirectCommands?null:req.method==='POST'&&req.url==='/api/v1/processing/inbound'?'PROCESS_INBOUND':req.method==='POST'&&req.url==='/api/v1/processing/policy-evaluations'?'POLICY_EVALUATION':null;
         if(!kind)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
         if(req.headers['content-type']!=='application/json')throw invalid();
@@ -81,7 +99,8 @@ export function createProcessingHttp({handlers,authProvider,abuseLimiter,readine
         await audit({...context,phase:'ACCEPTED'});if(!signal.aborted)send(res,202,output,traceId);
       }catch(error){
         if(!res.writableEnded){
-          if(committing&&(accepted||!['DOMAIN_COMMAND_CONFLICT','DOMAIN_COMMAND_FORBIDDEN'].includes(error?.message)))send(res,503,{status:'OUTCOME_UNVERIFIED'},traceId);
+          if(error?.message==='GRAPH_INBOX_INPUT_INVALID')send(res,400,{code:'INVALID_REQUEST'},traceId);
+          else if(committing&&(accepted||!['DOMAIN_COMMAND_CONFLICT','DOMAIN_COMMAND_FORBIDDEN'].includes(error?.message)))send(res,503,{status:'OUTCOME_UNVERIFIED'},traceId);
           else if(error?.message==='DOMAIN_COMMAND_CONFLICT')send(res,409,{code:'COMMAND_CONFLICT'},traceId);
           else if(error?.message==='DOMAIN_COMMAND_FORBIDDEN')send(res,404,{code:'NOT_FOUND'},traceId);
           else{const safe=publicError(error);send(res,safe.status,safe.status>=500?{status:'NOT_READY'}:{code:safe.code},traceId);}

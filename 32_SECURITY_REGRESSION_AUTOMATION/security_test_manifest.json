@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V132-DURABLE-GRAPH",
+      "concept": "V132 durable Graph intake",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V129-PRODUCTION-INGRESS",
       "concept": "V129 production ingress integration",
       "severity": "BLOCKER"

@@ -6,7 +6,7 @@ const ID=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/,UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a
 const ROLE=/^[a-z_][a-z0-9_]{0,62}$/,TOKEN=/^[a-f0-9]{64}$/;
 const GROUPS=['legaltech_session_broker','legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_audit_writer','legaltech_audit_reader',
   'legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_writer','legaltech_outbox_relay','legaltech_domain_commands','legaltech_job_domain_reader','legaltech_domain_result_writer',
-  'legaltech_drain_owner','legaltech_drain_worker','legaltech_drain_operator','legaltech_drain_reader'];
+  'legaltech_drain_owner','legaltech_drain_worker','legaltech_drain_operator','legaltech_drain_reader','legaltech_graph_producer','legaltech_graph_worker','legaltech_graph_reader','legaltech_domain_reviewer'];
 const TABLES=['principal_scopes','deployments','leases','controls','events'];
 const unavailable=()=>new Error('POSTGRES_DRAIN_UNVERIFIED');
 function exact(value,keys){return value&&Object.getPrototypeOf(value)===Object.prototype&&Reflect.ownKeys(value).length===keys.length&&keys.every(k=>Object.hasOwn(Object.getOwnPropertyDescriptor(value,k)??{},'value'));}
@@ -22,10 +22,10 @@ async function posture(tx,group){
       ((r.rolname=$1 AND r.rolcanlogin) OR r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication OR r.rolname=ANY($2::text[])
         OR r.rolname IN ('pg_read_all_data','pg_write_all_data','pg_read_server_files','pg_write_server_files','pg_execute_server_program')))
       OR has_database_privilege(current_user,current_database(),'CREATE') AS privileged,
-    EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN ('public','identity_security','operational_security','audit_security','queue_security','drain_security')
+    EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN ('public','identity_security','operational_security','audit_security','queue_security','drain_security','graph_security')
       AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE'))) AS owns_schema,
     EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE
-      n.nspname IN ('public','identity_security','operational_security','audit_security','queue_security','drain_security') AND c.relkind IN ('r','p','v','m','f')
+      n.nspname IN ('public','identity_security','operational_security','audit_security','queue_security','drain_security','graph_security') AND c.relkind IN ('r','p','v','m','f')
       AND (pg_has_role(current_user,c.relowner,'MEMBER') OR has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
         OR has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE'))) AS table_access,
     EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role('legaltech_drain_owner',r.oid,'MEMBER') AND

@@ -281,6 +281,11 @@
       "file": "056_domain_review_decisions.sql",
       "sha256": "e572beaa28abd191e359ec2c4e74fe1076e481debea1238e3fa50ca89fe814d9",
       "destructive": false
+    },
+    {
+      "file": "057_durable_graph_inbox.sql",
+      "sha256": "1cf91b9e45b3a1d964a0960df50a431af3d4853402e0f143be6cc022e714a022",
+      "destructive": false
     }
   ]
 }

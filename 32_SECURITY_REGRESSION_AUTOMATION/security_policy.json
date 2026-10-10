@@ -261,6 +261,7 @@
     "V126 processing HTTP and managed shutdown",
     "V127 durable deployment drain",
     "V128 artifact resource containment",
-    "V129 production ingress integration"
+    "V129 production ingress integration",
+    "V132 durable Graph intake"
   ]
 }

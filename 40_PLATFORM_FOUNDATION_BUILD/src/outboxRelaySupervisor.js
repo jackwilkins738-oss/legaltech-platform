@@ -19,8 +19,8 @@ export class OutboxRelaySupervisor {
   #unreleasedLease=false;
   constructor({relay,getScopes,authorizeScope,drain,pollIntervalMs=1000,cycleTimeoutMs=30000,maxScopes=100,batchSize=25,operation='OUTBOX_RELAY_CYCLE'}={}) {
     if(typeof relay?.relay!=='function'||typeof getScopes!=='function'||typeof authorizeScope!=='function'||typeof drain?.acquire!=='function'||typeof drain?.release!=='function')throw new Error('RELAY_SUPERVISOR_CONFIGURATION_INVALID');
-    if(!['OUTBOX_RELAY_CYCLE','WORKER_EXECUTION_CYCLE'].includes(operation))throw new Error('RELAY_SUPERVISOR_CONFIGURATION_INVALID');
-    this.#operation=operation;this.#prefix=operation==='OUTBOX_RELAY_CYCLE'?'outbox-relay':'worker-execution';
+    if(!['OUTBOX_RELAY_CYCLE','WORKER_EXECUTION_CYCLE','GRAPH_WEBHOOK_DISPATCH_CYCLE'].includes(operation))throw new Error('RELAY_SUPERVISOR_CONFIGURATION_INVALID');
+    this.#operation=operation;this.#prefix=operation==='OUTBOX_RELAY_CYCLE'?'outbox-relay':operation==='GRAPH_WEBHOOK_DISPATCH_CYCLE'?'graph-dispatch':'worker-execution';
     this.#relay=Object.freeze({relay:relay.relay.bind(relay)});this.#getScopes=getScopes;this.#authorize=authorizeScope;
     this.#drain=Object.freeze({acquire:drain.acquire.bind(drain),release:drain.release.bind(drain)});
     this.#interval=integer(pollIntervalMs,100,60000);this.#deadline=integer(cycleTimeoutMs,100,60000);this.#maxScopes=integer(maxScopes,1,1000);this.#limit=integer(batchSize,1,100);
@@ -65,7 +65,9 @@ export class OutboxRelaySupervisor {
       // A failed acquisition may have created a remote lease before its reply
       // was lost. Only a returned lease and successful release reconcile it.
       this.#unreleasedLease=true;
-      lease=await this.#drain.acquire({kind:'BACKGROUND',operationId:`${this.#prefix}:${crypto.randomUUID()}`,signal});
+      // A local abort must not discard an in-flight remote acquisition reply.
+      // Await its bounded acknowledgement, then check cancellation and release.
+      lease=await this.#drain.acquire({kind:'BACKGROUND',operationId:`${this.#prefix}:${crypto.randomUUID()}`});
       if(!lease||typeof lease.token!=='string'||lease.token.length<1||lease.token.length>256||!Number.isSafeInteger(lease.generation)||lease.generation<1)throw new Error('RELAY_DRAIN_INVALID');
       check();
       const current=scopes(await this.#getScopes(Object.freeze({signal})),this.#maxScopes);check();
