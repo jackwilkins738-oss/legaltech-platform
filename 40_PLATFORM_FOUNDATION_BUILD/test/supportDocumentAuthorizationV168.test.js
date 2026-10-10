@@ -22,7 +22,7 @@ test('V168 invokes current durable DOCUMENT_READ lookup at every review document
   for(const phase of ['RESOLVE','READ_VERSION','RELEASE'])assert.equal(await authorizer(input(phase)),true);
   assert.deepEqual(phases,['RESOLVE','READ_VERSION','RELEASE']);
   assert.equal(seen.length,3);
-  for(const grant of seen)assert.deepEqual({...grant,signal:undefined},{...binding(),eventId:undefined,scope:'DOCUMENT_READ',signal:undefined});
+  for(const grant of seen)assert.deepEqual({...grant,signal:undefined},{tenantId,actorId,requestId,matterId,documentRefHash,scope:'DOCUMENT_READ',signal:undefined});
 });
 test('V168 revoked or absent durable grant always denies and never invokes normal authorizer',async()=>{
   let normal=0;
