@@ -258,6 +258,7 @@
     "V123 domain pipeline regression",
     "V124 verified worker execution",
     "V125 managed processing adoption and canary",
-    "V126 processing HTTP and managed shutdown"
+    "V126 processing HTTP and managed shutdown",
+    "V127 durable deployment drain"
   ]
 }

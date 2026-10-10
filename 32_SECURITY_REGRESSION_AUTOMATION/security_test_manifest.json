@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V127-DURABLE-DRAIN",
+      "concept": "V127 durable deployment drain",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V126-PROCESSING-SERVICE",
       "concept": "V126 processing HTTP and managed shutdown",
       "severity": "BLOCKER"

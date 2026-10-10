@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V127 — Durable PostgreSQL deployment drain
+
+V127 adds a durable, deployment-scoped PostgreSQL drain store with separate worker/operator/reader credentials, immutable operation and lease bindings, persistent release/absence receipts, generation-fenced operator controls and append-only metadata events. Migration 055 forces owner-only RLS and exposes one tightly bounded security-definer API with current session-principal scopes and pinned function definitions. The nine-pool composition connects it to HTTP, workers, relay, canary and readiness. Readiness also rejects uncertainty introduced during a pending status read. See `40_PLATFORM_FOUNDATION_BUILD/docs/V127_DURABLE_DEPLOYMENT_DRAIN.md`.
+
+Local suites pass 2,134 platform and 140 scaffold tests, including 42 new boundary regressions. Twenty-one connected PostgreSQL CI cases are added; actual PostgreSQL execution is skipped locally and must pass before merge. There is no lease expiry or forced crash release: exact owner recovery and settled-effect evidence remain mandatory. Trusted deployment provisioning, real business/provider authorization, legacy adoption and customer-data release remain outstanding. This continues the authorized D-018 security integration exception; the pre-TO freeze and deployment gate remain in force.
+
 ## Private-repository security CI compatibility
 
 The unavailable paid CodeQL and dependency-review integrations are replaced by pinned Semgrep Community Edition with 35 reviewed local JavaScript/Python rules and a fail-closed locked npm dependency audit. The PostgreSQL CI driver is now a pinned development dependency with a committed lock. Known insecure scanner fixtures and five dependency-gate regressions validate failure behavior. No GitHub organization, billing or repository access changes are required. This static baseline has different coverage from CodeQL; see `32_SECURITY_REGRESSION_AUTOMATION/semgrep/README.md`. Existing security and production admission gates remain in force.
