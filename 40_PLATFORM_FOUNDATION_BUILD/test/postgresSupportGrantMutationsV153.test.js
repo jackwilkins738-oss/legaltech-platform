@@ -77,3 +77,17 @@ test('V156 duplicate approval and revoke return no success without exact inserte
   await assert.rejects(service.approve({session,requestId,traceId}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
   await assert.rejects(service.revoke({session,requestId,reasonHash,traceId}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
 });
+
+test('V156 identity expiry during transaction fails before successful mutation response',async()=>{
+  let checked=0;
+  const service=new PostgresSupportGrantMutations({
+    liveSession:{assertCurrent:async()=>++checked===1},
+    transact:async(_,work)=>work({query:async sql=>{
+      if(sql.includes('FROM public.support_access_requests'))
+        return {rows:[{matter_id:matterId,document_ref_hash:null}]};
+      return {rows:[{id:requestId}]};
+    }})
+  });
+  await assert.rejects(service.revoke({session,requestId,reasonHash,traceId}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+  assert.equal(checked,2);
+});
