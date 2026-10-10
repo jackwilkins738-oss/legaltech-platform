@@ -2,7 +2,13 @@
 
 **Lifecycle:** current engineering foundation, product workflow still evidence-gated.
 
-Latest batch: [V137 deployment capacity](docs/V137_DEPLOYMENT_CAPACITY_BATCH.md).
+Latest batch: [V142 support access safety](docs/V142_SUPPORT_ACCESS_SAFETY_BATCH.md).
+Temporary support authority is checked again after diagnostic provider waits and
+audits; failed revocation auditing preserves denial. Diagnostic provider ownership
+is bounded, including after timeouts. Reference document handoff also rechecks
+access before claiming the token and returning bytes.
+
+Deployment capacity: [V137](docs/V137_DEPLOYMENT_CAPACITY_BATCH.md).
 The durable PostgreSQL root requires a fleet connection budget and observable
 bounded pools. Check a synthetic plan with
 `npm run deployment:capacity -- deployment/capacity.synthetic.json`.

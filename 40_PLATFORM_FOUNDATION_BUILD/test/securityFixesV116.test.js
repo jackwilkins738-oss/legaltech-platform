@@ -40,12 +40,12 @@ test('V116 support scopes are exact across all read actions',()=>{
 });
 test('V116 failed support request audit creates no request or successful event',()=>{
   const x=support({auditEvent:()=>{throw new Error('AUDIT_DOWN')}});
-  assert.throws(()=>x.request('MATTER_READ'),/AUDIT_DOWN/);
+  assert.throws(()=>x.request('MATTER_READ'),/SUPPORT_ACCESS_AUDIT_UNAVAILABLE/);
   assert.deepEqual(x.registry.events('tenant-a'),[]);
 });
 test('V116 failed support approval audit leaves grant pending and unusable; retry succeeds',()=>{
   let failed=false;const x=support({auditEvent:()=>{if(failed)throw new Error('AUDIT_DOWN')}}),g=x.request('MATTER_READ');
-  failed=true;assert.throws(()=>x.approve(g),/AUDIT_DOWN/);
+  failed=true;assert.throws(()=>x.approve(g),/SUPPORT_ACCESS_AUDIT_UNAVAILABLE/);
   assert.equal(x.registry.status({tenantId:'tenant-a',requestId:g.requestId}).status,'PENDING');
   assert.throws(()=>x.registry.assertMatterRead(x.asker,{matterId:'m1',traceId:'read'}),/SUPPORT_ACCESS_UNAVAILABLE/);
   assert.equal(x.registry.events('tenant-a').length,1);
@@ -53,7 +53,7 @@ test('V116 failed support approval audit leaves grant pending and unusable; retr
 });
 test('V116 failed revocation audit still removes access and never emits a false success',()=>{
   let failed=false;const x=support({auditEvent:()=>{if(failed)throw new Error('AUDIT_DOWN')}}),g=x.request('MATTER_READ');x.approve(g);failed=true;
-  assert.throws(()=>x.registry.revoke({session:x.actor('security',['support:access:revoke']),requestId:g.requestId,traceId:'revoke',reason:'Synthetic removal'}),/AUDIT_DOWN/);
+  assert.throws(()=>x.registry.revoke({session:x.actor('security',['support:access:revoke']),requestId:g.requestId,traceId:'revoke',reason:'Synthetic removal'}),/SUPPORT_ACCESS_AUDIT_UNAVAILABLE/);
   assert.equal(x.registry.status({tenantId:'tenant-a',requestId:g.requestId}).status,'REVOKED');
   assert.equal(x.registry.events('tenant-a').length,2);
   assert.throws(()=>x.registry.assertMatterRead(x.asker,{matterId:'m1',traceId:'read'}),/SUPPORT_ACCESS_UNAVAILABLE/);
