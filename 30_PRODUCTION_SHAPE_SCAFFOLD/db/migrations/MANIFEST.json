@@ -296,6 +296,11 @@
       "file": "059_review_reader_boundary.sql",
       "sha256": "93a1c1f7b016fe92bdd801abb585566adf8492449f7e6cc6b43ec99005dd6b79",
       "destructive": false
+    },
+    {
+      "file": "060_support_reader_boundary.sql",
+      "sha256": "7fafe8195b4596b8e34b8ef13f2ae730e23b7d1799e2b54b5ef69f7e09c876e3",
+      "destructive": false
     }
   ]
 }
