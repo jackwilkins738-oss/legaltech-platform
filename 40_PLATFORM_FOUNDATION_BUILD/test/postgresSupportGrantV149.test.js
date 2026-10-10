@@ -27,7 +27,7 @@ test('V149 denies missing, duplicated, cross-tenant and failed database response
 
 test('V150 transaction lookup refuses missing or unexpected reader role',()=>{
   assert.throws(()=>createTenantScopedPostgresSupportGrantLookup({pool:{connect:async()=>{}},expectedRole:'postgres'}),/DURABLE_SUPPORT_GRANT_CONFIGURATION_INVALID/);
-  assert.throws(()=>createTenantScopedPostgresSupportGrantLookup({pool:null,expectedRole:'legaltech_support_reader'}),/POSTGRES_TRANSACTION_CONFIGURATION_INVALID/);
+  assert.throws(()=>createTenantScopedPostgresSupportGrantLookup({pool:null,expectedRole:'legaltech_support_reader_ci'}),/POSTGRES_TRANSACTION_CONFIGURATION_INVALID/);
 });
 test('V150 passes actor context to injected transaction adapter',async()=>{
   const lookup=createPostgresSupportGrantLookup({transact:async(context,work)=>{
