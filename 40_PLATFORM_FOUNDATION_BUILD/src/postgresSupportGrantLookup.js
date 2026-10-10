@@ -52,10 +52,26 @@ export function createPostgresSupportGrantLookup({transact}={}){
  * to the four V88 tables; integration tests and grants verification remain required.
  */
 export function createTenantScopedPostgresSupportGrantLookup({pool,expectedRole,timeoutMs=3000}={}){
-  if(expectedRole!=='legaltech_support_reader')throw new Error('DURABLE_SUPPORT_GRANT_CONFIGURATION_INVALID');
+  if(typeof expectedRole!=='string'||!/^legaltech_support_reader_[a-z0-9_]{1,30}$/.test(expectedRole))throw new Error('DURABLE_SUPPORT_GRANT_CONFIGURATION_INVALID');
   const transactions=new PostgresTenantTransactions({pool,expectedRole,timeoutMs});
   return createPostgresSupportGrantLookup({transact:(context,work)=>{
     if(context.readOnly!==true||!context.tenantId||!context.actorId)throw new Error('DURABLE_SUPPORT_GRANT_UNAVAILABLE');
-    return transactions.run({tenantId:context.tenantId,actorId:context.actorId,readOnly:true,signal:context.signal},work);
+    return transactions.run({tenantId:context.tenantId,actorId:context.actorId,readOnly:true,signal:context.signal},async tx=>{
+      const proof=await tx.query(`SELECT
+        pg_has_role(current_user,'legaltech_support_reader','MEMBER') AS member,
+        has_table_privilege(current_user,'public.support_access_requests','INSERT,UPDATE,DELETE,TRUNCATE') AS write_requests,
+        has_table_privilege(current_user,'public.support_access_approvals','INSERT,UPDATE,DELETE,TRUNCATE') AS write_approvals,
+        has_table_privilege(current_user,'public.support_access_revocations','INSERT,UPDATE,DELETE,TRUNCATE') AS write_revocations,
+        has_table_privilege(current_user,'public.support_access_events','SELECT') AS read_events,
+        has_column_privilege(current_user,'public.support_access_requests','ticket_ref_hash','SELECT') AS read_ticket,
+        row_security_active('public.support_access_requests'::regclass) AS rls_requests,
+        row_security_active('public.support_access_approvals'::regclass) AS rls_approvals,
+        row_security_active('public.support_access_revocations'::regclass) AS rls_revocations`);
+      const row=proof.rows?.[0];
+      if(proof.rows?.length!==1||row.member!==true||row.write_requests!==false||row.write_approvals!==false||
+         row.write_revocations!==false||row.read_events!==false||row.read_ticket!==false||
+         row.rls_requests!==true||row.rls_approvals!==true||row.rls_revocations!==true)throw new Error('DURABLE_SUPPORT_GRANT_UNAVAILABLE');
+      return work(tx);
+    });
   }});
 }
