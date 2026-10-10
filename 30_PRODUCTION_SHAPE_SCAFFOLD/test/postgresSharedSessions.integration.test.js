@@ -500,6 +500,36 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     assert.equal(checks.rows.find(x=>x.id===first.requestId).revoked,true);
     assert.equal(checks.rows.find(x=>x.id===next.requestId).revoked,false);
   });
+  await t.test('V169 document grants bind exact matter, document hash, scope and requester in PostgreSQL',async()=>{
+    const readerLogin='legaltech_support_reader_v169',operatorLogin='legaltech_support_operator_v169';
+    for(const [login,group] of [[readerLogin,'legaltech_support_reader'],[operatorLogin,'legaltech_support_operator']]){
+      await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+      await admin.query(`GRANT ${group} TO ${login}`);
+    }
+    const reader=createTenantScopedPostgresSupportGrantLookup({pool:makePool(readerLogin,2),expectedRole:readerLogin});
+    const writer=createTenantScopedPostgresSupportGrantMutations({pool:makePool(operatorLogin,2),expectedRole:operatorLogin,liveSession:{assertCurrent:async()=>true}});
+    const requester={tenantId:tenantA,actorId:actorA,sessionId:uuid()};
+    const approver={tenantId:tenantA,actorId:'11700000-0000-4000-8000-000000000013',sessionId:uuid()};
+    const matterId='11700000-0000-4000-8000-000000000031';
+    const hash='a'.repeat(64);
+    const created=await writer.request({session:requester,matterId,scope:'DOCUMENT_READ',documentRefHash:hash,ticketRefHash:'b'.repeat(64),purposeHash:'c'.repeat(64),traceId:'v169'});
+    const bound={tenantId:tenantA,actorId:actorA,requestId:created.requestId,matterId,scope:'DOCUMENT_READ',documentRefHash:hash};
+    await assert.rejects(reader(bound),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    await writer.approve({session:approver,requestId:created.requestId,traceId:'v169'});
+    assert.equal((await reader(bound)).active,true);
+    const mismatches=[
+      {...bound,documentRefHash:'d'.repeat(64)},
+      {...bound,matterId:'11700000-0000-4000-8000-000000000032'},
+      {...bound,scope:'MATTER_READ',documentRefHash:null},
+      {...bound,actorId:approver.actorId},
+      {...bound,tenantId:tenantB,actorId:actorB},
+      {...bound,requestId:uuid()}
+    ];
+    for(const invalid of mismatches)await assert.rejects(reader(invalid),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    await writer.revoke({session:approver,requestId:created.requestId,reasonHash:'e'.repeat(64),traceId:'v169'});
+    await assert.rejects(reader(bound),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    assert.equal((await admin.query('SELECT count(*)::integer AS n FROM public.support_access_revocations WHERE tenant_id=$1 AND request_id=$2',[tenantA,created.requestId])).rows[0].n,1);
+  });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
     const results=await Promise.all(Array.from({length:12},(_,i)=>transactions.run(scopes[i%2],async tx=>{
