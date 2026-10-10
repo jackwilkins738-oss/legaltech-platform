@@ -44,6 +44,7 @@ path,domain,status,authority,type,bytes
 00_GOVERNANCE/REPOSITORY_VALIDATION.json,governance,reference,medium,json,1813
 00_GOVERNANCE/RISK_REGISTER_INITIAL.md,governance,reference,medium,md,1116
 00_GOVERNANCE/TOP_SPEC_PERSPECTIVE_AUDIT.md,governance,reference,medium,md,17498
+01_RESEARCH_EVIDENCE/APPROVAL_WAIT_DESK_RESEARCH_2026-10.md,01_research_evidence,reference,low,md,8796
 01_RESEARCH_EVIDENCE/EVIDENCE_STANDARD.md,other,reference,high,md,977
 01_RESEARCH_EVIDENCE/EXTERNAL_VALIDATION_PLAN.md,other,reference,medium,md,809
 01_RESEARCH_EVIDENCE/MASTER_SOURCE_REGISTER.md,other,reference,high,md,22636
@@ -496,7 +497,7 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/test/offboarding-export-v113.test.js,production_shape,reference,low,js,979
 30_PRODUCTION_SHAPE_SCAFFOLD/test/onboarding-readiness-v109.test.js,production_shape,reference,low,js,766
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresRuntimeV117.test.js,production_shape,reference,low,js,4603
-30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,125412
+30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,126171
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresTransactionsV118.test.js,production_shape,reference,low,js,7779
 30_PRODUCTION_SHAPE_SCAFFOLD/test/secret-rotation-v111.test.js,production_shape,reference,low,js,1044
 30_PRODUCTION_SHAPE_SCAFFOLD/test/security-contract.test.js,engineering,reference,medium,js,228816
@@ -642,6 +643,7 @@ path,domain,status,authority,type,bytes
 38_DIGITAL_PRE_TO_LOCK/08_VERIFICATION_RESULTS.md,evidence,reference,medium,md,541
 38_DIGITAL_PRE_TO_LOCK/PRE_TO_FREEZE_MANIFEST.json,evidence,reference,high,json,1755
 38_DIGITAL_PRE_TO_LOCK/scripts/pre_to_digital_check.py,evidence,reference,medium,py,1485
+39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/2026-10-10_PARTNER_REPORT_APPROVAL_WAIT.md,39_post_to_evidence,reference,low,md,1802
 39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/README.md,evidence,reference,high,md,262
 39_POST_TO_EVIDENCE/01_CLEANED_NORMALISED/README.md,evidence,reference,medium,md,267
 39_POST_TO_EVIDENCE/02_ANALYSIS/README.md,evidence,reference,medium,md,257
@@ -997,7 +999,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V127.md,platform_build,current,medium,md,983
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V128.md,platform_build,current,medium,md,880
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V129.md,platform_build,current,medium,md,917
-40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V130.md,platform_build,current,medium,md,994
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V130.md,platform_build,current,medium,md,1405
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V29.md,engineering,current,high,md,687
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V30.md,engineering,current,high,md,575
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V31.md,engineering,current,medium,md,1385
