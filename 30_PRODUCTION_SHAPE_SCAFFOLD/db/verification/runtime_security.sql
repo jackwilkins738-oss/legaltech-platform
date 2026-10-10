@@ -54,6 +54,9 @@ BEGIN
     SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='review_security' AND pg_catalog.has_function_privilege(current_user,p.oid,'EXECUTE')
   ) THEN RAISE EXCEPTION 'RUNTIME_REVIEW_API_ACCESS_FORBIDDEN'; END IF;
+  IF pg_catalog.pg_has_role(current_user,'legaltech_review_reader','MEMBER') AND EXISTS(
+    SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname IN ('legaltech_domain_reviewer','legaltech_domain_commands','legaltech_domain_result_writer','legaltech_outbox_writer') AND pg_catalog.pg_has_role(current_user,r.oid,'MEMBER')
+  ) THEN RAISE EXCEPTION 'RUNTIME_REVIEW_READER_ROLE_MIXING'; END IF;
   -- No unreviewed alternative access path may bypass the base-table checks.
   IF EXISTS (
     SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace

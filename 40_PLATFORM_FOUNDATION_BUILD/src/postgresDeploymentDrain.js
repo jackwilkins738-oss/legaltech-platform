@@ -6,7 +6,7 @@ const ID=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/,UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a
 const ROLE=/^[a-z_][a-z0-9_]{0,62}$/,TOKEN=/^[a-f0-9]{64}$/;
 const GROUPS=['legaltech_session_broker','legaltech_security_reader','legaltech_security_operator','legaltech_rate_limiter','legaltech_audit_writer','legaltech_audit_reader',
   'legaltech_queue_producer','legaltech_queue_worker','legaltech_queue_reader','legaltech_outbox_writer','legaltech_outbox_relay','legaltech_domain_commands','legaltech_job_domain_reader','legaltech_domain_result_writer',
-  'legaltech_drain_owner','legaltech_drain_worker','legaltech_drain_operator','legaltech_drain_reader','legaltech_graph_producer','legaltech_graph_worker','legaltech_graph_reader','legaltech_domain_reviewer'];
+  'legaltech_drain_owner','legaltech_drain_worker','legaltech_drain_operator','legaltech_drain_reader','legaltech_graph_producer','legaltech_graph_worker','legaltech_graph_reader','legaltech_domain_reviewer','legaltech_review_reader'];
 const TABLES=['principal_scopes','deployments','leases','controls','events'];
 const unavailable=()=>new Error('POSTGRES_DRAIN_UNVERIFIED');
 function exact(value,keys){return value&&Object.getPrototypeOf(value)===Object.prototype&&Reflect.ownKeys(value).length===keys.length&&keys.every(k=>Object.hasOwn(Object.getOwnPropertyDescriptor(value,k)??{},'value'));}

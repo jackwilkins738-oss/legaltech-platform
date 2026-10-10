@@ -41,9 +41,26 @@ export class ManagedDeploymentDrain {
   }
   async #release(operationId,value){const ack=await this.#backend.release({deploymentId:this.#deployment,operationId,lease:value});
     if(!exact(ack,['released','token','generation'])||ack.released!==true||ack.token!==value.token||ack.generation!==value.generation)throw fail();}
-  async status(){await this.#auth('STATUS');if(this.#uncertain.size)throw fail();const result=status(await this.#backend.status({deploymentId:this.#deployment}));
-    if(this.#uncertain.size||result.inFlight<this.#held.size||[...this.#held.values()].some(v=>v.generation>result.generation))throw fail();return result;}
-  async probe(){try{const s=await this.status();return Object.freeze({ok:s.acceptingNew,code:s.acceptingNew?'MANAGED_DRAIN_ACTIVE':'MANAGED_DRAIN_CLOSED'});}catch{return Object.freeze({ok:false,code:'MANAGED_DRAIN_UNVERIFIED'});}}
+  async status(){await this.#auth('STATUS');if(this.#uncertain.size)throw fail();
+    // The remote count describes its database read, not leases acknowledged
+    // later. Compare only leases held throughout that read; a new/released
+    // lease cannot invalidate a correct earlier snapshot.
+    const before=new Map(this.#held),result=status(await this.#backend.status({deploymentId:this.#deployment}));
+    const persistent=[...before].filter(([operationId,value])=>this.#held.get(operationId)===value).map(([,value])=>value);
+    if(this.#uncertain.size||result.inFlight<persistent.length||persistent.some(v=>v.generation>result.generation))throw fail();return result;
+  }
+  async probe(){
+    // Wait briefly for owned acknowledgement transitions. Lost replies and
+    // unresolved control operations remain unready; elapsed time proves nothing.
+    for(let attempt=0;attempt<5;attempt++){
+      try{const s=await this.status();return Object.freeze({ok:s.acceptingNew,code:s.acceptingNew?'MANAGED_DRAIN_ACTIVE':'MANAGED_DRAIN_CLOSED'});}catch{
+        if(!this.#uncertain.size||[...this.#uncertain.keys()].some(k=>!this.#busy.has(k))||attempt===4)break;
+        await new Promise(resolve=>setTimeout(resolve,25));
+      }
+    }
+    return Object.freeze({ok:false,code:'MANAGED_DRAIN_UNVERIFIED'});
+  }
+
   async begin({actorId,reasonHash}={}){
     if(!ID.test(actorId??'')||!/^[a-f0-9]{64}$/.test(reasonHash??''))throw fail();await this.#auth('BEGIN',actorId);
     const operationId=`drain-begin:${crypto.randomUUID()}`;this.#uncertain.set(operationId,null);

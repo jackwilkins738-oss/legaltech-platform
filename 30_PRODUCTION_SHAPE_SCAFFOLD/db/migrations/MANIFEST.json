@@ -291,6 +291,11 @@
       "file": "058_review_function_boundary.sql",
       "sha256": "dc2f609c36da394f8852da76db28ea5f36638d12424f2b28949b3b99adf243b8",
       "destructive": false
+    },
+    {
+      "file": "059_review_reader_boundary.sql",
+      "sha256": "93a1c1f7b016fe92bdd801abb585566adf8492449f7e6cc6b43ec99005dd6b79",
+      "destructive": false
     }
   ]
 }

@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V134-REVIEW-BROWSING",
+      "concept": "V134 production review browsing",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V133-REVIEW-BOUNDARY",
       "concept": "V133 production review boundary",
       "severity": "BLOCKER"
