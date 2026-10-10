@@ -25,3 +25,22 @@ test('V146 denies database outage',async()=>{
   const reader=new DurableSupportGrantReader({liveSession:{assertCurrent:async()=>true},readCurrent:async()=>{throw Error('database down');}});
   await assert.rejects(reader.assertCurrent(session,request),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
 });
+
+test('V147 rejects non-true live session proof before or after grant read',async()=>{
+  for(const value of [false,null,undefined,{},1]){
+    let called=0;
+    const before=new DurableSupportGrantReader({
+      liveSession:{assertCurrent:async()=>value},
+      readCurrent:async()=>{called++;return decision;}
+    });
+    await assert.rejects(before.assertCurrent(session,request),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    assert.equal(called,0);
+    let checks=0;
+    const after=new DurableSupportGrantReader({
+      liveSession:{assertCurrent:async()=>++checks===1?true:value},
+      readCurrent:async()=>decision
+    });
+    await assert.rejects(after.assertCurrent(session,request),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    assert.equal(checks,2);
+  }
+});
