@@ -28,7 +28,7 @@ path,domain,status,authority,type,bytes
 .gitignore,governance,current,high,file,649
 00_GOVERNANCE/COMPANY_OPERATING_MODEL.md,governance,reference,medium,md,1703
 00_GOVERNANCE/CONSOLIDATION_NOTES.md,governance,reference,medium,md,1106
-00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,84884
+00_GOVERNANCE/CURRENT_STATE.md,governance,reference,high,md,84883
 00_GOVERNANCE/DECISION_GATES.md,governance,reference,medium,md,1121
 00_GOVERNANCE/DECISIONS.md,governance,reference,high,md,3857
 00_GOVERNANCE/FILE_PRIORITY_BUILD_ORDER.md,governance,reference,medium,md,1298
@@ -500,7 +500,7 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/test/offboarding-export-v113.test.js,production_shape,reference,low,js,979
 30_PRODUCTION_SHAPE_SCAFFOLD/test/onboarding-readiness-v109.test.js,production_shape,reference,low,js,766
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresRuntimeV117.test.js,production_shape,reference,low,js,4603
-30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,175038
+30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,176073
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresTransactionsV118.test.js,production_shape,reference,low,js,7779
 30_PRODUCTION_SHAPE_SCAFFOLD/test/secret-rotation-v111.test.js,production_shape,reference,low,js,1044
 30_PRODUCTION_SHAPE_SCAFFOLD/test/security-contract.test.js,engineering,reference,medium,js,228816
@@ -692,7 +692,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/docs/V130_DURABLE_REVIEW_DECISION.md,platform_build,current,medium,md,5953
 40_PLATFORM_FOUNDATION_BUILD/docs/V132_DURABLE_GRAPH_INTAKE.md,platform_build,current,medium,md,11175
 40_PLATFORM_FOUNDATION_BUILD/docs/V133_PRODUCTION_REVIEW_BOUNDARY.md,platform_build,current,medium,md,6918
-40_PLATFORM_FOUNDATION_BUILD/docs/V134_PRODUCTION_REVIEW_BROWSING.md,platform_build,current,medium,md,8484
+40_PLATFORM_FOUNDATION_BUILD/docs/V134_PRODUCTION_REVIEW_BROWSING.md,platform_build,current,medium,md,8483
 40_PLATFORM_FOUNDATION_BUILD/docs/V31_OPERATOR_REVIEW_SURFACE.md,engineering,current,medium,md,915
 40_PLATFORM_FOUNDATION_BUILD/docs/V32_OPERATIONS_COCKPIT.md,engineering,current,medium,md,912
 40_PLATFORM_FOUNDATION_BUILD/docs/V33_HIGH_TECH_COMMAND_CENTRE.md,engineering,current,medium,md,866
@@ -842,7 +842,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/postgresResultAdoption.js,platform_build,current,medium,js,8752
 40_PLATFORM_FOUNDATION_BUILD/src/postgresReviewDecisions.js,platform_build,current,medium,js,18077
 40_PLATFORM_FOUNDATION_BUILD/src/postgresReviewFunctionHashes.js,platform_build,current,medium,js,449
-40_PLATFORM_FOUNDATION_BUILD/src/postgresReviewReader.js,platform_build,current,medium,js,10337
+40_PLATFORM_FOUNDATION_BUILD/src/postgresReviewReader.js,platform_build,current,medium,js,10612
 40_PLATFORM_FOUNDATION_BUILD/src/postgresSecurityBoundary.js,platform_build,current,medium,js,19465
 40_PLATFORM_FOUNDATION_BUILD/src/postgresSessions.js,platform_build,current,medium,js,11678
 40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerDomain.js,platform_build,current,medium,js,6462
@@ -1022,7 +1022,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V130.md,platform_build,current,medium,md,1405
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V132.md,platform_build,current,medium,md,1022
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V133.md,platform_build,current,medium,md,701
-40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V134.md,platform_build,current,medium,md,850
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V134.md,platform_build,current,medium,md,849
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V29.md,engineering,current,high,md,687
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V30.md,engineering,current,high,md,575
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V31.md,engineering,current,medium,md,1385

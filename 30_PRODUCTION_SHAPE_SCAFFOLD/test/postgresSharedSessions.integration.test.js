@@ -1176,6 +1176,15 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     await admin.query('ALTER POLICY domain_result_human_read ON public.domain_job_results USING(true)');try{assert.equal((await reviewReader.probe()).ok,false);}finally{await admin.query('ALTER POLICY domain_result_human_read ON public.domain_job_results USING(tenant_id=public.app_current_tenant_id())');}
     assert.equal((await reviewReader.probe()).ok,true);
   });
+  await t.test('V134 private schema read grants and executable definer functions fail reader health',async()=>{
+    await admin.query('CREATE SCHEMA synthetic_review_probe');await admin.query('CREATE TABLE synthetic_review_probe.metadata(id uuid)');
+    await admin.query('GRANT USAGE ON SCHEMA synthetic_review_probe TO legaltech_review_reader_ci');
+    try{await admin.query('GRANT SELECT ON synthetic_review_probe.metadata TO legaltech_review_reader_ci');assert.equal((await reviewReader.probe()).ok,false);
+      await admin.query('REVOKE SELECT ON synthetic_review_probe.metadata FROM legaltech_review_reader_ci');assert.equal((await reviewReader.probe()).ok,true);
+      await admin.query('CREATE FUNCTION synthetic_review_probe.example() RETURNS boolean LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog AS $$ SELECT true $$');assert.equal((await reviewReader.probe()).ok,false);
+    }finally{await admin.query('DROP SCHEMA synthetic_review_probe CASCADE');}
+    assert.equal((await reviewReader.probe()).ok,true);
+  });
   await t.test('V134 review reader role mixing is rejected across writable runtime session and drain credentials',async()=>{
     for(const [role,probe] of [['legaltech_runtime_ci',()=>createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({})],['legaltech_broker_ci',()=>one.probe()],['legaltech_drain_reader_ci',()=>durable.probe()]]){
       await admin.query(`GRANT legaltech_review_reader TO ${role}`);try{assert.equal((await probe()).ok,false);}finally{await admin.query(`REVOKE legaltech_review_reader FROM ${role}`);}
