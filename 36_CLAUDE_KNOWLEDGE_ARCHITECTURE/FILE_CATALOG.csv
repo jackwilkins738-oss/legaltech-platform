@@ -498,7 +498,7 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/test/offboarding-export-v113.test.js,production_shape,reference,low,js,979
 30_PRODUCTION_SHAPE_SCAFFOLD/test/onboarding-readiness-v109.test.js,production_shape,reference,low,js,766
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresRuntimeV117.test.js,production_shape,reference,low,js,4603
-30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,152406
+30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,152803
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresTransactionsV118.test.js,production_shape,reference,low,js,7779
 30_PRODUCTION_SHAPE_SCAFFOLD/test/secret-rotation-v111.test.js,production_shape,reference,low,js,1044
 30_PRODUCTION_SHAPE_SCAFFOLD/test/security-contract.test.js,engineering,reference,medium,js,228816
