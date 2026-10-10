@@ -821,7 +821,7 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       try{await check();}finally{await admin.query(`REVOKE EXECUTE ON FUNCTION drain_security.operate(text,text,jsonb) FROM ${principal}`);await admin.query(`REVOKE USAGE ON SCHEMA drain_security FROM ${principal}`);}
     }
   });
-  await t.test('V127 nine-pool service uses real durable drain for canary readiness and global shutdown',async()=>{
+  await t.test('V127 nine-pool service uses real durable drain for canary readiness and global shutdown',async serviceTest=>{
     const {drain:unusedDomainDrain,...serviceDomain}=pipelineOptions,{drain:unusedWorkerDrain,...serviceWorker}=managedWorker;
     const root=createCapacityBoundService({drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},processing:{domain:serviceDomain,worker:serviceWorker,
       queueReaderPool,expectedQueueReaderRole:'legaltech_queue_reader_ci',authorizeResultRead:async()=>true,authorizeAdoption:async()=>true,
@@ -832,7 +832,7 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     try{await root.start({port:0});const base=`http://127.0.0.1:${root.server.address().port}`;let response;const deadline=Date.now()+10000;
       do{response=await fetch(base+'/api/v1/ready');await response.arrayBuffer();if(response.status===200)break;await new Promise(r=>setTimeout(r,25));}while(Date.now()<deadline);
       assert.equal(response.status,200);
-      await t.test('V137 actual durable service rejects pool drift in ready and restart',async()=>{
+      await serviceTest.test('V137 actual durable service rejects pool drift in ready and restart',async()=>{
         const before=queueReaderPool.options.max;queueReaderPool.options.max=before+1;
         try{
           assert.equal(root.deploymentCapacity.status().healthy,false);
