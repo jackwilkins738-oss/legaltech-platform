@@ -29,6 +29,11 @@ export function createSupportDocumentAuthorization({authorizeDocument,resolveBin
       if(first?.active!==true||request.signal?.aborted)throw deny();
       const permitted=await authorizeDocument(Object.freeze({...request}));
       if(permitted!==true||request.signal?.aborted)throw deny();
+      // A trusted server-side case/document binding can change while the
+      // human/document permission provider is awaiting. Never release against
+      // a stale mapping, even if the original grant remains active.
+      const finalBinding=snapshot(await resolveBinding(Object.freeze({tenantId:request.tenantId,actorId:request.actorId,eventId:request.eventId,signal:request.signal})),['tenantId','actorId','eventId','requestId','matterId','documentRefHash']);
+      if(Object.keys(binding).some(key=>binding[key]!==finalBinding[key])||request.signal?.aborted)throw deny();
       const last=await readCurrentGrant(lookup);
       if(last?.active!==true||request.signal?.aborted)throw deny();
       return true;
