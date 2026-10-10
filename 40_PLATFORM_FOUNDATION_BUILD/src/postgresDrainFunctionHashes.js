@@ -9,7 +9,7 @@ export const DRAIN_FUNCTION_HASHES=Object.freeze(Object.fromEntries(Object.entri
     "arguments": "deployment text"
   },
   "operate": {
-    "hash": "79aac21570b69c3aaee80bbc7ab7cd1a42244e405faa4456a440aefe2c05a8a8",
+    "hash": "9adfb3ef47e1a35dcb848c551029ba8fa615733e6b5134ce68bca21d45dbf968",
     "arguments": "deployment text, action text, input jsonb"
   }
 }).map(([name,value])=>[name,Object.freeze(value)])));

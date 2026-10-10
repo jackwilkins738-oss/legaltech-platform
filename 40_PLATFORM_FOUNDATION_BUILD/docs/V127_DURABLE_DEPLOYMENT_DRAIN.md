@@ -4,7 +4,7 @@ Migration 055 and `PostgresDeploymentDrainBackend` provide a real shared deploym
 
 ## Durable invariants
 
-Every mutation locks the deployment row. Acquisition and beginning a drain therefore serialize: work either holds a recorded lease or is rejected after admission closes. Draining becomes drained only when every recorded lease has been released. Resume requires the exact current generation and globally zero held leases. Control operation identifiers have immutable actor, principal and request bindings; replay cannot reset or reopen a deployment.
+Every mutation locks the deployment row, rechecks authorization after any lock wait, and holds its active scope row through commit. Concurrent revocation either wins before dispatch or waits for the authorized transaction to settle. Acquisition and beginning a drain therefore serialize: work either holds a recorded lease or is rejected after admission closes. Draining becomes drained only when every recorded lease has been released. Resume requires the exact current generation and globally zero held leases. Control operation identifiers have immutable actor, principal and request bindings; replay cannot reset or reopen a deployment.
 
 Lease records bind deployment, operation, stable process owner UUID, actual database session principal, kind, random token and acquisition generation. Retries return the original lease; release requires its exact credentials. Records and audit events contain metadata only. An absence lookup writes a durable tombstone, so a delayed acquisition cannot arrive after reconciliation has accepted absence. Released receipts persist for lost-reply recovery. No expiry, automatic lease reaping or forced release exists.
 
@@ -30,6 +30,6 @@ Lease tokens are private database credentials. Exclude SQL parameters/results co
 
 ## Validation and release scope
 
-The boundary suite adds 42 regressions. The enabled PostgreSQL CI suite adds 21 cases covering independent connections, acquire/drain serialization, crash retention, lost acknowledgements, durable absence, revoked scopes, capability separation, direct DML denial, owner/RLS/function tampering and the nine-pool HTTP/canary/drain lifecycle. Local PostgreSQL execution is skipped; real CI must pass before merge.
+The boundary suite adds 42 regressions. The enabled PostgreSQL CI suite adds 22 cases covering independent connections, acquire/drain serialization, crash retention, lost acknowledgements, durable absence, revoked scopes, capability separation, direct DML denial, owner/RLS/function tampering and the nine-pool HTTP/canary/drain lifecycle. Local PostgreSQL execution is skipped; real CI must pass before merge.
 
 This continues the authorized D-018 security integration exception. The pre-TO freeze and customer-data deployment gate remain in force. Actual cloud provisioning, provider effects, business authorization, production permission evidence and legacy application adoption remain outstanding. Synthetic CI proves the database composition, not readiness of deployed services.

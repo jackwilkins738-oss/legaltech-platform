@@ -124,6 +124,13 @@ BEGIN
   END IF;
   SELECT * INTO d FROM drain_security.deployments WHERE deployment_id=deployment FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'DRAIN_NOT_PROVISIONED'; END IF;
+  -- Recheck after any deployment-lock wait, then hold the current scope row
+  -- through commit. A concurrent revocation either wins first or waits for
+  -- this already-authorized mutation; an obsolete snapshot cannot dispatch.
+  PERFORM drain_security.assert_access(deployment,mode);
+  PERFORM 1 FROM drain_security.principal_scopes s
+    WHERE s.deployment_id=deployment AND s.principal=session_user AND s.access=mode AND s.active FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DRAIN_SCOPE_FORBIDDEN'; END IF;
   IF mode='CONTROL' THEN
     SELECT * INTO c FROM drain_security.controls WHERE deployment_id=deployment AND operation_id=operation;
     IF FOUND THEN

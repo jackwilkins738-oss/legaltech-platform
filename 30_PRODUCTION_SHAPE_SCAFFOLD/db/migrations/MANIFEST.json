@@ -274,7 +274,7 @@
     },
     {
       "file": "055_durable_deployment_drain.sql",
-      "sha256": "48ce2b860e968be297f36547d6195da542f7db472e421699ec5bcadb362a0a7b",
+      "sha256": "c9e38b8c9aa7d393911396f9874c1f27cfbb6f95d21cb8d59d85f36b2d12f298",
       "destructive": false
     }
   ]

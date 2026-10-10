@@ -744,6 +744,21 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127 real PostgreSQL shared i
     try{await assert.rejects(acquireDurable(),/UNVERIFIED/);await assert.rejects(releaseDurable(durable,id,value),/UNVERIFIED/);assert.equal((await durable.status(scope)).inFlight,1);}
     finally{await admin.query("UPDATE drain_security.principal_scopes SET active=true WHERE deployment_id=$1 AND principal='legaltech_drain_worker_ci'",[drainDeployment]);await releaseDurable(durable,id,value);}
   });
+  await t.test('V127 scope revoked during deployment-lock wait cannot authorize a queued mutation',async()=>{
+    const blocker=await admin.connect(),id=operation('queued-revocation');let pending;
+    try{await blocker.query('BEGIN');await blocker.query('SELECT 1 FROM drain_security.deployments WHERE deployment_id=$1 FOR UPDATE',[drainDeployment]);
+      pending=acquireDurable(durable,id).then(value=>({value}),error=>({error}));
+      let waiting=false;const deadline=Date.now()+3000;
+      while(Date.now()<deadline){waiting=(await admin.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename='legaltech_drain_worker_ci' AND wait_event_type='Lock' AND query LIKE '%drain_security.operate%') AS waiting")).rows[0].waiting;if(waiting)break;await new Promise(r=>setTimeout(r,10));}
+      assert.equal(waiting,true);
+      await blocker.query("UPDATE drain_security.principal_scopes SET active=false WHERE deployment_id=$1 AND principal='legaltech_drain_worker_ci'",[drainDeployment]);await blocker.query('COMMIT');
+      const outcome=await pending;assert.match(outcome.error?.message??'',/UNVERIFIED/);
+      assert.equal((await admin.query('SELECT count(*)::integer AS n FROM drain_security.leases WHERE deployment_id=$1 AND operation_id=$2',[drainDeployment,id])).rows[0].n,0);
+    }finally{await blocker.query('ROLLBACK');blocker.release();
+      await admin.query("UPDATE drain_security.principal_scopes SET active=true WHERE deployment_id=$1 AND principal='legaltech_drain_worker_ci'",[drainDeployment]);
+      if(pending){const outcome=await pending;if(outcome.value)await releaseDurable(durable,id,outcome.value);}
+    }
+  });
   await t.test('V127 current operator and reader scope revocations deny control and readiness',async()=>{
     for(const principal of ['legaltech_drain_operator_ci','legaltech_drain_reader_ci']){
       await admin.query('UPDATE drain_security.principal_scopes SET active=false WHERE deployment_id=$1 AND principal=$2::name',[drainDeployment,principal]);
