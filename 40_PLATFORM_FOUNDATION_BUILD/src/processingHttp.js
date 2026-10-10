@@ -32,11 +32,11 @@ function receipt(value,expected){shape(value,['tenantId','commandId','jobId','ki
 // Dedicated metadata command API. It never falls back to the synthetic platform
 // or exposes worker, adoption, provider, drain-admin or raw result endpoints.
 export function createProcessingHttp({handlers,authProvider,abuseLimiter,readiness,drain,authorizeRequest,audit,accepting=()=>true,
-  requestTimeoutMs=10000,readinessTimeoutMs=1500,maxBodyBytes=16384,maxInFlight=100}={}){
+  requestTimeoutMs=10000,readinessTimeoutMs=1500,maxBodyBytes=16384,maxInFlight=100,allowDirectCommands=true}={}){
   if(!isProductionReadiness(readiness)||!isManagedDeploymentDrain(drain)||['registerInbound','requestPolicyEvaluation'].some(k=>typeof handlers?.[k]!=='function')
     ||typeof authProvider?.authenticate!=='function'||authProvider instanceof StaticAuthProvider||usesReferenceSessionStore(authProvider)
     ||abuseLimiter instanceof InMemoryAbuseLimiter||['checkIp','checkTenant'].some(k=>typeof abuseLimiter?.[k]!=='function')
-    ||typeof authorizeRequest!=='function'||typeof audit!=='function'||typeof accepting!=='function')throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
+    ||typeof authorizeRequest!=='function'||typeof audit!=='function'||typeof accepting!=='function'||typeof allowDirectCommands!=='boolean')throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
   for(const [v,min,max] of [[requestTimeoutMs,100,60000],[readinessTimeoutMs,100,6000],[maxBodyBytes,1024,65536],[maxInFlight,1,1000]])if(!Number.isInteger(v)||v<min||v>max)throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
   const bound=Object.freeze({registerInbound:handlers.registerInbound.bind(handlers),requestPolicyEvaluation:handlers.requestPolicyEvaluation.bind(handlers),authenticate:authProvider.authenticate.bind(authProvider),checkIp:abuseLimiter.checkIp.bind(abuseLimiter),checkTenant:abuseLimiter.checkTenant.bind(abuseLimiter)});
   const pending=new Set(),controllers=new Set();let closed=false,uncertain=false;
@@ -58,7 +58,7 @@ export function createProcessingHttp({handlers,authProvider,abuseLimiter,readine
       let lease,committing=false,accepted=false;
       try{
         headers(req);check(signal);await bound.checkIp(req);await admitted(signal);
-        const kind=req.method==='POST'&&req.url==='/api/v1/processing/inbound'?'PROCESS_INBOUND':req.method==='POST'&&req.url==='/api/v1/processing/policy-evaluations'?'POLICY_EVALUATION':null;
+        const kind=!allowDirectCommands?null:req.method==='POST'&&req.url==='/api/v1/processing/inbound'?'PROCESS_INBOUND':req.method==='POST'&&req.url==='/api/v1/processing/policy-evaluations'?'POLICY_EVALUATION':null;
         if(!kind)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
         if(req.headers['content-type']!=='application/json')throw invalid();
         const session=normalizeSession(await bound.authenticate(req.headers,{method:req.method,url:req.url}));check(signal);

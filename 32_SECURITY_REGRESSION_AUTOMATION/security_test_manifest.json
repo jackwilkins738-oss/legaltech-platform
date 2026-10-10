@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V129-PRODUCTION-INGRESS",
+      "concept": "V129 production ingress integration",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V128-ARTIFACT-CONTAINMENT",
       "concept": "V128 artifact resource containment",
       "severity": "BLOCKER"
