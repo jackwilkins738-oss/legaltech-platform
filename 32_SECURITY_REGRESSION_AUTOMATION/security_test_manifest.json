@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V128-ARTIFACT-CONTAINMENT",
+      "concept": "V128 artifact resource containment",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V127-DURABLE-DRAIN",
       "concept": "V127 durable deployment drain",
       "severity": "BLOCKER"

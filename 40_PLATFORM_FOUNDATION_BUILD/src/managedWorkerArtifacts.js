@@ -8,20 +8,38 @@ function data(value,keys){
   return Object.fromEntries(keys.map(k=>[k,d[k].value]));
 }
 function signalCheck(signal){if(signal?.aborted)throw fail();}
+const ownedArtifacts=new WeakMap();
+// Only buffers created and transferred by this managed boundary are disposable.
+// Legacy/provider-owned buffers remain untouched by the worker runtime.
+export function releaseManagedArtifact(value){const bytes=ownedArtifacts.get(value);if(bytes){bytes.fill(0);ownedArtifacts.delete(value);}}
 const fields=['tenantId','id','kind','hash','objectKey','versionId','size','state','evidenceHash','region','revision'];
 export class ManagedWorkerArtifacts {
-  #manifest;#storage;#authorize;#verify;#payloadLimit;#policyLimit;
-  constructor({manifest,storage,authorizeVersion,verifyEvidence,maxPayloadBytes=15*1024*1024,maxPolicyBytes=1024*1024}={}){
+  #manifest;#storage;#authorize;#verify;#payloadLimit;#policyLimit;#reads=new Set();#maxReads;#readTimeout;#probePending=false;
+  constructor({manifest,storage,authorizeVersion,verifyEvidence,maxPayloadBytes=15*1024*1024,maxPolicyBytes=1024*1024,maxConcurrentReads=4,readTimeoutMs=10000}={}){
     if(['resolveVersion','probe'].some(k=>typeof manifest?.[k]!=='function')||['readVersion','probe'].some(k=>typeof storage?.[k]!=='function')
       ||typeof authorizeVersion!=='function'||typeof verifyEvidence!=='function'||!Number.isSafeInteger(maxPayloadBytes)||maxPayloadBytes<1||maxPayloadBytes>15*1024*1024
-      ||!Number.isSafeInteger(maxPolicyBytes)||maxPolicyBytes<1||maxPolicyBytes>1024*1024)throw new Error('WORKER_ARTIFACT_PROVIDER_CONFIGURATION_INVALID');
+      ||!Number.isSafeInteger(maxPolicyBytes)||maxPolicyBytes<1||maxPolicyBytes>1024*1024||!Number.isInteger(maxConcurrentReads)||maxConcurrentReads<1||maxConcurrentReads>32
+      ||!Number.isInteger(readTimeoutMs)||readTimeoutMs<100||readTimeoutMs>60000)throw new Error('WORKER_ARTIFACT_PROVIDER_CONFIGURATION_INVALID');
     this.#manifest=Object.freeze({resolveVersion:manifest.resolveVersion.bind(manifest),probe:manifest.probe.bind(manifest)});
     this.#storage=Object.freeze({readVersion:storage.readVersion.bind(storage),probe:storage.probe.bind(storage)});
-    this.#authorize=authorizeVersion;this.#verify=verifyEvidence;this.#payloadLimit=maxPayloadBytes;this.#policyLimit=maxPolicyBytes;
+    this.#authorize=authorizeVersion;this.#verify=verifyEvidence;this.#payloadLimit=maxPayloadBytes;this.#policyLimit=maxPolicyBytes;this.#maxReads=maxConcurrentReads;this.#readTimeout=readTimeoutMs;
   }
   loadPayload({tenantId,payloadId,payloadHash,signal}={}){return this.#load({tenantId,id:payloadId,hash:payloadHash,kind:'PAYLOAD',signal});}
   loadPolicy({tenantId,policyVersionId,policyVersionHash,signal}={}){return this.#load({tenantId,id:policyVersionId,hash:policyVersionHash,kind:'POLICY',signal});}
-  async #load({tenantId,id,hash,kind,signal}){
+  async #load(input){
+    const signal=input.signal;
+    if(signal!==undefined&&(typeof signal?.aborted!=='boolean'||typeof signal?.addEventListener!=='function'||typeof signal?.removeEventListener!=='function'))throw fail();
+    signalCheck(signal);if(this.#reads.size>=this.#maxReads)throw fail();
+    const controller=new AbortController(),abort=()=>controller.abort();let timer,result;
+    this.#reads.add(controller);
+    try{signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
+      timer=setTimeout(abort,this.#readTimeout);
+      // Abort requests cancellation but never releases ownership of an actual
+      // provider callback/iterator until it and cleanup have really settled.
+      result=await this.#read({...input,signal:controller.signal});return result;
+    }catch{throw fail();}finally{clearTimeout(timer);try{signal?.removeEventListener('abort',abort);}catch{releaseManagedArtifact(result);throw fail();}finally{this.#reads.delete(controller);}}
+  }
+  async #read({tenantId,id,hash,kind,signal}){
     if(typeof tenantId!=='string'||!UUID.test(tenantId)||typeof id!=='string'||!UUID.test(id)||typeof hash!=='string'||!HEX.test(hash)
       ||signal!==undefined&&(typeof signal?.aborted!=='boolean'||typeof signal?.addEventListener!=='function'))throw fail();
     const request=Object.freeze({tenantId:tenantId.toLowerCase(),id:id.toLowerCase(),hash,kind,signal});
@@ -57,18 +75,25 @@ export class ManagedWorkerArtifacts {
       }
       signalCheck(signal);if(length!==manifest.size)throw fail();bytes=Buffer.concat(chunks,length);
       if(crypto.createHash('sha256').update(bytes).digest('hex')!==hash)throw fail();
+      // Cleanup can block, cancel or revoke permissions. Complete it before
+      // the final manifest/evidence/authorization checks and byte transfer.
+      await iterator.return();iterator=undefined;signalCheck(signal);
       const current=data(await this.#manifest.resolveVersion(request),fields);signalCheck(signal);
       if(fields.some(k=>current[k]!==manifest[k]))throw fail();
       if(await this.#verify(Object.freeze({...current,signal}))!==true)throw fail();await gate(manifest,'RETURN_VERSION');
-      const result=Object.freeze({tenantId:manifest.tenantId,id:manifest.id,hash,state:manifest.state,bytes});bytes=undefined;return result;
+      const result=Object.freeze({tenantId:manifest.tenantId,id:manifest.id,hash,state:manifest.state,bytes});ownedArtifacts.set(result,bytes);bytes=undefined;return result;
     }catch{throw fail();}finally{
       try{if(typeof iterator?.return==='function')await iterator.return();}catch{throw fail();}
       finally{bytes?.fill(0);for(const chunk of chunks)chunk.fill(0);}
     }
   }
   async probe({signal}={}){
+    const safe=ok=>Object.freeze({ok,code:ok?'WORKER_ARTIFACT_PROVIDER_VERIFIED':'WORKER_ARTIFACT_PROVIDER_UNVERIFIED'});
+    const available=()=>this.#reads.size<this.#maxReads&&![...this.#reads].some(c=>c.signal.aborted);
+    if(this.#probePending||!available())return safe(false);
+    this.#probePending=true;
     try{signalCheck(signal);const a=await this.#manifest.probe({signal});signalCheck(signal);const b=await this.#storage.probe({signal});signalCheck(signal);
-      return Object.freeze({ok:a?.ok===true&&b?.ok===true,code:a?.ok===true&&b?.ok===true?'WORKER_ARTIFACT_PROVIDER_VERIFIED':'WORKER_ARTIFACT_PROVIDER_UNVERIFIED'});
-    }catch{return Object.freeze({ok:false,code:'WORKER_ARTIFACT_PROVIDER_UNVERIFIED'});}
+      return safe(a?.ok===true&&b?.ok===true&&available());
+    }catch{return safe(false);}finally{this.#probePending=false;}
   }
 }

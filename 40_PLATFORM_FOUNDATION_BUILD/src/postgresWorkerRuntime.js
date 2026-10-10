@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {releaseManagedArtifact} from './managedWorkerArtifacts.js';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i,HEX=/^[a-f0-9]{64}$/,CODE=/^[A-Z][A-Z0-9_]{0,63}$/;
 const kinds=new Set(['PROCESS_INBOUND','POLICY_EVALUATION']);
 const retries=new Set(['PAYLOAD_DEPENDENCY_UNAVAILABLE','POLICY_DEPENDENCY_UNAVAILABLE','PROCESSOR_DEPENDENCY_UNAVAILABLE']);
@@ -44,7 +45,7 @@ export class PostgresWorkerRuntime {
     if(this.#busy)throw new Error('WORKER_RUNTIME_BUSY');this.#busy=true;
     tenantId=tenantId.toLowerCase();serviceActorId=serviceActorId.toLowerCase();
     const controller=new AbortController(),abort=()=>controller.abort();
-    let claim,command,bytes,processorBytes,heartbeatTimer,timer,heartbeatPending=Promise.resolve(),heartbeatActive=false,checkpointActive=true,checkpoints=new Set(),fault=null,completionStarted=false;
+    let claim,command,artifact,bytes,processorBytes,heartbeatTimer,timer,heartbeatPending=Promise.resolve(),heartbeatActive=false,checkpointActive=true,checkpoints=new Set(),fault=null,completionStarted=false;
     const stopHeartbeat=async()=>{heartbeatActive=false;clearTimeout(heartbeatTimer);await heartbeatPending;};
     const check=()=>{if(controller.signal.aborted)throw new Error(fault??'WORKER_EXECUTION_ABORTED');};
     const authorize=async phase=>{
@@ -86,7 +87,7 @@ export class PostgresWorkerRuntime {
       await authorize('LOAD_ARTIFACT');
       const id=kind==='PROCESS_INBOUND'?command.payloadId:command.policyVersionId,hash=kind==='PROCESS_INBOUND'?command.payloadHash:command.policyVersionHash;
       if(typeof id!=='string'||!UUID.test(id)||typeof hash!=='string'||!HEX.test(hash)||typeof command.commandId!=='string'||!UUID.test(command.commandId)||!HEX.test(command.requestHash??''))throw new Error('WORKER_DOMAIN_BINDING_INVALID');
-      const artifact=kind==='PROCESS_INBOUND'?await this.#loadPayload(Object.freeze({tenantId,payloadId:id,payloadHash:hash,signal:controller.signal}))
+      artifact=kind==='PROCESS_INBOUND'?await this.#loadPayload(Object.freeze({tenantId,payloadId:id,payloadHash:hash,signal:controller.signal}))
         :await this.#loadPolicy(Object.freeze({tenantId,policyVersionId:id,policyVersionHash:hash,signal:controller.signal}));
       check();bytes=snapshotArtifact(artifact,{tenantId,id,hash,state:kind==='PROCESS_INBOUND'?'PROCESSING_ALLOWED':'PUBLISHED',maxBytes:kind==='PROCESS_INBOUND'?this.#payloadLimit:this.#policyLimit});
       await checkpoint('EXECUTE');check();processorBytes=Buffer.from(bytes);
@@ -113,7 +114,7 @@ export class PostgresWorkerRuntime {
       catch{return Object.freeze({jobId:claim.jobId,status:'OUTCOME_UNKNOWN',errorCode:'WORKER_FAILURE_OUTCOME_UNKNOWN'});}
       return Object.freeze({jobId:claim.jobId,status:'FAILED',errorCode,retryRequested:retryable});
     }finally{
-      checkpointActive=false;controller.abort();await Promise.allSettled([...checkpoints]);await stopHeartbeat();clearTimeout(timer);signal?.removeEventListener('abort',abort);bytes?.fill(0);processorBytes?.fill(0);this.#busy=false;
+      checkpointActive=false;controller.abort();await Promise.allSettled([...checkpoints]);await stopHeartbeat();clearTimeout(timer);signal?.removeEventListener('abort',abort);bytes?.fill(0);processorBytes?.fill(0);releaseManagedArtifact(artifact);this.#busy=false;
     }
   }
 }
