@@ -42,7 +42,7 @@ export class ManagedDeploymentDrain {
   async #release(operationId,value){const ack=await this.#backend.release({deploymentId:this.#deployment,operationId,lease:value});
     if(!exact(ack,['released','token','generation'])||ack.released!==true||ack.token!==value.token||ack.generation!==value.generation)throw fail();}
   async status(){await this.#auth('STATUS');if(this.#uncertain.size)throw fail();const result=status(await this.#backend.status({deploymentId:this.#deployment}));
-    if(result.inFlight<this.#held.size)throw fail();return result;}
+    if(this.#uncertain.size||result.inFlight<this.#held.size||[...this.#held.values()].some(v=>v.generation>result.generation))throw fail();return result;}
   async probe(){try{const s=await this.status();return Object.freeze({ok:s.acceptingNew,code:s.acceptingNew?'MANAGED_DRAIN_ACTIVE':'MANAGED_DRAIN_CLOSED'});}catch{return Object.freeze({ok:false,code:'MANAGED_DRAIN_UNVERIFIED'});}}
   async begin({actorId,reasonHash}={}){
     if(!ID.test(actorId??'')||!/^[a-f0-9]{64}$/.test(reasonHash??''))throw fail();await this.#auth('BEGIN',actorId);

@@ -271,6 +271,11 @@
       "file": "054_domain_result_adoption.sql",
       "sha256": "68fc47d306372dbeb75eb4c067aa1390a60fa66163906b19f7cc0cf9a1e031d6",
       "destructive": false
+    },
+    {
+      "file": "055_durable_deployment_drain.sql",
+      "sha256": "c9e38b8c9aa7d393911396f9874c1f27cfbb6f95d21cb8d59d85f36b2d12f298",
+      "destructive": false
     }
   ]
 }

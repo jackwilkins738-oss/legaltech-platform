@@ -24,6 +24,9 @@ import {PostgresResultAdopter} from '../../40_PLATFORM_FOUNDATION_BUILD/src/post
 import {REQUIRED_PRODUCTION_PROBES} from '../../40_PLATFORM_FOUNDATION_BUILD/src/productionAdmission.js';
 import {createPostgresWorkerPipeline} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerPipeline.js';
 import {PostgresWorkerDomainLoader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerDomain.js';
+import {PostgresDeploymentDrainBackend} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresDeploymentDrain.js';
+import {ManagedDeploymentDrain} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedDeploymentDrain.js';
+import {createDurablePostgresProcessingService} from '../../40_PLATFORM_FOUNDATION_BUILD/src/durableProcessingService.js';
 import {DeploymentDrainController} from '../../40_PLATFORM_FOUNDATION_BUILD/src/deploymentDrain.js';
 import {createPostgresRuntimeProbe} from '../src/postgresRuntime.js';
 
@@ -32,7 +35,7 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119/V120/V121/V122/V123/V124/V125/V126 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
@@ -75,8 +78,8 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126 real PostgreSQL shared identi
   const one=new PostgresServerSessionStore({...options,brokerPool:brokerOne}),two=new PostgresServerSessionStore({...options,brokerPool:brokerTwo});
   const session=(providerSessionId=`provider-${uuid()}`)=>({tenantId:tenantA,actorId:actorA,capabilities:['matter:read'],roles:[],authContext:{method:'OIDC',mfaVerified:true,authTime:null,expiresAt:new Date(Date.now()+3600000).toISOString(),providerSessionId}});
 
-  await t.test('all 54 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
-    assert.equal(manifest.migrations.length,54);
+  await t.test('all 55 checksum-pinned migrations execute and actual runtime catalog verification passes',async()=>{
+    assert.equal(manifest.migrations.length,55);
     const result=await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({});assert.equal(result.ok,true);
     assert.equal((await one.probe()).ok,true);
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
@@ -662,4 +665,158 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126 real PostgreSQL shared identi
     }finally{if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:'a'.repeat(64),timeoutMs:5000});root.server.closeAllConnections();}}
   });
 
+  const drainDeployment='synthetic-ci-v127',drainOwner=uuid(),reason='a'.repeat(64);
+  for(const [login,group] of [['legaltech_drain_worker_ci','legaltech_drain_worker'],['legaltech_drain_operator_ci','legaltech_drain_operator'],['legaltech_drain_reader_ci','legaltech_drain_reader']]){
+    await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+    await admin.query(`GRANT ${group} TO ${login}`);
+  }
+  for(const [principal,access] of [['legaltech_drain_worker_ci','WORKLOAD'],['legaltech_drain_operator_ci','CONTROL'],['legaltech_drain_reader_ci','READ']])
+    await admin.query('INSERT INTO drain_security.principal_scopes(deployment_id,principal,access) VALUES($1,$2::name,$3)',[drainDeployment,principal,access]);
+  const drainWorkerPool=makePool('legaltech_drain_worker_ci'),drainOperatorPool=makePool('legaltech_drain_operator_ci'),drainReaderPool=makePool('legaltech_drain_reader_ci');
+  const drainOptions={workerPool:drainWorkerPool,operatorPool:drainOperatorPool,readerPool:drainReaderPool,expectedWorkerRole:'legaltech_drain_worker_ci',
+    expectedOperatorRole:'legaltech_drain_operator_ci',expectedReaderRole:'legaltech_drain_reader_ci',deploymentId:drainDeployment,ownerId:drainOwner,authorizeBackend:async()=>true,timeoutMs:5000};
+  const durable=new PostgresDeploymentDrainBackend(drainOptions),otherDurable=new PostgresDeploymentDrainBackend({...drainOptions,
+    workerPool:makePool('legaltech_drain_worker_ci'),operatorPool:makePool('legaltech_drain_operator_ci'),readerPool:makePool('legaltech_drain_reader_ci'),ownerId:uuid()});
+  const operation=prefix=>`${prefix}:${uuid()}`,scope={deploymentId:drainDeployment};
+  const beginDurable=()=>durable.begin({...scope,operationId:operation('begin'),actorId:'synthetic-operator',reasonHash:reason});
+  const resumeDurable=async()=>{const prior=await durable.status(scope);return durable.resume({...scope,operationId:operation('resume'),actorId:'synthetic-operator',expectedGeneration:prior.generation});};
+  const acquireDurable=(backend=durable,id=operation('lease'),kind='BACKGROUND')=>backend.acquire({...scope,operationId:id,kind});
+  const releaseDurable=(backend,id,lease)=>backend.release({...scope,operationId:id,lease});
+  await t.test('V127 scope-provisioned initialization is durable replay-safe and starts globally closed',async()=>{
+    const input={operationId:operation('init'),actorId:'synthetic-operator'};const value=await durable.initialize(input);
+    assert.deepEqual(value,{state:'DRAINED',generation:1,inFlight:0,acceptingNew:false});assert.deepEqual(await durable.initialize(input),value);
+    await assert.rejects(durable.initialize({...input,operationId:operation('init')}),/UNVERIFIED/);assert.equal((await durable.probe()).ok,true);await resumeDurable();
+  });
+  await t.test('V127 independent connections share persistent leases and closed generations wait for every owner',async()=>{
+    const first=operation('first'),second=operation('second'),a=await acquireDurable(durable,first),b=await acquireDurable(otherDurable,second);
+    const closing=await beginDurable();assert.equal(closing.state,'DRAINING');assert.equal(closing.inFlight,2);
+    await assert.rejects(resumeDurable(),/UNVERIFIED/);await releaseDurable(durable,first,a);assert.equal((await otherDurable.status(scope)).state,'DRAINING');
+    await releaseDurable(otherDurable,second,b);assert.equal((await durable.status(scope)).state,'DRAINED');const resumed=await resumeDurable();assert.equal(resumed.generation,closing.generation+1);
+  });
+  await t.test('V127 immutable acquisition replay keeps original token and rejects changed kind or owner',async()=>{
+    const id=operation('immutable'),a=await acquireDurable(durable,id);try{
+      assert.deepEqual(await acquireDurable(durable,id),a);await assert.rejects(acquireDurable(durable,id,'INGRESS'),/UNVERIFIED/);await assert.rejects(acquireDurable(otherDurable,id),/UNVERIFIED/);
+      assert.equal((await admin.query("SELECT count(*)::integer AS n FROM drain_security.events WHERE deployment_id=$1 AND operation_id=$2 AND action='ACQUIRE'",[drainDeployment,id])).rows[0].n,1);
+    }finally{await releaseDurable(durable,id,a);}await assert.rejects(acquireDurable(durable,id),/UNVERIFIED/);
+  });
+  await t.test('V127 token and attempt-generation forgery cannot release another owner or clear a lease',async()=>{
+    const id=operation('forged'),a=await acquireDurable(durable,id);try{
+      for(const lease of [{...a,token:'b'.repeat(64)},{...a,generation:a.generation+1}])await assert.rejects(releaseDurable(durable,id,lease),/UNVERIFIED/);
+      await assert.rejects(releaseDurable(otherDurable,id,a),/UNVERIFIED/);assert.equal((await durable.status(scope)).inFlight,1);
+    }finally{await releaseDurable(durable,id,a);}assert.deepEqual(await releaseDurable(durable,id,a),{released:true,...a});
+  });
+  await t.test('V127 begin refuses new acquisition and stale generation cannot resume',async()=>{
+    const closed=await beginDurable();await assert.rejects(acquireDurable(),/UNVERIFIED/);
+    await assert.rejects(durable.resume({...scope,operationId:operation('stale'),actorId:'synthetic-operator',expectedGeneration:closed.generation-1}),/UNVERIFIED/);await resumeDurable();
+  });
+  await t.test('V127 acquire and begin serialize atomically under cross-connection concurrency',async()=>{
+    const id=operation('racing');const [acquisition]=await Promise.allSettled([acquireDurable(otherDurable,id),beginDurable()]);
+    const state=await durable.status(scope);assert.equal(state.acceptingNew,false);assert.equal(state.inFlight,acquisition.status==='fulfilled'?1:0);
+    assert.equal(state.state,acquisition.status==='fulfilled'?'DRAINING':'DRAINED');if(acquisition.status==='fulfilled')await releaseDurable(otherDurable,id,acquisition.value);await resumeDurable();
+  });
+  await t.test('V127 authoritative absence is sealed so a delayed acquisition cannot later commit',async()=>{
+    const id=operation('late');let allow;const gate=new Promise(r=>{allow=r});const late=gate.then(()=>acquireDurable(durable,id));
+    assert.deepEqual(await durable.lookupOperation({...scope,operationId:id}),{state:'ABSENT',lease:null});allow();await assert.rejects(late,/UNVERIFIED/);assert.equal((await durable.status(scope)).inFlight,0);
+    assert.deepEqual(await durable.lookupOperation({...scope,operationId:id}),{state:'ABSENT',lease:null});
+  });
+  await t.test('V127 connection/process loss never expires leases and reconstruction requires original owner',async()=>{
+    const workerPool=makePool('legaltech_drain_worker_ci'),ownerId=uuid(),crashed=new PostgresDeploymentDrainBackend({...drainOptions,workerPool,ownerId}),id=operation('crash');
+    const value=await acquireDurable(crashed,id);pools.splice(pools.indexOf(workerPool),1);await workerPool.end();await beginDurable();
+    assert.equal((await durable.status(scope)).state,'DRAINING');await assert.rejects(otherDurable.lookupOperation({...scope,operationId:id}),/UNVERIFIED/);
+    const recovered=new PostgresDeploymentDrainBackend({...drainOptions,ownerId});assert.deepEqual(await recovered.lookupOperation({...scope,operationId:id}),{state:'HELD',lease:value});
+    assert.equal((await durable.status(scope)).inFlight,1);await releaseDurable(recovered,id,value);await resumeDurable();
+  });
+  await t.test('V127 lost acquisition acknowledgement stays unready until exact durable reconciliation',async()=>{
+    const id=operation('lost-acquire'),backend={acquire:async input=>{await durable.acquire(input);throw new Error('synthetic-lost-reply');},release:durable.release.bind(durable),
+      status:durable.status.bind(durable),begin:durable.begin.bind(durable),resume:durable.resume.bind(durable),lookupOperation:durable.lookupOperation.bind(durable)};
+    const drain=new ManagedDeploymentDrain({backend,authorize:async()=>true,deploymentId:drainDeployment});await assert.rejects(drain.acquire({operationId:id,kind:'INGRESS'}),/UNVERIFIED/);
+    assert.equal((await drain.probe()).ok,false);assert.equal((await durable.status(scope)).inFlight,1);await drain.reconcile({operationId:id});assert.equal((await drain.probe()).ok,true);
+  });
+  await t.test('V127 lost release acknowledgement reconciles immutable RELEASED proof without duplicate events',async()=>{
+    const id=operation('lost-release'),backend={acquire:durable.acquire.bind(durable),release:async input=>{await durable.release(input);throw new Error('synthetic-lost-release');},
+      status:durable.status.bind(durable),begin:durable.begin.bind(durable),resume:durable.resume.bind(durable),lookupOperation:durable.lookupOperation.bind(durable)};
+    const drain=new ManagedDeploymentDrain({backend,authorize:async()=>true,deploymentId:drainDeployment}),value=await drain.acquire({operationId:id,kind:'BACKGROUND'});
+    await assert.rejects(drain.release(value),/UNVERIFIED/);assert.equal((await drain.probe()).ok,false);await drain.reconcile({operationId:id});assert.equal((await drain.probe()).ok,true);
+    assert.equal((await admin.query("SELECT count(*)::integer AS n FROM drain_security.events WHERE deployment_id=$1 AND operation_id=$2 AND action='RELEASE'",[drainDeployment,id])).rows[0].n,1);
+  });
+  await t.test('V127 current deployment scope revocation denies workload mutation without forgetting held effects',async()=>{
+    const id=operation('scope-revoked'),value=await acquireDurable(durable,id);await admin.query("UPDATE drain_security.principal_scopes SET active=false WHERE deployment_id=$1 AND principal='legaltech_drain_worker_ci'",[drainDeployment]);
+    try{await assert.rejects(acquireDurable(),/UNVERIFIED/);await assert.rejects(releaseDurable(durable,id,value),/UNVERIFIED/);assert.equal((await durable.status(scope)).inFlight,1);}
+    finally{await admin.query("UPDATE drain_security.principal_scopes SET active=true WHERE deployment_id=$1 AND principal='legaltech_drain_worker_ci'",[drainDeployment]);await releaseDurable(durable,id,value);}
+  });
+  await t.test('V127 scope revoked during deployment-lock wait cannot authorize a queued mutation',async()=>{
+    const blocker=await admin.connect(),id=operation('queued-revocation');let pending;
+    try{await blocker.query('BEGIN');await blocker.query('SELECT 1 FROM drain_security.deployments WHERE deployment_id=$1 FOR UPDATE',[drainDeployment]);
+      pending=acquireDurable(durable,id).then(value=>({value}),error=>({error}));
+      let waiting=false;const deadline=Date.now()+3000;
+      while(Date.now()<deadline){waiting=(await admin.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename='legaltech_drain_worker_ci' AND wait_event_type='Lock' AND query LIKE '%drain_security.operate%') AS waiting")).rows[0].waiting;if(waiting)break;await new Promise(r=>setTimeout(r,10));}
+      assert.equal(waiting,true);
+      await blocker.query("UPDATE drain_security.principal_scopes SET active=false WHERE deployment_id=$1 AND principal='legaltech_drain_worker_ci'",[drainDeployment]);await blocker.query('COMMIT');
+      const outcome=await pending;assert.match(outcome.error?.message??'',/UNVERIFIED/);
+      assert.equal((await admin.query('SELECT count(*)::integer AS n FROM drain_security.leases WHERE deployment_id=$1 AND operation_id=$2',[drainDeployment,id])).rows[0].n,0);
+    }finally{await blocker.query('ROLLBACK');blocker.release();
+      await admin.query("UPDATE drain_security.principal_scopes SET active=true WHERE deployment_id=$1 AND principal='legaltech_drain_worker_ci'",[drainDeployment]);
+      if(pending){const outcome=await pending;if(outcome.value)await releaseDurable(durable,id,outcome.value);}
+    }
+  });
+  await t.test('V127 current operator and reader scope revocations deny control and readiness',async()=>{
+    for(const principal of ['legaltech_drain_operator_ci','legaltech_drain_reader_ci']){
+      await admin.query('UPDATE drain_security.principal_scopes SET active=false WHERE deployment_id=$1 AND principal=$2::name',[drainDeployment,principal]);
+      try{if(principal==='legaltech_drain_operator_ci')await assert.rejects(beginDurable(),/UNVERIFIED/);else assert.equal((await durable.probe()).ok,false);}
+      finally{await admin.query('UPDATE drain_security.principal_scopes SET active=true WHERE deployment_id=$1 AND principal=$2::name',[drainDeployment,principal]);}
+    }
+  });
+  await t.test('V127 unprovisioned deployment bindings cannot initialize or read another deployment',async()=>{
+    const other=new PostgresDeploymentDrainBackend({...drainOptions,deploymentId:'synthetic-ci-v127-other'});await assert.rejects(other.initialize({operationId:operation('other-init'),actorId:'operator'}),/UNVERIFIED/);assert.equal((await other.probe()).ok,false);
+  });
+  await t.test('V127 direct SQL cannot bypass worker/operator/reader capability separation',async()=>{
+    for(const [pool,action,input] of [[drainWorkerPool,'BEGIN',{operationId:operation('bypass'),actorId:'operator',reasonHash:reason}],
+      [drainOperatorPool,'ACQUIRE',{operationId:operation('bypass'),ownerId:drainOwner,kind:'BACKGROUND',token:reason}],
+      [drainReaderPool,'RESUME',{operationId:operation('bypass'),actorId:'operator',expectedGeneration:1}]]){
+      await assert.rejects(pool.query('SELECT drain_security.operate($1,$2,$3::jsonb)',[drainDeployment,action,JSON.stringify(input)]),/DRAIN_SCOPE_FORBIDDEN/);
+    }
+  });
+  await t.test('V127 application and control principals cannot select or mutate private drain ledgers',async()=>{
+    for(const pool of [runtime,brokerOne,queueWorkerPool,queueReaderPool,relayPool,domainReaderPool,drainWorkerPool,drainOperatorPool,drainReaderPool])
+      for(const table of ['deployments','leases','controls','events','principal_scopes'])assert.equal(await pool.query(`SELECT * FROM drain_security.${table}`).then(()=>false,e=>e.code==='42501'),true);
+    for(const sql of ['DELETE FROM drain_security.leases','TRUNCATE drain_security.events','UPDATE drain_security.principal_scopes SET active=true'])assert.equal(await drainOperatorPool.query(sql).then(()=>false,e=>e.code==='42501'),true);
+  });
+  await t.test('V127 mixed roles or foreign data grants cannot pass backend posture',async()=>{
+    await admin.query('GRANT legaltech_drain_operator TO legaltech_drain_worker_ci');try{await assert.rejects(acquireDurable(),/UNVERIFIED/);}finally{await admin.query('REVOKE legaltech_drain_operator FROM legaltech_drain_worker_ci');}
+    await admin.query('GRANT SELECT ON public.matters TO legaltech_drain_reader_ci');try{assert.equal((await durable.probe()).ok,false);}finally{await admin.query('REVOKE SELECT ON public.matters FROM legaltech_drain_reader_ci');}
+  });
+  await t.test('V127 PUBLIC function access or altered security-definer posture closes readiness',async()=>{
+    await admin.query('GRANT EXECUTE ON FUNCTION drain_security.operate(text,text,jsonb) TO PUBLIC');try{assert.equal((await durable.probe()).ok,false);}finally{await admin.query('REVOKE EXECUTE ON FUNCTION drain_security.operate(text,text,jsonb) FROM PUBLIC');}
+    await admin.query('ALTER FUNCTION drain_security.operate(text,text,jsonb) SECURITY INVOKER');try{assert.equal((await durable.probe()).ok,false);}finally{await admin.query('ALTER FUNCTION drain_security.operate(text,text,jsonb) SECURITY DEFINER');}
+  });
+  await t.test('V127 altered function body hash cannot silently change drain semantics',async()=>{
+    const definition=(await admin.query("SELECT pg_get_functiondef('drain_security.operate(text,text,jsonb)'::regprocedure) AS sql")).rows[0].sql;
+    const modified=definition.replace('AS $function$','AS $function$\n-- synthetic catalog tamper');assert.notEqual(modified,definition);
+    await admin.query(modified);try{assert.equal((await durable.probe()).ok,false);}finally{await admin.query(definition);}
+  });
+  await t.test('V127 disabled forced RLS or changed owner policy cannot attest a healthy backend',async()=>{
+    await admin.query('ALTER TABLE drain_security.leases NO FORCE ROW LEVEL SECURITY');try{assert.equal((await durable.probe()).ok,false);}finally{await admin.query('ALTER TABLE drain_security.leases FORCE ROW LEVEL SECURITY');}
+    await admin.query('ALTER POLICY owner_only ON drain_security.leases USING(false)');try{assert.equal((await durable.probe()).ok,false);}finally{await admin.query('ALTER POLICY owner_only ON drain_security.leases USING(true)');}
+  });
+  await t.test('V127 domain and session admission refuse direct drain API grants without role membership',async()=>{
+    for(const [principal,check] of [['legaltech_runtime_ci',async()=>assert.equal((await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})()).ok,false)],
+      ['legaltech_broker_ci',async()=>assert.equal((await one.probe()).ok,false)]]){
+      await admin.query(`GRANT USAGE ON SCHEMA drain_security TO ${principal}`);await admin.query(`GRANT EXECUTE ON FUNCTION drain_security.operate(text,text,jsonb) TO ${principal}`);
+      try{await check();}finally{await admin.query(`REVOKE EXECUTE ON FUNCTION drain_security.operate(text,text,jsonb) FROM ${principal}`);await admin.query(`REVOKE USAGE ON SCHEMA drain_security FROM ${principal}`);}
+    }
+  });
+  await t.test('V127 nine-pool service uses real durable drain for canary readiness and global shutdown',async()=>{
+    const {drain:unusedDomainDrain,...serviceDomain}=pipelineOptions,{drain:unusedWorkerDrain,...serviceWorker}=managedWorker;
+    const root=createDurablePostgresProcessingService({drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},processing:{domain:serviceDomain,worker:serviceWorker,
+      queueReaderPool,expectedQueueReaderRole:'legaltech_queue_reader_ci',authorizeResultRead:async()=>true,authorizeAdoption:async()=>true,
+      artifacts:{manifest:{resolveVersion:async r=>manifests.get(r.id),probe:async()=>({ok:true})},storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.hash,contentLength:r.size,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},authorizeVersion:async()=>true,verifyEvidence:async()=>true},
+      canary:{tenantId:tenantA,actorId:actorA,serviceActorId:serviceActor,authorizeCanary:async()=>true,createFixture:async()=>{const payloadId=uuid();manifests.set(payloadId,{tenantId:tenantA,id:payloadId,kind:'PAYLOAD',hash:artifactHash,objectKey:`${tenantA}/canary/${payloadId}`,versionId:'synthetic-v127',size:bytes.length,state:'PROCESSING_ALLOWED',evidenceHash:reason,region:'synthetic-region',revision:1});return {confirmedSynthetic:true,payloadId,payloadHash:artifactHash,expectedResultCode:'CLASSIFIED',expectedResultHash:resultHash};},timeoutMs:5000,maxAgeMs:30000}},
+      http:httpFixture,probes:Object.fromEntries(REQUIRED_PRODUCTION_PROBES.map(k=>[k,async()=>({ok:true})])),readiness:{probeTimeoutMs:5000},canaryIntervalMs:10000});
+    let stopped;
+    try{await root.start({port:0});const base=`http://127.0.0.1:${root.server.address().port}`;let response;const deadline=Date.now()+10000;
+      do{response=await fetch(base+'/api/v1/ready');await response.arrayBuffer();if(response.status===200)break;await new Promise(r=>setTimeout(r,25));}while(Date.now()<deadline);
+      assert.equal(response.status,200);stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true);
+      const global=await durable.status(scope);assert.equal(global.state,'DRAINED');assert.equal(global.inFlight,0);assert.equal(root.server.listening,false);
+    }finally{if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
+  });
 });
