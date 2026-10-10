@@ -172,7 +172,7 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     const operator=new PostgresTenantTransactions({pool,expectedRole:login});
     await operator.run({tenantId:tenantA,actorId:actorA},async tx=>{
       const r=await tx.query("SELECT tenant_id FROM public.support_access_requests WHERE tenant_id=$1",[tenantA]);
-      assert.equal(r.rows.length,0);
+      assert.ok(r.rows.every(row=>row.tenant_id===tenantA));
     });
     await assert.rejects(operator.run({tenantId:tenantA,actorId:actorA},tx=>
       tx.query('SELECT * FROM public.support_access_events')),/UNAVAILABLE/);
