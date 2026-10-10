@@ -92,7 +92,7 @@ jobs:
           node-version: '22'
       - name: Install isolated PostgreSQL test driver
         working-directory: 30_PRODUCTION_SHAPE_SCAFFOLD
-        run: npm install --no-save --package-lock=false --ignore-scripts pg@8.23.0
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Execute migrations and shared security integration tests
         working-directory: 30_PRODUCTION_SHAPE_SCAFFOLD
         run: node --test test/postgresSharedSessions.integration.test.js

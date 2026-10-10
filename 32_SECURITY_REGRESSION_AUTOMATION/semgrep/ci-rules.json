@@ -1,0 +1,3539 @@
+{
+  "rules": [
+    {
+      "id": "javascript.angular.security.detect-angular-sce-disabled.detect-angular-sce-disabled",
+      "message": "$sceProvider is set to false. Disabling Strict Contextual escaping (SCE) in an AngularJS application could provide additional attack surface for XSS vulnerabilities.",
+      "metadata": {
+        "cwe": [
+          "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+        ],
+        "references": [
+          "https://docs.angularjs.org/api/ng/service/$sce",
+          "https://owasp.org/www-chapter-london/assets/slides/OWASPLondon20170727_AngularJS.pdf"
+        ],
+        "category": "security",
+        "technology": [
+          "angular"
+        ],
+        "owasp": [
+          "A07:2017 - Cross-Site Scripting (XSS)",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cross-Site-Scripting (XSS)"
+        ],
+        "source": "https://semgrep.dev/r/javascript.angular.security.detect-angular-sce-disabled.detect-angular-sce-disabled",
+        "shortlink": "https://sg.run/N4DG",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9227,
+            "rv_id": 1263094,
+            "rule_id": "EwU20Z",
+            "version_id": "5PTo1EW",
+            "url": "https://semgrep.dev/playground/r/5PTo1EW/javascript.angular.security.detect-angular-sce-disabled.detect-angular-sce-disabled",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "pattern": "$sceProvider.enabled(false);\n"
+    },
+    {
+      "id": "javascript.browser.security.open-redirect.js-open-redirect",
+      "message": "The application accepts potentially user-controlled input `$PROP` which can control the location of the current window context. This can lead two types of vulnerabilities open-redirection and Cross-Site-Scripting (XSS) with JavaScript URIs. It is recommended to validate user-controllable input before allowing it to control the redirection.",
+      "options": {
+        "interfile": true
+      },
+      "metadata": {
+        "interfile": true,
+        "cwe": [
+          "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+        ],
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "asvs": {
+          "section": "V5 Validation, Sanitization and Encoding",
+          "control_id": "5.5.1 Insecue Redirect",
+          "control_url": "https://github.com/OWASP/ASVS/blob/master/4.0/en/0x13-V5-Validation-Sanitization-Encoding.md#v51-input-validation",
+          "version": "4"
+        },
+        "category": "security",
+        "confidence": "HIGH",
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html"
+        ],
+        "technology": [
+          "browser"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Open Redirect"
+        ],
+        "source": "https://semgrep.dev/r/javascript.browser.security.open-redirect.js-open-redirect",
+        "shortlink": "https://sg.run/3xRe",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9243,
+            "rv_id": 1263122,
+            "rule_id": "WAUopl",
+            "version_id": "pZT03x0",
+            "url": "https://semgrep.dev/playground/r/pZT03x0/javascript.browser.security.open-redirect.js-open-redirect",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "new URLSearchParams($WINDOW. ... .location.search).get('...')\n"
+                },
+                {
+                  "pattern": "new URLSearchParams(location.search).get('...')\n"
+                },
+                {
+                  "pattern": "new URLSearchParams($WINDOW. ... .location.hash.substring(1)).get('...')\n"
+                },
+                {
+                  "pattern": "new URLSearchParams(location.hash.substring(1)).get('...')\n"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "$PROPS = new URLSearchParams($WINDOW. ... .location.search)\n...\n"
+                },
+                {
+                  "pattern-inside": "$PROPS = new URLSearchParams(location.search)\n...\n"
+                },
+                {
+                  "pattern-inside": "$PROPS = new URLSearchParams($WINDOW. ... .location.hash.substring(1))\n...\n"
+                },
+                {
+                  "pattern-inside": "$PROPS = new URLSearchParams(location.hash.substring(1))\n...\n"
+                }
+              ]
+            },
+            {
+              "pattern": "$PROPS.get('...')"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "$PROPS = new URL($WINDOW. ... .location.href)\n...\n"
+                },
+                {
+                  "pattern-inside": "$PROPS = new URL(location.href)\n...\n"
+                }
+              ]
+            },
+            {
+              "pattern": "$PROPS.searchParams.get('...')"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "new URL($WINDOW. ... .location.href).searchParams.get('...')\n"
+                },
+                {
+                  "pattern": "new URL(location.href).searchParams.get('...')\n"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "location.href = $SINK"
+                },
+                {
+                  "pattern": "$THIS. ... .location.href = $SINK"
+                },
+                {
+                  "pattern": "location.replace($SINK)"
+                },
+                {
+                  "pattern": "$THIS. ... .location.replace($SINK)"
+                },
+                {
+                  "pattern": "location = $SINK"
+                },
+                {
+                  "pattern": "$WINDOW. ... .location = $SINK"
+                }
+              ]
+            },
+            {
+              "focus-metavariable": "$SINK"
+            },
+            {
+              "metavariable-pattern": {
+                "patterns": [
+                  {
+                    "pattern-not": "\"...\" + $VALUE\n"
+                  },
+                  {
+                    "pattern-not": "`...${$VALUE}`\n"
+                  }
+                ],
+                "metavariable": "$SINK"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "javascript.express.security.express-jwt-hardcoded-secret.express-jwt-hardcoded-secret",
+      "message": "A hard-coded credential was detected. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).",
+      "options": {
+        "interfile": true
+      },
+      "metadata": {
+        "interfile": true,
+        "cwe": [
+          "CWE-798: Use of Hard-coded Credentials"
+        ],
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+        ],
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "category": "security",
+        "technology": [
+          "express",
+          "secrets"
+        ],
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Hard-coded Secrets"
+        ],
+        "source": "https://semgrep.dev/r/javascript.express.security.express-jwt-hardcoded-secret.express-jwt-hardcoded-secret",
+        "shortlink": "https://sg.run/Do1d",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9252,
+            "rv_id": 1263166,
+            "rule_id": "pKUOjy",
+            "version_id": "pZT03Q0",
+            "url": "https://semgrep.dev/playground/r/pZT03Q0/javascript.express.security.express-jwt-hardcoded-secret.express-jwt-hardcoded-secret",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern-inside": "$JWT = require('express-jwt');\n...\n"
+            },
+            {
+              "pattern-inside": "import $JWT from 'express-jwt';\n...\n"
+            },
+            {
+              "pattern-inside": "import * as $JWT from 'express-jwt';\n...\n"
+            },
+            {
+              "pattern-inside": "import { ..., $JWT, ... } from 'express-jwt';\n...\n"
+            }
+          ]
+        },
+        {
+          "pattern-either": [
+            {
+              "pattern": "$JWT({...,secret: \"$Y\",...},...)\n"
+            },
+            {
+              "pattern": "$OPTS = \"$Y\";\n...\n$JWT({...,secret: $OPTS},...);\n"
+            }
+          ]
+        },
+        {
+          "focus-metavariable": "$Y"
+        }
+      ]
+    },
+    {
+      "id": "javascript.jose.security.jwt-hardcode.hardcoded-jwt-secret",
+      "message": "A hard-coded credential was detected. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).",
+      "metadata": {
+        "interfile": true,
+        "cwe": [
+          "CWE-798: Use of Hard-coded Credentials"
+        ],
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+        ],
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "asvs": {
+          "section": "V3: Session Management Verification Requirements",
+          "control_id": "3.5.2 Static API keys or secret",
+          "control_url": "https://github.com/OWASP/ASVS/blob/master/4.0/en/0x12-V3-Session-management.md#v35-token-based-session-management",
+          "version": "4"
+        },
+        "category": "security",
+        "technology": [
+          "jose",
+          "jwt",
+          "secrets"
+        ],
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Hard-coded Secrets"
+        ],
+        "source": "https://semgrep.dev/r/javascript.jose.security.jwt-hardcode.hardcoded-jwt-secret",
+        "shortlink": "https://sg.run/Ro1g",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9293,
+            "rv_id": 1263182,
+            "rule_id": "JDUyRl",
+            "version_id": "d6TyxbX",
+            "url": "https://semgrep.dev/playground/r/d6TyxbX/javascript.jose.security.jwt-hardcode.hardcoded-jwt-secret",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "patterns": [
+        {
+          "pattern-inside": "$JOSE = require(\"jose\");\n...\n"
+        },
+        {
+          "pattern-either": [
+            {
+              "pattern-inside": "var {JWT} = $JOSE;\n...\n"
+            },
+            {
+              "pattern-inside": "var {JWK, JWT} = $JOSE;\n...\n"
+            },
+            {
+              "pattern-inside": "const {JWT} = $JOSE;\n...\n"
+            },
+            {
+              "pattern-inside": "const {JWK, JWT} = $JOSE;\n...\n"
+            },
+            {
+              "pattern-inside": "let {JWT} = $JOSE;\n...\n"
+            },
+            {
+              "pattern-inside": "let {JWK, JWT} = $JOSE;\n...\n"
+            }
+          ]
+        },
+        {
+          "pattern-either": [
+            {
+              "pattern": "JWT.verify($P, \"...\", ...);\n"
+            },
+            {
+              "pattern": "JWT.sign($P, \"...\", ...);\n"
+            },
+            {
+              "pattern": "JWT.verify($P, JWK.asKey(\"...\"), ...);     \n"
+            },
+            {
+              "pattern": "$JWT.sign($P, JWK.asKey(\"...\"), ...);\n"
+            }
+          ]
+        }
+      ],
+      "options": {
+        "symbolic_propagation": true,
+        "interfile": true
+      }
+    },
+    {
+      "id": "javascript.jose.security.jwt-none-alg.jwt-none-alg",
+      "message": "Detected use of the 'none' algorithm in a JWT token. The 'none' algorithm assumes the integrity of the token has already been verified. This would allow a malicious actor to forge a JWT token that will automatically be verified. Do not explicitly use the 'none' algorithm. Instead, use an algorithm such as 'HS256'.",
+      "metadata": {
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "source-rule-url": "https://semgrep.dev/blog/2020/hardcoded-secrets-unverified-tokens-and-other-common-jwt-mistakes/",
+        "asvs": {
+          "section": "V3: Session Management Verification Requirements",
+          "control_id": "3.5.3 Insecue Stateless Session Tokens",
+          "control_url": "https://github.com/OWASP/ASVS/blob/master/4.0/en/0x12-V3-Session-management.md#v35-token-based-session-management",
+          "version": "4"
+        },
+        "category": "security",
+        "technology": [
+          "jose",
+          "jwt"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "references": [
+          "https://owasp.org/Top10/A02_2021-Cryptographic_Failures"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/javascript.jose.security.jwt-none-alg.jwt-none-alg",
+        "shortlink": "https://sg.run/AvRL",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9294,
+            "rv_id": 1263183,
+            "rule_id": "5rUOGN",
+            "version_id": "ZRTKAyb",
+            "url": "https://semgrep.dev/playground/r/ZRTKAyb/javascript.jose.security.jwt-none-alg.jwt-none-alg",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "pattern-either": [
+        {
+          "pattern": "var $JOSE = require(\"jose\");\n...\nvar { JWK, JWT } = $JOSE;\n...\nvar $T = JWT.verify($P, JWK.None,...);\n"
+        },
+        {
+          "pattern": "var $JOSE = require(\"jose\");\n...\nvar { JWK, JWT } = $JOSE;\n...\n$T = JWT.verify($P, JWK.None,...);\n"
+        },
+        {
+          "pattern": "var $JOSE = require(\"jose\");\n...\nvar { JWK, JWT } = $JOSE;\n...\nJWT.verify($P, JWK.None,...);\n"
+        }
+      ]
+    },
+    {
+      "id": "javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret",
+      "message": "A hard-coded credential was detected. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).",
+      "metadata": {
+        "cwe": [
+          "CWE-798: Use of Hard-coded Credentials"
+        ],
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+        ],
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "asvs": {
+          "section": "V3: Session Management Verification Requirements",
+          "control_id": "3.5.2 Static API keys or secret",
+          "control_url": "https://github.com/OWASP/ASVS/blob/master/4.0/en/0x12-V3-Session-management.md#v35-token-based-session-management",
+          "version": "4"
+        },
+        "category": "security",
+        "technology": [
+          "jwt",
+          "javascript",
+          "secrets"
+        ],
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Hard-coded Secrets"
+        ],
+        "source": "https://semgrep.dev/r/javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret",
+        "shortlink": "https://sg.run/4xN9",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9300,
+            "rv_id": 1263189,
+            "rule_id": "WAUon7",
+            "version_id": "gETB75D",
+            "url": "https://semgrep.dev/playground/r/gETB75D/javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "patterns": [
+            {
+              "pattern": "$X = '...' \n"
+            },
+            {
+              "pattern": "$X = '$Y' \n"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "$JWT.sign($DATA,\"...\",...);\n"
+                },
+                {
+                  "pattern-inside": "$JWT.verify($DATA,\"...\",...);\n"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "$JWT = require(\"jsonwebtoken\")\n...\n"
+                },
+                {
+                  "pattern-inside": "import $JWT from \"jsonwebtoken\"\n...\n"
+                },
+                {
+                  "pattern-inside": "import * as $JWT from \"jsonwebtoken\"\n...\n"
+                },
+                {
+                  "pattern-inside": "import {...,$JWT,...} from \"jsonwebtoken\"\n...\n"
+                }
+              ]
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "$JWT.sign($DATA,$VALUE,...);\n"
+                },
+                {
+                  "pattern-inside": "$JWT.verify($DATA,$VALUE,...);\n"
+                }
+              ]
+            },
+            {
+              "focus-metavariable": "$VALUE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "javascript.passport-jwt.security.passport-hardcode.hardcoded-passport-secret",
+      "message": "A hard-coded credential was detected. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).",
+      "metadata": {
+        "cwe": [
+          "CWE-798: Use of Hard-coded Credentials"
+        ],
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+        ],
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "asvs": {
+          "section": "V3: Session Management Verification Requirements",
+          "control_id": "3.5.2 Static API keys or secret",
+          "control_url": "https://github.com/OWASP/ASVS/blob/master/4.0/en/0x12-V3-Session-management.md#v35-token-based-session-management",
+          "version": "4"
+        },
+        "category": "security",
+        "technology": [
+          "jwt",
+          "nodejs",
+          "secrets"
+        ],
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Hard-coded Secrets"
+        ],
+        "source": "https://semgrep.dev/r/javascript.passport-jwt.security.passport-hardcode.hardcoded-passport-secret",
+        "shortlink": "https://sg.run/vz70",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9333,
+            "rv_id": 1263225,
+            "rule_id": "QrUzq6",
+            "version_id": "X0TzyoE",
+            "url": "https://semgrep.dev/playground/r/X0TzyoE/javascript.passport-jwt.security.passport-hardcode.hardcoded-passport-secret",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "by-side-effect": true,
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "{..., clientSecret: \"...\", ...}\n"
+                },
+                {
+                  "pattern": "{..., secretOrKey: \"...\", ...}\n"
+                },
+                {
+                  "pattern": "{..., consumerSecret: \"...\", ...}\n"
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern-inside": "$OBJ = {}\n...\n"
+                    },
+                    {
+                      "pattern-either": [
+                        {
+                          "pattern": "$OBJ.clientSecret = \"...\"\n"
+                        },
+                        {
+                          "pattern": "$OBJ.secretOrKey = \"...\"\n"
+                        },
+                        {
+                          "pattern": "$OBJ.consumerSecret = \"...\"\n"
+                        }
+                      ]
+                    },
+                    {
+                      "pattern": "$OBJ"
+                    }
+                  ]
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern-inside": "$SECRET = '...'\n...\n"
+                    },
+                    {
+                      "pattern-either": [
+                        {
+                          "pattern": "{..., clientSecret: $SECRET, ...}\n"
+                        },
+                        {
+                          "pattern": "{..., secretOrKey: $SECRET, ...}\n"
+                        },
+                        {
+                          "pattern": "{..., consumerSecret: $SECRET, ...}\n"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern-inside": "$SECRET = '...'\n...\n"
+                    },
+                    {
+                      "pattern-either": [
+                        {
+                          "pattern-inside": "$VALUE = {..., clientSecret: $SECRET, ...}\n...\n"
+                        },
+                        {
+                          "pattern-inside": "$VALUE = {..., secretOrKey: $SECRET, ...}\n...\n"
+                        },
+                        {
+                          "pattern-inside": "$VALUE = {..., consumerSecret: $SECRET, ...}\n...\n"
+                        }
+                      ]
+                    },
+                    {
+                      "pattern": "$VALUE"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "$F = require(\"$I\").Strategy\n...\n"
+                },
+                {
+                  "pattern-inside": "$F = require(\"$I\")\n...\n"
+                },
+                {
+                  "pattern-inside": "import { $STRAT as $F } from '$I'\n...\n"
+                },
+                {
+                  "pattern-inside": "import $F from '$I'\n...\n"
+                }
+              ]
+            },
+            {
+              "metavariable-regex": {
+                "metavariable": "$I",
+                "regex": "(passport-.*)"
+              }
+            },
+            {
+              "pattern-inside": "new $F($VALUE,...)\n"
+            },
+            {
+              "focus-metavariable": "$VALUE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "python.flask.security.audit.app-run-param-config.avoid_app_run_with_bad_host",
+      "message": "Running flask app with host 0.0.0.0 could expose the server publicly.",
+      "metadata": {
+        "cwe": [
+          "CWE-668: Exposure of Resource to Wrong Sphere"
+        ],
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "category": "security",
+        "technology": [
+          "flask"
+        ],
+        "references": [
+          "https://owasp.org/Top10/A01_2021-Broken_Access_Control"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Other"
+        ],
+        "source": "https://semgrep.dev/r/python.flask.security.audit.app-run-param-config.avoid_app_run_with_bad_host",
+        "shortlink": "https://sg.run/eLby",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9532,
+            "rv_id": 1263414,
+            "rule_id": "L1Uy1n",
+            "version_id": "BjTkZOY",
+            "url": "https://semgrep.dev/playground/r/BjTkZOY/python.flask.security.audit.app-run-param-config.avoid_app_run_with_bad_host",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "pattern-either": [
+        {
+          "pattern": "app.run(..., host=\"0.0.0.0\", ...)"
+        },
+        {
+          "pattern": "app.run(..., \"0.0.0.0\", ...)"
+        }
+      ]
+    },
+    {
+      "id": "python.flask.security.audit.debug-enabled.debug-enabled",
+      "patterns": [
+        {
+          "pattern-inside": "import flask\n...\n"
+        },
+        {
+          "pattern": "$APP.run(..., debug=True, ...)"
+        }
+      ],
+      "message": "Detected Flask app with debug=True. Do not deploy to production with this flag enabled as it will leak sensitive information. Instead, consider using Flask configuration variables or setting 'debug' using system environment variables.",
+      "metadata": {
+        "cwe": [
+          "CWE-489: Active Debug Code"
+        ],
+        "owasp": "A06:2017 - Security Misconfiguration",
+        "references": [
+          "https://labs.detectify.com/2015/10/02/how-patreon-got-hacked-publicly-exposed-werkzeug-debugger/"
+        ],
+        "category": "security",
+        "technology": [
+          "flask"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Active Debug Code"
+        ],
+        "source": "https://semgrep.dev/r/python.flask.security.audit.debug-enabled.debug-enabled",
+        "shortlink": "https://sg.run/dKrd",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9534,
+            "rv_id": 946206,
+            "rule_id": "gxU1bd",
+            "version_id": "8KTKjwR",
+            "url": "https://semgrep.dev/playground/r/8KTKjwR/python.flask.security.audit.debug-enabled.debug-enabled",
+            "origin": "community"
+          }
+        }
+      },
+      "severity": "WARNING",
+      "languages": [
+        "python"
+      ]
+    },
+    {
+      "id": "python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret",
+      "message": "Hardcoded JWT secret or private key is used. This is a Insufficiently Protected Credentials weakness: https://cwe.mitre.org/data/definitions/522.html Consider using an appropriate security mechanism to protect the credentials (e.g. keeping secrets in environment variables)",
+      "metadata": {
+        "cwe": [
+          "CWE-522: Insufficiently Protected Credentials"
+        ],
+        "owasp": [
+          "A02:2017 - Broken Authentication",
+          "A04:2021 - Insecure Design",
+          "A06:2025 - Insecure Design"
+        ],
+        "references": [
+          "https://semgrep.dev/blog/2020/hardcoded-secrets-unverified-tokens-and-other-common-jwt-mistakes/"
+        ],
+        "category": "security",
+        "technology": [
+          "jwt"
+        ],
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret",
+        "shortlink": "https://sg.run/l2E9",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9557,
+            "rv_id": 1263452,
+            "rule_id": "X5U8P5",
+            "version_id": "PkTR3X3",
+            "url": "https://semgrep.dev/playground/r/PkTR3X3/python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret",
+            "origin": "community"
+          }
+        }
+      },
+      "patterns": [
+        {
+          "pattern": "jwt.encode($_, \"...\", ...)\n"
+        }
+      ],
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR"
+    },
+    {
+      "id": "python.lang.security.audit.network.bind.avoid-bind-to-all-interfaces",
+      "message": "Running `socket.bind` to 0.0.0.0, or empty string could unexpectedly expose the server publicly as it binds to all available interfaces. Consider instead getting correct address from an environment variable or configuration file.",
+      "metadata": {
+        "cwe": [
+          "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+        ],
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "category": "security",
+        "technology": [
+          "python"
+        ],
+        "references": [
+          "https://owasp.org/Top10/A01_2021-Broken_Access_Control"
+        ],
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Mishandled Sensitive Information"
+        ],
+        "source": "https://semgrep.dev/r/python.lang.security.audit.network.bind.avoid-bind-to-all-interfaces",
+        "shortlink": "https://sg.run/rdln",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9669,
+            "rv_id": 1263505,
+            "rule_id": "OrU3og",
+            "version_id": "0bTKzDL",
+            "url": "https://semgrep.dev/playground/r/0bTKzDL/python.lang.security.audit.network.bind.avoid-bind-to-all-interfaces",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "python"
+      ],
+      "severity": "INFO",
+      "pattern-either": [
+        {
+          "pattern": "$S = socket.socket(...)\n...\n$S.bind((\"0.0.0.0\", ...))\n"
+        },
+        {
+          "pattern": "$S = socket.socket(...)\n...\n$S.bind((\"::\", ...))\n"
+        },
+        {
+          "pattern": "$S = socket.socket(...)\n...\n$S.bind((\"\", ...))\n"
+        }
+      ]
+    },
+    {
+      "id": "python.pycryptodome.security.insufficient-dsa-key-size.insufficient-dsa-key-size",
+      "message": "Detected an insufficient key size for DSA. NIST recommends a key size of 2048 or higher.",
+      "metadata": {
+        "cwe": [
+          "CWE-326: Inadequate Encryption Strength"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "source-rule-url": "https://github.com/PyCQA/bandit/blob/b1411bfb43795d3ffd268bef17a839dee954c2b1/bandit/plugins/weak_cryptographic_key.py",
+        "references": [
+          "https://www.pycryptodome.org/src/public_key/dsa",
+          "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r5.pdf"
+        ],
+        "category": "security",
+        "technology": [
+          "pycryptodome"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "functional-categories": [
+          "crypto::search::key-length::pycryptodome",
+          "crypto::search::key-length::pycryptodomex"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.pycryptodome.security.insufficient-dsa-key-size.insufficient-dsa-key-size",
+        "shortlink": "https://sg.run/4y8l",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9688,
+            "rv_id": 1263554,
+            "rule_id": "AbUWje",
+            "version_id": "JdTzxbQ",
+            "url": "https://semgrep.dev/playground/r/JdTzxbQ/python.pycryptodome.security.insufficient-dsa-key-size.insufficient-dsa-key-size",
+            "origin": "community"
+          }
+        }
+      },
+      "options": {
+        "symbolic_propagation": true
+      },
+      "languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "Crypto.PublicKey.DSA.generate(..., bits=$SIZE, ...)"
+            },
+            {
+              "pattern": "Crypto.PublicKey.DSA.generate($SIZE, ...)"
+            },
+            {
+              "pattern": "Cryptodome.PublicKey.DSA.generate(..., bits=$SIZE, ...)"
+            },
+            {
+              "pattern": "Cryptodome.PublicKey.DSA.generate($SIZE, ...)"
+            }
+          ]
+        },
+        {
+          "metavariable-comparison": {
+            "metavariable": "$SIZE",
+            "comparison": "$SIZE < 2048"
+          }
+        }
+      ]
+    },
+    {
+      "id": "python.pycryptodome.security.insufficient-rsa-key-size.insufficient-rsa-key-size",
+      "message": "Detected an insufficient key size for RSA. NIST recommends a key size of 3072 or higher.",
+      "metadata": {
+        "cwe": [
+          "CWE-326: Inadequate Encryption Strength"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "source-rule-url": "https://github.com/PyCQA/bandit/blob/b1411bfb43795d3ffd268bef17a839dee954c2b1/bandit/plugins/weak_cryptographic_key.py",
+        "references": [
+          "https://www.pycryptodome.org/src/public_key/rsa#rsa",
+          "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r5.pdf"
+        ],
+        "category": "security",
+        "technology": [
+          "pycryptodome"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "functional-categories": [
+          "crypto::search::key-length::pycryptodome",
+          "crypto::search::key-length::pycryptodomex"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.pycryptodome.security.insufficient-rsa-key-size.insufficient-rsa-key-size",
+        "shortlink": "https://sg.run/PprY",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 9689,
+            "rv_id": 1263555,
+            "rule_id": "BYUBWe",
+            "version_id": "5PTo1jL",
+            "url": "https://semgrep.dev/playground/r/5PTo1jL/python.pycryptodome.security.insufficient-rsa-key-size.insufficient-rsa-key-size",
+            "origin": "community"
+          }
+        }
+      },
+      "options": {
+        "symbolic_propagation": true
+      },
+      "languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "Crypto.PublicKey.RSA.generate(..., bits=$SIZE, ...)"
+            },
+            {
+              "pattern": "Crypto.PublicKey.RSA.generate($SIZE, ...)"
+            },
+            {
+              "pattern": "Cryptodome.PublicKey.RSA.generate(..., bits=$SIZE, ...)"
+            },
+            {
+              "pattern": "Cryptodome.PublicKey.RSA.generate($SIZE, ...)"
+            }
+          ]
+        },
+        {
+          "metavariable-comparison": {
+            "metavariable": "$SIZE",
+            "comparison": "$SIZE < 3072"
+          }
+        }
+      ]
+    },
+    {
+      "id": "javascript.lang.security.audit.code-string-concat.code-string-concat",
+      "message": "Found data from an Express or Next web request flowing to `eval`. If this data is user-controllable this can lead to execution of arbitrary system commands in the context of your application process. Avoid `eval` whenever possible.",
+      "options": {
+        "interfile": true
+      },
+      "metadata": {
+        "interfile": true,
+        "confidence": "HIGH",
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "cwe": [
+          "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+        ],
+        "references": [
+          "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval",
+          "https://nodejs.org/api/child_process.html#child_processexeccommand-options-callback",
+          "https://www.stackhawk.com/blog/nodejs-command-injection-examples-and-prevention/",
+          "https://ckarande.gitbooks.io/owasp-nodegoat-tutorial/content/tutorial/a1_-_server_side_js_injection.html"
+        ],
+        "category": "security",
+        "technology": [
+          "node.js",
+          "Express",
+          "Next.js"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "MEDIUM",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Code Injection"
+        ],
+        "source": "https://semgrep.dev/r/javascript.lang.security.audit.code-string-concat.code-string-concat",
+        "shortlink": "https://sg.run/96Yk",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 13023,
+            "rv_id": 1263192,
+            "rule_id": "DbUKEz",
+            "version_id": "44TEjYX",
+            "url": "https://semgrep.dev/playground/r/44TEjYX/javascript.lang.security.audit.code-string-concat.code-string-concat",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern-either": [
+            {
+              "patterns": [
+                {
+                  "pattern-either": [
+                    {
+                      "pattern-inside": "function ... ($REQ, $RES) {...}"
+                    },
+                    {
+                      "pattern-inside": "function ... ($REQ, $RES, $NEXT) {...}"
+                    },
+                    {
+                      "patterns": [
+                        {
+                          "pattern-either": [
+                            {
+                              "pattern-inside": "$APP.$METHOD(..., function $FUNC($REQ, $RES) {...})"
+                            },
+                            {
+                              "pattern-inside": "$APP.$METHOD(..., function $FUNC($REQ, $RES, $NEXT) {...})"
+                            }
+                          ]
+                        },
+                        {
+                          "metavariable-regex": {
+                            "metavariable": "$METHOD",
+                            "regex": "^(get|post|put|head|delete|options)$"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "pattern-either": [
+                    {
+                      "pattern": "$REQ.query"
+                    },
+                    {
+                      "pattern": "$REQ.body"
+                    },
+                    {
+                      "pattern": "$REQ.params"
+                    },
+                    {
+                      "pattern": "$REQ.cookies"
+                    },
+                    {
+                      "pattern": "$REQ.headers"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "patterns": [
+                {
+                  "pattern-either": [
+                    {
+                      "pattern-inside": "import { ...,$IMPORT,... } from 'next/router'\n...\n"
+                    },
+                    {
+                      "pattern-inside": "import $IMPORT from 'next/router';\n...\n"
+                    }
+                  ]
+                },
+                {
+                  "pattern-either": [
+                    {
+                      "patterns": [
+                        {
+                          "pattern-inside": "$ROUTER = $IMPORT()\n...\n"
+                        },
+                        {
+                          "pattern-either": [
+                            {
+                              "pattern-inside": "const { ...,$PROPS,... } = $ROUTER.query\n...\n"
+                            },
+                            {
+                              "pattern-inside": "var { ...,$PROPS,... } = $ROUTER.query\n...\n"
+                            },
+                            {
+                              "pattern-inside": "let { ...,$PROPS,... } = $ROUTER.query\n...\n"
+                            }
+                          ]
+                        },
+                        {
+                          "focus-metavariable": "$PROPS"
+                        }
+                      ]
+                    },
+                    {
+                      "patterns": [
+                        {
+                          "pattern-inside": "$ROUTER = $IMPORT()\n...\n"
+                        },
+                        {
+                          "pattern": "$ROUTER.query.$VALUE \n"
+                        }
+                      ]
+                    },
+                    {
+                      "patterns": [
+                        {
+                          "pattern": "$IMPORT().query.$VALUE"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "eval(...)\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "javascript.express.security.audit.express-libxml-noent.express-libxml-noent",
+      "message": "The libxml library processes user-input with the `noent` attribute is set to `true` which can lead to being vulnerable to XML External Entities (XXE) type attacks. It is recommended to set `noent` to `false` when using this feature to ensure you are protected.",
+      "options": {
+        "interfile": true
+      },
+      "metadata": {
+        "interfile": true,
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html"
+        ],
+        "technology": [
+          "express"
+        ],
+        "category": "security",
+        "cwe": [
+          "CWE-611: Improper Restriction of XML External Entity Reference"
+        ],
+        "owasp": [
+          "A04:2017 - XML External Entities (XXE)",
+          "A05:2021 - Security Misconfiguration",
+          "A02:2025 - Security Misconfiguration"
+        ],
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "XML Injection"
+        ],
+        "source": "https://semgrep.dev/r/javascript.express.security.audit.express-libxml-noent.express-libxml-noent",
+        "shortlink": "https://sg.run/Z75x",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 22079,
+            "rv_id": 1263138,
+            "rule_id": "pKUNeD",
+            "version_id": "d6TyxpX",
+            "url": "https://semgrep.dev/playground/r/d6TyxpX/javascript.express.security.audit.express-libxml-noent.express-libxml-noent",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "function ... ($REQ, $RES) {...}"
+                },
+                {
+                  "pattern-inside": "function ... ($REQ, $RES, $NEXT) {...}"
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern-either": [
+                        {
+                          "pattern-inside": "$APP.$METHOD(..., function $FUNC($REQ, $RES) {...})"
+                        },
+                        {
+                          "pattern-inside": "$APP.$METHOD(..., function $FUNC($REQ, $RES, $NEXT) {...})"
+                        }
+                      ]
+                    },
+                    {
+                      "metavariable-regex": {
+                        "metavariable": "$METHOD",
+                        "regex": "^(get|post|put|head|delete|options)$"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "$REQ.query"
+                },
+                {
+                  "pattern": "$REQ.body"
+                },
+                {
+                  "pattern": "$REQ.params"
+                },
+                {
+                  "pattern": "$REQ.cookies"
+                },
+                {
+                  "pattern": "$REQ.headers"
+                },
+                {
+                  "pattern": "$REQ.files.$ANYTHING.data.toString('utf8')"
+                },
+                {
+                  "pattern": "$REQ.files.$ANYTHING['data'].toString('utf8')"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "({ $REQ }: Request,$RES: Response, $NEXT: NextFunction) =>\n{...}\n"
+                },
+                {
+                  "pattern-inside": "({ $REQ }: Request,$RES: Response) => {...}\n"
+                }
+              ]
+            },
+            {
+              "focus-metavariable": "$REQ"
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "params"
+                },
+                {
+                  "pattern": "query"
+                },
+                {
+                  "pattern": "cookies"
+                },
+                {
+                  "pattern": "headers"
+                },
+                {
+                  "pattern": "body"
+                },
+                {
+                  "pattern": "files.$ANYTHING.data.toString('utf8')"
+                },
+                {
+                  "pattern": "files.$ANYTHING['data'].toString('utf8')"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "pattern-either": [
+            {
+              "patterns": [
+                {
+                  "pattern-either": [
+                    {
+                      "pattern-inside": "$XML = require('$IMPORT')\n...\n"
+                    },
+                    {
+                      "pattern-inside": "import $XML from '$IMPORT'\n  ...\n"
+                    },
+                    {
+                      "pattern-inside": "import * as $XML from '$IMPORT'\n...\n"
+                    }
+                  ]
+                },
+                {
+                  "metavariable-regex": {
+                    "metavariable": "$IMPORT",
+                    "regex": "^(libxmljs|libxmljs2)$"
+                  }
+                },
+                {
+                  "pattern-inside": "$XML.$FUNC($QUERY, {...,noent:true,...})"
+                },
+                {
+                  "metavariable-regex": {
+                    "metavariable": "$FUNC",
+                    "regex": "^(parseXmlString|parseXml)$"
+                  }
+                },
+                {
+                  "focus-metavariable": "$QUERY"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "javascript.express.security.audit.express-open-redirect.express-open-redirect",
+      "message": "The application redirects to a URL specified by user-supplied input `$REQ` that is not validated. This could redirect users to malicious locations. Consider using an allow-list approach to validate URLs, or warn users they are being redirected to a third-party website.",
+      "metadata": {
+        "technology": [
+          "express"
+        ],
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html"
+        ],
+        "cwe": [
+          "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+        ],
+        "category": "security",
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Open Redirect"
+        ],
+        "source": "https://semgrep.dev/r/javascript.express.security.audit.express-open-redirect.express-open-redirect",
+        "shortlink": "https://sg.run/EpoP",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 22081,
+            "rv_id": 1263140,
+            "rule_id": "X5ULkq",
+            "version_id": "nWT2L0v",
+            "url": "https://semgrep.dev/playground/r/nWT2L0v/javascript.express.security.audit.express-open-redirect.express-open-redirect",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "options": {
+        "taint_unify_mvars": true,
+        "symbolic_propagation": true
+      },
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "function ... ($REQ, $RES) {...}"
+                },
+                {
+                  "pattern-inside": "function ... ($REQ, $RES, $NEXT) {...}"
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern-either": [
+                        {
+                          "pattern-inside": "$APP.$METHOD(..., function $FUNC($REQ, $RES) {...})"
+                        },
+                        {
+                          "pattern-inside": "$APP.$METHOD(..., function $FUNC($REQ, $RES, $NEXT) {...})"
+                        }
+                      ]
+                    },
+                    {
+                      "metavariable-regex": {
+                        "metavariable": "$METHOD",
+                        "regex": "^(get|post|put|head|delete|options)$"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "$REQ.query"
+                },
+                {
+                  "pattern": "$REQ.body"
+                },
+                {
+                  "pattern": "$REQ.params"
+                },
+                {
+                  "pattern": "$REQ.cookies"
+                },
+                {
+                  "pattern": "$REQ.headers"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "({ $REQ }: Request,$RES: Response, $NEXT: NextFunction) =>\n{...}\n"
+                },
+                {
+                  "pattern-inside": "({ $REQ }: Request,$RES: Response) => {...}\n"
+                }
+              ]
+            },
+            {
+              "focus-metavariable": "$REQ"
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "params"
+                },
+                {
+                  "pattern": "query"
+                },
+                {
+                  "pattern": "cookies"
+                },
+                {
+                  "pattern": "headers"
+                },
+                {
+                  "pattern": "body"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "$RES.redirect(\"$HTTP\"+$REQ. ... .$VALUE)"
+                },
+                {
+                  "pattern": "$RES.redirect(\"$HTTP\"+$REQ. ... .$VALUE + $...A)"
+                },
+                {
+                  "pattern": "$RES.redirect(`$HTTP${$REQ. ... .$VALUE}...`)"
+                },
+                {
+                  "pattern": "$RES.redirect(\"$HTTP\"+$REQ.$VALUE[...])"
+                },
+                {
+                  "pattern": "$RES.redirect(\"$HTTP\"+$REQ.$VALUE[...] + $...A)"
+                },
+                {
+                  "pattern": "$RES.redirect(`$HTTP${$REQ.$VALUE[...]}...`)"
+                }
+              ]
+            },
+            {
+              "metavariable-regex": {
+                "metavariable": "$HTTP",
+                "regex": "^https?:\\/\\/$"
+              }
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "$REQ. ... .$VALUE"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "$RES.redirect($REQ. ... .$VALUE)"
+                },
+                {
+                  "pattern": "$RES.redirect($REQ. ... .$VALUE + $...A)"
+                },
+                {
+                  "pattern": "$RES.redirect(`${$REQ. ... .$VALUE}...`)"
+                }
+              ]
+            },
+            {
+              "pattern": "$REQ. ... .$VALUE"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern": "$RES.redirect($REQ.$VALUE['...'])"
+                },
+                {
+                  "pattern": "$RES.redirect($REQ.$VALUE['...'] + $...A)"
+                },
+                {
+                  "pattern": "$RES.redirect(`${$REQ.$VALUE['...']}...`)"
+                }
+              ]
+            },
+            {
+              "pattern": "$REQ.$VALUE"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "$ASSIGN = $REQ. ... .$VALUE\n...\n"
+                },
+                {
+                  "pattern-inside": "$ASSIGN = $REQ.$VALUE['...']\n...\n"
+                },
+                {
+                  "pattern-inside": "$ASSIGN = $REQ. ... .$VALUE + $...A\n...\n"
+                },
+                {
+                  "pattern-inside": "$ASSIGN = $REQ.$VALUE['...'] + $...A\n...     \n"
+                },
+                {
+                  "pattern-inside": "$ASSIGN = `${$REQ. ... .$VALUE}...`\n...\n"
+                },
+                {
+                  "pattern-inside": "$ASSIGN = `${$REQ.$VALUE['...']}...`\n...                    \n"
+                }
+              ]
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "$RES.redirect($ASSIGN)"
+                },
+                {
+                  "pattern": "$RES.redirect($ASSIGN + $...FOO)"
+                },
+                {
+                  "pattern": "$RES.redirect(`${$ASSIGN}...`)"
+                }
+              ]
+            },
+            {
+              "focus-metavariable": "$ASSIGN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "javascript.express.security.audit.express-session-hardcoded-secret.express-session-hardcoded-secret",
+      "message": "A hard-coded credential was detected. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).",
+      "options": {
+        "interfile": true
+      },
+      "metadata": {
+        "interfile": true,
+        "cwe": [
+          "CWE-798: Use of Hard-coded Credentials"
+        ],
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+        ],
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "category": "security",
+        "technology": [
+          "express",
+          "secrets"
+        ],
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Hard-coded Secrets"
+        ],
+        "source": "https://semgrep.dev/r/javascript.express.security.audit.express-session-hardcoded-secret.express-session-hardcoded-secret",
+        "shortlink": "https://sg.run/LYvG",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 22083,
+            "rv_id": 1263143,
+            "rule_id": "10Uo39",
+            "version_id": "LjTkgle",
+            "url": "https://semgrep.dev/playground/r/LjTkgle/javascript.express.security.audit.express-session-hardcoded-secret.express-session-hardcoded-secret",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern-inside": "$SESSION = require('express-session');\n...\n"
+            },
+            {
+              "pattern-inside": "import $SESSION from 'express-session'\n...\n"
+            },
+            {
+              "pattern-inside": "import {..., $SESSION, ...} from 'express-session'\n...\n"
+            },
+            {
+              "pattern-inside": "import * as $SESSION from 'express-session'\n...\n"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "$APP.use($SESSION({...}))"
+                },
+                {
+                  "pattern": "$SECRET = $VALUE\n...\n$APP.use($SESSION($SECRET))\n"
+                }
+              ]
+            },
+            {
+              "pattern": "secret: '$Y'\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "javascript.express.security.audit.express-third-party-object-deserialization.express-third-party-object-deserialization",
+      "message": "The following function call $SER.$FUNC accepts user controlled data which can result in Remote Code Execution (RCE) through Object Deserialization. It is recommended to use secure data processing alternatives such as JSON.parse() and Buffer.from().",
+      "options": {
+        "interfile": true
+      },
+      "metadata": {
+        "interfile": true,
+        "technology": [
+          "express"
+        ],
+        "category": "security",
+        "cwe": [
+          "CWE-502: Deserialization of Untrusted Data"
+        ],
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html"
+        ],
+        "source_rule_url": [
+          "https://github.com/ajinabraham/njsscan/blob/75bfbeb9c8d72999e4d527dfa2548f7f0f3cc48a/njsscan/rules/semantic_grep/eval/eval_deserialize.yaml"
+        ],
+        "owasp": [
+          "A08:2017 - Insecure Deserialization",
+          "A08:2021 - Software and Data Integrity Failures",
+          "A08:2025 - Software or Data Integrity Failures"
+        ],
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Insecure Deserialization "
+        ],
+        "source": "https://semgrep.dev/r/javascript.express.security.audit.express-third-party-object-deserialization.express-third-party-object-deserialization",
+        "shortlink": "https://sg.run/8W5j",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 22084,
+            "rv_id": 1263145,
+            "rule_id": "9AUyqj",
+            "version_id": "gETB7nD",
+            "url": "https://semgrep.dev/playground/r/gETB7nD/javascript.express.security.audit.express-third-party-object-deserialization.express-third-party-object-deserialization",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "WARNING",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "function ... ($REQ, $RES) {...}"
+                },
+                {
+                  "pattern-inside": "function ... ($REQ, $RES, $NEXT) {...}"
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern-either": [
+                        {
+                          "pattern-inside": "$APP.$METHOD(..., function $FUNC($REQ, $RES) {...})"
+                        },
+                        {
+                          "pattern-inside": "$APP.$METHOD(..., function $FUNC($REQ, $RES, $NEXT) {...})"
+                        }
+                      ]
+                    },
+                    {
+                      "metavariable-regex": {
+                        "metavariable": "$METHOD",
+                        "regex": "^(get|post|put|head|delete|options)$"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "$REQ.query"
+                },
+                {
+                  "pattern": "$REQ.body"
+                },
+                {
+                  "pattern": "$REQ.params"
+                },
+                {
+                  "pattern": "$REQ.cookies"
+                },
+                {
+                  "pattern": "$REQ.headers"
+                },
+                {
+                  "pattern": "$REQ.files.$ANYTHING.data.toString('utf8')"
+                },
+                {
+                  "pattern": "$REQ.files.$ANYTHING['data'].toString('utf8')"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "({ $REQ }: Request,$RES: Response, $NEXT: NextFunction) =>\n{...}\n"
+                },
+                {
+                  "pattern-inside": "({ $REQ }: Request,$RES: Response) => {...}\n"
+                }
+              ]
+            },
+            {
+              "focus-metavariable": "$REQ"
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "params"
+                },
+                {
+                  "pattern": "query"
+                },
+                {
+                  "pattern": "cookies"
+                },
+                {
+                  "pattern": "headers"
+                },
+                {
+                  "pattern": "body"
+                },
+                {
+                  "pattern": "files.$ANYTHING.data.toString('utf8')"
+                },
+                {
+                  "pattern": "files.$ANYTHING['data'].toString('utf8')"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "pattern-either": [
+            {
+              "patterns": [
+                {
+                  "pattern-either": [
+                    {
+                      "pattern-inside": "$SER = require('$IMPORT')\n...\n"
+                    },
+                    {
+                      "pattern-inside": "import $SER from '$IMPORT'\n ...\n"
+                    },
+                    {
+                      "pattern-inside": "import * as $SER from '$IMPORT'\n...\n"
+                    }
+                  ]
+                },
+                {
+                  "metavariable-regex": {
+                    "metavariable": "$IMPORT",
+                    "regex": "^(node-serialize|serialize-to-js)$"
+                  }
+                },
+                {
+                  "pattern": "$SER.$FUNC(...)"
+                },
+                {
+                  "metavariable-regex": {
+                    "metavariable": "$FUNC",
+                    "regex": "^(unserialize|deserialize)$"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+      "message": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+      "options": {
+        "interfile": true
+      },
+      "metadata": {
+        "interfile": true,
+        "references": [
+          "https://sequelize.org/docs/v6/core-concepts/raw-queries/#replacements"
+        ],
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "cwe": [
+          "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+        ],
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "SQL Injection"
+        ],
+        "source": "https://semgrep.dev/r/javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+        "shortlink": "https://sg.run/gjoe",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 22085,
+            "rv_id": 1263241,
+            "rule_id": "yyU0GX",
+            "version_id": "nWT2Llx",
+            "url": "https://semgrep.dev/playground/r/nWT2Llx/javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "function ... ($REQ, $RES) {...}"
+                },
+                {
+                  "pattern-inside": "function ... ($REQ, $RES, $NEXT) {...}"
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern-either": [
+                        {
+                          "pattern-inside": "$APP.$METHOD(..., function $FUNC($REQ, $RES) {...})"
+                        },
+                        {
+                          "pattern-inside": "$APP.$METHOD(..., function $FUNC($REQ, $RES, $NEXT) {...})"
+                        }
+                      ]
+                    },
+                    {
+                      "metavariable-regex": {
+                        "metavariable": "$METHOD",
+                        "regex": "^(get|post|put|head|delete|options)$"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "$REQ.query"
+                },
+                {
+                  "pattern": "$REQ.body"
+                },
+                {
+                  "pattern": "$REQ.params"
+                },
+                {
+                  "pattern": "$REQ.cookies"
+                },
+                {
+                  "pattern": "$REQ.headers"
+                },
+                {
+                  "pattern": "$REQ.files.$ANYTHING.data.toString('utf8')"
+                },
+                {
+                  "pattern": "$REQ.files.$ANYTHING['data'].toString('utf8')"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "pattern-inside": "({ $REQ }: Request,$RES: Response, $NEXT: NextFunction) =>\n{...}\n"
+                },
+                {
+                  "pattern-inside": "({ $REQ }: Request,$RES: Response) => {...}\n"
+                }
+              ]
+            },
+            {
+              "focus-metavariable": "$REQ"
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "params"
+                },
+                {
+                  "pattern": "query"
+                },
+                {
+                  "pattern": "cookies"
+                },
+                {
+                  "pattern": "headers"
+                },
+                {
+                  "pattern": "body"
+                },
+                {
+                  "pattern": "files.$ANYTHING.data.toString('utf8')"
+                },
+                {
+                  "pattern": "files.$ANYTHING['data'].toString('utf8')"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "pattern-either": [
+            {
+              "patterns": [
+                {
+                  "pattern-either": [
+                    {
+                      "pattern": "sequelize.query($QUERY,...)"
+                    },
+                    {
+                      "pattern": "$DB.sequelize.query($QUERY,...)"
+                    }
+                  ]
+                },
+                {
+                  "focus-metavariable": "$QUERY"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sanitizers": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "parseInt(...)"
+            },
+            {
+              "pattern": "$FUNC. ... .hash(...)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "python.django.security.injection.command.subprocess-injection.subprocess-injection",
+      "languages": [
+        "python"
+      ],
+      "mode": "taint",
+      "options": {
+        "symbolic_propagation": true
+      },
+      "pattern-sources": [
+        {
+          "patterns": [
+            {
+              "pattern-inside": "def $FUNC(..., $REQUEST, ...):\n  ...\n"
+            },
+            {
+              "focus-metavariable": "$REQUEST"
+            },
+            {
+              "metavariable-pattern": {
+                "metavariable": "$REQUEST",
+                "patterns": [
+                  {
+                    "pattern": "request"
+                  },
+                  {
+                    "pattern-not-inside": "request.build_absolute_uri"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "patterns": [
+                    {
+                      "pattern": "subprocess.$FUNC(...)"
+                    },
+                    {
+                      "pattern-not": "subprocess.$FUNC(\"...\", ...)"
+                    },
+                    {
+                      "pattern-not": "subprocess.$FUNC([\"...\", ...], ...)"
+                    },
+                    {
+                      "pattern-not-inside": "$CMD = [\"...\", ...]\n...\nsubprocess.$FUNC($CMD, ...)\n"
+                    }
+                  ]
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern": "subprocess.$FUNC([\"$SHELL\", \"-c\", ...], ...)"
+                    },
+                    {
+                      "metavariable-regex": {
+                        "metavariable": "$SHELL",
+                        "regex": "^(sh|bash|ksh|csh|tcsh|zsh)$"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern": "subprocess.$FUNC([\"$INTERPRETER\", ...], ...)"
+                    },
+                    {
+                      "metavariable-regex": {
+                        "metavariable": "$INTERPRETER",
+                        "regex": "^(python|python\\d)$"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sanitizers": [
+        {
+          "patterns": [
+            {
+              "pattern": "$DICT[$KEY]"
+            },
+            {
+              "focus-metavariable": "$KEY"
+            }
+          ]
+        }
+      ],
+      "severity": "ERROR",
+      "message": "Detected user input entering a `subprocess` call unsafely. This could result in a command injection vulnerability. An attacker could use this vulnerability to execute arbitrary commands on the host, which allows them to download malware, scan sensitive data, or run any command they wish on the server. Do not let users choose the command to run. In general, prefer to use Python API versions of system commands. If you must use subprocess, use a dictionary to allowlist a set of commands.",
+      "metadata": {
+        "category": "security",
+        "technology": [
+          "flask"
+        ],
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "cwe": [
+          "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+        ],
+        "references": [
+          "https://semgrep.dev/docs/cheat-sheets/python-command-injection/"
+        ],
+        "confidence": "HIGH",
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Command Injection"
+        ],
+        "source": "https://semgrep.dev/r/python.django.security.injection.command.subprocess-injection.subprocess-injection",
+        "shortlink": "https://sg.run/49BE",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 31144,
+            "rv_id": 1263388,
+            "rule_id": "EwUepx",
+            "version_id": "7ZTE3qK",
+            "url": "https://semgrep.dev/playground/r/7ZTE3qK/python.django.security.injection.command.subprocess-injection.subprocess-injection",
+            "origin": "community"
+          }
+        }
+      }
+    },
+    {
+      "id": "python.flask.security.injection.subprocess-injection.subprocess-injection",
+      "languages": [
+        "python"
+      ],
+      "mode": "taint",
+      "options": {
+        "symbolic_propagation": true
+      },
+      "pattern-sources": [
+        {
+          "pattern-either": [
+            {
+              "patterns": [
+                {
+                  "pattern-either": [
+                    {
+                      "pattern": "flask.request.form.get(...)"
+                    },
+                    {
+                      "pattern": "flask.request.form[...]"
+                    },
+                    {
+                      "pattern": "flask.request.args.get(...)"
+                    },
+                    {
+                      "pattern": "flask.request.args[...]"
+                    },
+                    {
+                      "pattern": "flask.request.values.get(...)"
+                    },
+                    {
+                      "pattern": "flask.request.values[...]"
+                    },
+                    {
+                      "pattern": "flask.request.cookies.get(...)"
+                    },
+                    {
+                      "pattern": "flask.request.cookies[...]"
+                    },
+                    {
+                      "pattern": "flask.request.stream"
+                    },
+                    {
+                      "pattern": "flask.request.headers.get(...)"
+                    },
+                    {
+                      "pattern": "flask.request.headers[...]"
+                    },
+                    {
+                      "pattern": "flask.request.data"
+                    },
+                    {
+                      "pattern": "flask.request.full_path"
+                    },
+                    {
+                      "pattern": "flask.request.url"
+                    },
+                    {
+                      "pattern": "flask.request.json"
+                    },
+                    {
+                      "pattern": "flask.request.get_json()"
+                    },
+                    {
+                      "pattern": "flask.request.view_args.get(...)"
+                    },
+                    {
+                      "pattern": "flask.request.view_args[...]"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "patterns": [
+                {
+                  "pattern-inside": "@$APP.route($ROUTE, ...)\ndef $FUNC(..., $ROUTEVAR, ...):\n  ...\n"
+                },
+                {
+                  "focus-metavariable": "$ROUTEVAR"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern-either": [
+                {
+                  "patterns": [
+                    {
+                      "pattern": "subprocess.$FUNC(...)"
+                    },
+                    {
+                      "pattern-not": "subprocess.$FUNC(\"...\", ...)"
+                    },
+                    {
+                      "pattern-not": "subprocess.$FUNC([\"...\", ...], ...)"
+                    },
+                    {
+                      "pattern-not-inside": "$CMD = [\"...\", ...]\n...\nsubprocess.$FUNC($CMD, ...)\n"
+                    }
+                  ]
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern": "subprocess.$FUNC([\"$SHELL\", \"-c\", ...], ...)"
+                    },
+                    {
+                      "metavariable-regex": {
+                        "metavariable": "$SHELL",
+                        "regex": "^(sh|bash|ksh|csh|tcsh|zsh)$"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "patterns": [
+                    {
+                      "pattern": "subprocess.$FUNC([\"$INTERPRETER\", ...], ...)"
+                    },
+                    {
+                      "metavariable-regex": {
+                        "metavariable": "$INTERPRETER",
+                        "regex": "^(python|python\\d)$"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "pattern-sanitizers": [
+        {
+          "patterns": [
+            {
+              "pattern": "$DICT[$KEY]"
+            },
+            {
+              "focus-metavariable": "$KEY"
+            }
+          ]
+        }
+      ],
+      "severity": "ERROR",
+      "message": "Detected user input entering a `subprocess` call unsafely. This could result in a command injection vulnerability. An attacker could use this vulnerability to execute arbitrary commands on the host, which allows them to download malware, scan sensitive data, or run any command they wish on the server. Do not let users choose the command to run. In general, prefer to use Python API versions of system commands. If you must use subprocess, use a dictionary to allowlist a set of commands.",
+      "metadata": {
+        "category": "security",
+        "technology": [
+          "flask"
+        ],
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "cwe": [
+          "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+        ],
+        "references": [
+          "https://semgrep.dev/docs/cheat-sheets/python-command-injection/"
+        ],
+        "confidence": "HIGH",
+        "cwe2022-top25": true,
+        "cwe2021-top25": true,
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Command Injection"
+        ],
+        "source": "https://semgrep.dev/r/python.flask.security.injection.subprocess-injection.subprocess-injection",
+        "shortlink": "https://sg.run/5gW3",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 31147,
+            "rv_id": 1263433,
+            "rule_id": "8GU3qp",
+            "version_id": "bZT53gQ",
+            "url": "https://semgrep.dev/playground/r/bZT53gQ/python.flask.security.injection.subprocess-injection.subprocess-injection",
+            "origin": "community"
+          }
+        }
+      }
+    },
+    {
+      "id": "python.pycryptodome.security.insecure-cipher-algorithm-blowfish.insecure-cipher-algorithm-blowfish",
+      "message": "Detected Blowfish cipher algorithm which is considered insecure. This algorithm is not cryptographically secure and can be reversed easily. Use secure stream ciphers such as ChaCha20, XChaCha20 and Salsa20, or a block cipher such as AES with a block size of 128 bits. When using a block cipher, use a modern mode of operation that also provides authentication, such as GCM.",
+      "metadata": {
+        "source-rule-url": "https://github.com/PyCQA/bandit/blob/d5f8fa0d89d7b11442fc6ec80ca42953974354c8/bandit/blacklists/calls.py#L84",
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "bandit-code": "B304",
+        "references": [
+          "https://stackoverflow.com/questions/1135186/whats-wrong-with-xor-encryption",
+          "https://www.pycryptodome.org/src/cipher/cipher"
+        ],
+        "category": "security",
+        "technology": [
+          "pycryptodome"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "functional-categories": [
+          "crypto::search::symmetric-algorithm::pycryptodome",
+          "crypto::search::symmetric-algorithm::pycryptodomex"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.pycryptodome.security.insecure-cipher-algorithm-blowfish.insecure-cipher-algorithm-blowfish",
+        "shortlink": "https://sg.run/dlOE",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 33634,
+            "rv_id": 1263545,
+            "rule_id": "JDUGnK",
+            "version_id": "ExTExln",
+            "url": "https://semgrep.dev/playground/r/ExTExln/python.pycryptodome.security.insecure-cipher-algorithm-blowfish.insecure-cipher-algorithm-blowfish",
+            "origin": "community"
+          }
+        }
+      },
+      "options": {
+        "symbolic_propagation": true
+      },
+      "severity": "WARNING",
+      "languages": [
+        "python"
+      ],
+      "pattern-either": [
+        {
+          "pattern": "Cryptodome.Cipher.Blowfish.new(...)"
+        },
+        {
+          "pattern": "Crypto.Cipher.Blowfish.new(...)"
+        }
+      ]
+    },
+    {
+      "id": "python.pycryptodome.security.insecure-cipher-algorithm-des.insecure-cipher-algorithm-des",
+      "message": "Detected DES cipher or Triple DES algorithm which is considered insecure. This algorithm is not cryptographically secure and can be reversed easily. Use a secure symmetric cipher from the cryptodome package instead. Use secure stream ciphers such as ChaCha20, XChaCha20 and Salsa20, or a block cipher such as AES with a block size of 128 bits. When using a block cipher, use a modern mode of operation that also provides authentication, such as GCM.",
+      "metadata": {
+        "source-rule-url": "https://github.com/PyCQA/bandit/blob/d5f8fa0d89d7b11442fc6ec80ca42953974354c8/bandit/blacklists/calls.py#L84",
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "bandit-code": "B304",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/326.html",
+          "https://www.pycryptodome.org/src/cipher/cipher"
+        ],
+        "category": "security",
+        "technology": [
+          "pycryptodome"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "functional-categories": [
+          "crypto::search::symmetric-algorithm::pycryptodome",
+          "crypto::search::symmetric-algorithm::pycryptodomex"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.pycryptodome.security.insecure-cipher-algorithm-des.insecure-cipher-algorithm-des",
+        "shortlink": "https://sg.run/Z5bw",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 33635,
+            "rv_id": 1263546,
+            "rule_id": "5rUr73",
+            "version_id": "7ZTE3G7",
+            "url": "https://semgrep.dev/playground/r/7ZTE3G7/python.pycryptodome.security.insecure-cipher-algorithm-des.insecure-cipher-algorithm-des",
+            "origin": "community"
+          }
+        }
+      },
+      "options": {
+        "symbolic_propagation": true
+      },
+      "severity": "WARNING",
+      "languages": [
+        "python"
+      ],
+      "pattern-either": [
+        {
+          "pattern": "Cryptodome.Cipher.DES.new(...)"
+        },
+        {
+          "pattern": "Crypto.Cipher.DES.new(...)"
+        },
+        {
+          "pattern": "Cryptodome.Cipher.DES3.new(...)"
+        },
+        {
+          "pattern": "Crypto.Cipher.DES3.new(...)"
+        }
+      ]
+    },
+    {
+      "id": "python.pycryptodome.security.insecure-cipher-algorithm-rc2.insecure-cipher-algorithm-rc2",
+      "message": "Detected RC2 cipher algorithm which is considered insecure. This algorithm is not cryptographically secure and can be reversed easily. Use secure stream ciphers such as ChaCha20, XChaCha20 and Salsa20, or a block cipher such as AES with a block size of 128 bits. When using a block cipher, use a modern mode of operation that also provides authentication, such as GCM.",
+      "metadata": {
+        "source-rule-url": "https://github.com/PyCQA/bandit/blob/d5f8fa0d89d7b11442fc6ec80ca42953974354c8/bandit/blacklists/calls.py#L84",
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "bandit-code": "B304",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/326.html",
+          "https://www.pycryptodome.org/src/cipher/cipher"
+        ],
+        "category": "security",
+        "technology": [
+          "pycryptodome"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "functional-categories": [
+          "crypto::search::symmetric-algorithm::pycryptodome",
+          "crypto::search::symmetric-algorithm::pycryptodomex"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.pycryptodome.security.insecure-cipher-algorithm-rc2.insecure-cipher-algorithm-rc2",
+        "shortlink": "https://sg.run/nAbY",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 33636,
+            "rv_id": 1263547,
+            "rule_id": "GdUYlW",
+            "version_id": "LjTkgn6",
+            "url": "https://semgrep.dev/playground/r/LjTkgn6/python.pycryptodome.security.insecure-cipher-algorithm-rc2.insecure-cipher-algorithm-rc2",
+            "origin": "community"
+          }
+        }
+      },
+      "options": {
+        "symbolic_propagation": true
+      },
+      "severity": "WARNING",
+      "languages": [
+        "python"
+      ],
+      "pattern-either": [
+        {
+          "pattern": "Cryptodome.Cipher.ARC2.new(...)"
+        },
+        {
+          "pattern": "Crypto.Cipher.ARC2.new(...)"
+        }
+      ]
+    },
+    {
+      "id": "python.pycryptodome.security.insecure-cipher-algorithm-rc4.insecure-cipher-algorithm-rc4",
+      "message": "Detected ARC4 cipher algorithm which is considered insecure. This algorithm is not cryptographically secure and can be reversed easily. Use secure stream ciphers such as ChaCha20, XChaCha20 and Salsa20, or a block cipher such as AES with a block size of 128 bits. When using a block cipher, use a modern mode of operation that also provides authentication, such as GCM.",
+      "metadata": {
+        "source-rule-url": "https://github.com/PyCQA/bandit/blob/d5f8fa0d89d7b11442fc6ec80ca42953974354c8/bandit/blacklists/calls.py#L84",
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "bandit-code": "B304",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/326.html",
+          "https://www.pycryptodome.org/src/cipher/cipher"
+        ],
+        "category": "security",
+        "technology": [
+          "pycryptodome"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "functional-categories": [
+          "crypto::search::symmetric-algorithm::pycryptodome",
+          "crypto::search::symmetric-algorithm::pycryptodomex"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.pycryptodome.security.insecure-cipher-algorithm-rc4.insecure-cipher-algorithm-rc4",
+        "shortlink": "https://sg.run/Eo6N",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 33637,
+            "rv_id": 1263548,
+            "rule_id": "ReUnEB",
+            "version_id": "8KT5rXY",
+            "url": "https://semgrep.dev/playground/r/8KT5rXY/python.pycryptodome.security.insecure-cipher-algorithm-rc4.insecure-cipher-algorithm-rc4",
+            "origin": "community"
+          }
+        }
+      },
+      "severity": "WARNING",
+      "languages": [
+        "python"
+      ],
+      "pattern-either": [
+        {
+          "pattern": "Cryptodome.Cipher.ARC4.new(...)"
+        },
+        {
+          "pattern": "Crypto.Cipher.ARC4.new(...)"
+        }
+      ]
+    },
+    {
+      "id": "python.pycryptodome.security.insecure-hash-algorithm-md2.insecure-hash-algorithm-md2",
+      "message": "Detected MD2 hash algorithm which is considered insecure. MD2 is not collision resistant and is therefore not suitable as a cryptographic signature.  Use a modern hash algorithm from the SHA-2, SHA-3, or BLAKE2 family instead.",
+      "metadata": {
+        "source-rule-url": "https://github.com/PyCQA/bandit/blob/d5f8fa0d89d7b11442fc6ec80ca42953974354c8/bandit/blacklists/calls.py#L59",
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "references": [
+          "https://www.pycryptodome.org/src/hash/hash#modern-hash-algorithms",
+          "https://www.schneier.com/blog/archives/2012/10/when_will_we_se.html",
+          "https://www.trendmicro.com/vinfo/us/security/news/vulnerabilities-and-exploits/sha-1-collision-signals-the-end-of-the-algorithm-s-viability",
+          "http://2012.sharcs.org/slides/stevens.pdf",
+          "https://pycryptodome.readthedocs.io/en/latest/src/hash/sha3_256.html"
+        ],
+        "category": "security",
+        "technology": [
+          "pycryptodome"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "functional-categories": [
+          "crypto::search::hash-algorithm::pycryptodome",
+          "crypto::search::hash-algorithm::pycryptodomex"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.pycryptodome.security.insecure-hash-algorithm-md2.insecure-hash-algorithm-md2",
+        "shortlink": "https://sg.run/7JP2",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 33638,
+            "rv_id": 1263550,
+            "rule_id": "AbU0Ex",
+            "version_id": "QkTGqD8",
+            "url": "https://semgrep.dev/playground/r/QkTGqD8/python.pycryptodome.security.insecure-hash-algorithm-md2.insecure-hash-algorithm-md2",
+            "origin": "community"
+          }
+        }
+      },
+      "options": {
+        "symbolic_propagation": true
+      },
+      "severity": "WARNING",
+      "languages": [
+        "python"
+      ],
+      "pattern-either": [
+        {
+          "pattern": "Crypto.Hash.MD2.new(...)"
+        },
+        {
+          "pattern": "Cryptodome.Hash.MD2.new (...)"
+        }
+      ]
+    },
+    {
+      "id": "python.pycryptodome.security.insecure-hash-algorithm-md4.insecure-hash-algorithm-md4",
+      "message": "Detected MD4 hash algorithm which is considered insecure. MD4 is not collision resistant and is therefore not suitable as a cryptographic signature. Use a modern hash algorithm from the SHA-2, SHA-3, or BLAKE2 family instead.",
+      "metadata": {
+        "source-rule-url": "https://github.com/PyCQA/bandit/blob/d5f8fa0d89d7b11442fc6ec80ca42953974354c8/bandit/blacklists/calls.py#L59",
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "references": [
+          "https://www.pycryptodome.org/src/hash/hash#modern-hash-algorithms",
+          "https://www.schneier.com/blog/archives/2012/10/when_will_we_se.html",
+          "https://www.trendmicro.com/vinfo/us/security/news/vulnerabilities-and-exploits/sha-1-collision-signals-the-end-of-the-algorithm-s-viability",
+          "http://2012.sharcs.org/slides/stevens.pdf",
+          "https://pycryptodome.readthedocs.io/en/latest/src/hash/sha3_256.html"
+        ],
+        "category": "security",
+        "technology": [
+          "pycryptodome"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "functional-categories": [
+          "crypto::search::hash-algorithm::pycryptodome",
+          "crypto::search::hash-algorithm::pycryptodomex"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.pycryptodome.security.insecure-hash-algorithm-md4.insecure-hash-algorithm-md4",
+        "shortlink": "https://sg.run/Lve6",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 33639,
+            "rv_id": 1263551,
+            "rule_id": "BYUJy4",
+            "version_id": "3ZT4Xnp",
+            "url": "https://semgrep.dev/playground/r/3ZT4Xnp/python.pycryptodome.security.insecure-hash-algorithm-md4.insecure-hash-algorithm-md4",
+            "origin": "community"
+          }
+        }
+      },
+      "options": {
+        "symbolic_propagation": true
+      },
+      "severity": "WARNING",
+      "languages": [
+        "python"
+      ],
+      "pattern-either": [
+        {
+          "pattern": "Crypto.Hash.MD4.new(...)"
+        },
+        {
+          "pattern": "Cryptodome.Hash.MD4.new (...)"
+        }
+      ]
+    },
+    {
+      "id": "python.pycryptodome.security.insecure-hash-algorithm-md5.insecure-hash-algorithm-md5",
+      "message": "Detected MD5 hash algorithm which is considered insecure. MD5 is not collision resistant and is therefore not suitable as a cryptographic signature.  Use a modern hash algorithm from the SHA-2, SHA-3, or BLAKE2 family instead.",
+      "metadata": {
+        "source-rule-url": "https://github.com/PyCQA/bandit/blob/d5f8fa0d89d7b11442fc6ec80ca42953974354c8/bandit/blacklists/calls.py#L59",
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "references": [
+          "https://www.pycryptodome.org/src/hash/hash#modern-hash-algorithms",
+          "https://www.schneier.com/blog/archives/2012/10/when_will_we_se.html",
+          "https://www.trendmicro.com/vinfo/us/security/news/vulnerabilities-and-exploits/sha-1-collision-signals-the-end-of-the-algorithm-s-viability",
+          "http://2012.sharcs.org/slides/stevens.pdf",
+          "https://pycryptodome.readthedocs.io/en/latest/src/hash/sha3_256.html"
+        ],
+        "category": "security",
+        "technology": [
+          "pycryptodome"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "functional-categories": [
+          "crypto::search::hash-algorithm::pycryptodome",
+          "crypto::search::hash-algorithm::pycryptodomex"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.pycryptodome.security.insecure-hash-algorithm-md5.insecure-hash-algorithm-md5",
+        "shortlink": "https://sg.run/85JN",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 33640,
+            "rv_id": 1263552,
+            "rule_id": "DbUXwo",
+            "version_id": "44TEjpk",
+            "url": "https://semgrep.dev/playground/r/44TEjpk/python.pycryptodome.security.insecure-hash-algorithm-md5.insecure-hash-algorithm-md5",
+            "origin": "community"
+          }
+        }
+      },
+      "options": {
+        "symbolic_propagation": true
+      },
+      "severity": "WARNING",
+      "languages": [
+        "python"
+      ],
+      "pattern-either": [
+        {
+          "pattern": "Crypto.Hash.MD5.new(...)"
+        },
+        {
+          "pattern": "Cryptodome.Hash.MD5.new (...)"
+        }
+      ]
+    },
+    {
+      "id": "python.django.security.hashids-with-django-secret.hashids-with-django-secret",
+      "languages": [
+        "python"
+      ],
+      "message": "The Django secret key is used as salt in HashIDs. The HashID mechanism is not secure. By observing sufficient HashIDs, the salt used to construct them can be recovered. This means the Django secret key can be obtained by attackers, through the HashIDs.",
+      "metadata": {
+        "category": "security",
+        "subcategory": [
+          "vuln"
+        ],
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A02:2021 \u2013 Cryptographic Failures"
+        ],
+        "references": [
+          "https://docs.djangoproject.com/en/4.2/ref/settings/#std-setting-SECRET_KEY",
+          "http://carnage.github.io/2015/08/cryptanalysis-of-hashids"
+        ],
+        "technology": [
+          "django"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.django.security.hashids-with-django-secret.hashids-with-django-secret",
+        "shortlink": "https://sg.run/bxeZ",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 72426,
+            "rv_id": 946163,
+            "rule_id": "0oUXqy",
+            "version_id": "0bT15nn",
+            "url": "https://semgrep.dev/playground/r/0bT15nn/python.django.security.hashids-with-django-secret.hashids-with-django-secret",
+            "origin": "community"
+          }
+        }
+      },
+      "pattern-either": [
+        {
+          "pattern": "hashids.Hashids(..., salt=django.conf.settings.SECRET_KEY, ...)"
+        },
+        {
+          "pattern": "hashids.Hashids(django.conf.settings.SECRET_KEY, ...)"
+        }
+      ],
+      "severity": "ERROR"
+    },
+    {
+      "id": "python.flask.security.hashids-with-flask-secret.hashids-with-flask-secret",
+      "languages": [
+        "python"
+      ],
+      "message": "The Flask secret key is used as salt in HashIDs. The HashID mechanism is not secure. By observing sufficient HashIDs, the salt used to construct them can be recovered. This means the Flask secret key can be obtained by attackers, through the HashIDs.",
+      "metadata": {
+        "category": "security",
+        "subcategory": [
+          "vuln"
+        ],
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A02:2021 \u2013 Cryptographic Failures"
+        ],
+        "references": [
+          "https://flask.palletsprojects.com/en/2.2.x/config/#SECRET_KEY",
+          "http://carnage.github.io/2015/08/cryptanalysis-of-hashids"
+        ],
+        "technology": [
+          "flask"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.flask.security.hashids-with-flask-secret.hashids-with-flask-secret",
+        "shortlink": "https://sg.run/N0Rx",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 72427,
+            "rv_id": 946220,
+            "rule_id": "KxUX3z",
+            "version_id": "0bT15Px",
+            "url": "https://semgrep.dev/playground/r/0bT15Px/python.flask.security.hashids-with-flask-secret.hashids-with-flask-secret",
+            "origin": "community"
+          }
+        }
+      },
+      "pattern-either": [
+        {
+          "pattern": "hashids.Hashids(..., salt=flask.current_app.config['SECRET_KEY'], ...)"
+        },
+        {
+          "pattern": "hashids.Hashids(flask.current_app.config['SECRET_KEY'], ...)"
+        },
+        {
+          "patterns": [
+            {
+              "pattern-inside": "$APP = flask.Flask(...)\n...\n"
+            },
+            {
+              "pattern-either": [
+                {
+                  "pattern": "hashids.Hashids(..., salt=$APP.config['SECRET_KEY'], ...)"
+                },
+                {
+                  "pattern": "hashids.Hashids($APP.config['SECRET_KEY'], ...)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "severity": "ERROR"
+    },
+    {
+      "id": "javascript.jwt-simple.security.jwt-simple-noverify.jwt-simple-noverify",
+      "message": "Detected the decoding of a JWT token without a verify step. JWT tokens must be verified before use, otherwise the token's integrity is unknown. This means a malicious actor could forge a JWT token with any claims. Set 'verify' to `true` before using the token.",
+      "severity": "ERROR",
+      "metadata": {
+        "owasp": [
+          "A05:2021 - Security Misconfiguration",
+          "A07:2021 - Identification and Authentication Failures",
+          "A02:2025 - Security Misconfiguration",
+          "A07:2025 - Authentication Failures"
+        ],
+        "cwe": [
+          "CWE-287: Improper Authentication",
+          "CWE-345: Insufficient Verification of Data Authenticity",
+          "CWE-347: Improper Verification of Cryptographic Signature"
+        ],
+        "category": "security",
+        "subcategory": [
+          "vuln"
+        ],
+        "technology": [
+          "jwt-simple",
+          "jwt"
+        ],
+        "confidence": "HIGH",
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "references": [
+          "https://www.npmjs.com/package/jwt-simple",
+          "https://cwe.mitre.org/data/definitions/287",
+          "https://cwe.mitre.org/data/definitions/345",
+          "https://cwe.mitre.org/data/definitions/347"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues",
+          "Improper Authentication"
+        ],
+        "source": "https://semgrep.dev/r/javascript.jwt-simple.security.jwt-simple-noverify.jwt-simple-noverify",
+        "shortlink": "https://sg.run/zdjod",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 120561,
+            "rv_id": 1263191,
+            "rule_id": "r6UyNLy",
+            "version_id": "3ZT4Xxv",
+            "url": "https://semgrep.dev/playground/r/3ZT4Xxv/javascript.jwt-simple.security.jwt-simple-noverify.jwt-simple-noverify",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "patterns": [
+        {
+          "pattern-inside": "$JWT = require('jwt-simple');\n...\n"
+        },
+        {
+          "pattern": "$JWT.decode($TOKEN, $SECRET, $NOVERIFY, ...)"
+        },
+        {
+          "metavariable-pattern": {
+            "metavariable": "$NOVERIFY",
+            "patterns": [
+              {
+                "pattern-either": [
+                  {
+                    "pattern": "true\n"
+                  },
+                  {
+                    "pattern": "\"...\"\n"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "javascript.node-crypto.security.aead-no-final.aead-no-final",
+      "message": "The 'final' call of a Decipher object checks the authentication tag in a mode for authenticated encryption. Failing to call 'final' will invalidate all integrity guarantees of the released ciphertext.",
+      "metadata": {
+        "cwe": [
+          "CWE-310: CWE CATEGORY: Cryptographic Issues"
+        ],
+        "owasp": [
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "category": "security",
+        "subcategory": [
+          "vuln"
+        ],
+        "technology": [
+          "node-crypto"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "references": [
+          "https://nodejs.org/api/crypto.html#deciphersetauthtagbuffer-encoding",
+          "https://owasp.org/Top10/A02_2021-Cryptographic_Failures/"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/javascript.node-crypto.security.aead-no-final.aead-no-final",
+        "shortlink": "https://sg.run/r6EEA",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 146569,
+            "rv_id": 1263222,
+            "rule_id": "2ZUz884",
+            "version_id": "zyTb2X0",
+            "url": "https://semgrep.dev/playground/r/zyTb2X0/javascript.node-crypto.security.aead-no-final.aead-no-final",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "patterns": [
+        {
+          "pattern": "$DECIPHER = $CRYPTO.createDecipheriv('$ALGO', ...)\n...\n$DECIPHER.update(...)\n"
+        },
+        {
+          "pattern-not-inside": "$DECIPHER = $CRYPTO.createDecipheriv('$ALGO', ...)\n...\n$DECIPHER.final(...)\n"
+        },
+        {
+          "metavariable-regex": {
+            "metavariable": "$ALGO",
+            "regex": ".*(-gcm|-ccm|-ocb|chacha20-poly1305)$"
+          }
+        }
+      ]
+    },
+    {
+      "id": "javascript.node-crypto.security.create-de-cipher-no-iv.create-de-cipher-no-iv",
+      "message": "The deprecated functions 'createCipher' and 'createDecipher' generate the same initialization vector every time. For counter modes such as CTR, GCM, or CCM this leads to break of both confidentiality and integrity, if the key is used more than once. Other modes are still affected in their strength, though they're not completely broken. Use 'createCipheriv' or 'createDecipheriv' instead.",
+      "metadata": {
+        "cwe": [
+          "CWE-1204: Generation of Weak Initialization Vector (IV)"
+        ],
+        "category": "security",
+        "subcategory": [
+          "vuln"
+        ],
+        "technology": [
+          "node-crypto"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "confidence": "HIGH",
+        "references": [
+          "https://nodejs.org/api/crypto.html#cryptocreatecipheralgorithm-password-options",
+          "https://nodejs.org/api/crypto.html#cryptocreatedecipheralgorithm-password-options"
+        ],
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Other"
+        ],
+        "source": "https://semgrep.dev/r/javascript.node-crypto.security.create-de-cipher-no-iv.create-de-cipher-no-iv",
+        "shortlink": "https://sg.run/bw33r",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 146570,
+            "rv_id": 945898,
+            "rule_id": "X5UQRR7",
+            "version_id": "ZRT3510",
+            "url": "https://semgrep.dev/playground/r/ZRT3510/javascript.node-crypto.security.create-de-cipher-no-iv.create-de-cipher-no-iv",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "patterns": [
+        {
+          "pattern-either": [
+            {
+              "pattern": "$CRYPTO.createCipher(...)\n"
+            },
+            {
+              "pattern": "$CRYPTO.createDecipher(...)\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "python.lang.security.audit.sha224-hash.sha224-hash",
+      "message": "This code uses a 224-bit hash function, which is deprecated or disallowed in some security policies. Consider updating to a stronger hash function such as SHA-384 or higher to ensure compliance and security.",
+      "metadata": {
+        "cwe": [
+          "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+        ],
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "references": [
+          "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-131Ar3.ipd.pdf",
+          "https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/ism/cyber-security-guidelines/guidelines-cryptography"
+        ],
+        "category": "security",
+        "technology": [
+          "python"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Cryptographic Issues"
+        ],
+        "source": "https://semgrep.dev/r/python.lang.security.audit.sha224-hash.sha224-hash",
+        "shortlink": "https://sg.run/Db1Yv",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 151752,
+            "rv_id": 1263511,
+            "rule_id": "BYUX0y9",
+            "version_id": "5PTo1QL",
+            "url": "https://semgrep.dev/playground/r/5PTo1QL/python.lang.security.audit.sha224-hash.sha224-hash",
+            "origin": "community"
+          }
+        }
+      },
+      "severity": "WARNING",
+      "languages": [
+        "python"
+      ],
+      "pattern-either": [
+        {
+          "pattern": "hashlib.sha224(...)"
+        },
+        {
+          "pattern": "hashlib.sha3_224(...)"
+        }
+      ]
+    },
+    {
+      "id": "python.flask.security.audit.flask-url-for-external-true.flask-url-for-external-true",
+      "message": "Function `flask.url_for` with `_external=True` argument will generate URLs using the `Host` header of the HTTP request, which may lead to security risks such as Host header injection",
+      "metadata": {
+        "cwe": [
+          "CWE-673: External Influence of Sphere Definition"
+        ],
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "category": "security",
+        "technology": [
+          "flask"
+        ],
+        "references": [
+          "https://flask.palletsprojects.com/en/latest/api/#flask.url_for",
+          "https://portswigger.net/kb/issues/00500300_host-header-injection"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "LOW",
+        "confidence": "HIGH",
+        "license": "Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license",
+        "vulnerability_class": [
+          "Other"
+        ],
+        "source": "https://semgrep.dev/r/python.flask.security.audit.flask-url-for-external-true.flask-url-for-external-true",
+        "shortlink": "https://sg.run/gEGeR",
+        "semgrep.dev": {
+          "rule": {
+            "r_id": 191541,
+            "rv_id": 1263418,
+            "rule_id": "JDU5oql",
+            "version_id": "K3TKk6n",
+            "url": "https://semgrep.dev/playground/r/K3TKk6n/python.flask.security.audit.flask-url-for-external-true.flask-url-for-external-true",
+            "origin": "community"
+          }
+        }
+      },
+      "languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "patterns": [
+        {
+          "pattern-not": "flask.url_for(..., _external=False, ...)"
+        },
+        {
+          "pattern-not": "url_for(..., _external=False, ...)"
+        },
+        {
+          "pattern-either": [
+            {
+              "pattern": "flask.url_for(..., _external=$VAR, ...)"
+            },
+            {
+              "pattern": "url_for(..., _external=$VAR, ...)"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

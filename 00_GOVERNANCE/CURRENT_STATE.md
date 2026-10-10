@@ -1,5 +1,9 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## Private-repository security CI compatibility
+
+The unavailable paid CodeQL and dependency-review integrations are replaced by pinned Semgrep Community Edition with 35 reviewed local JavaScript/Python rules and a fail-closed locked npm dependency audit. The PostgreSQL CI driver is now a pinned development dependency with a committed lock. Known insecure scanner fixtures and five dependency-gate regressions validate failure behavior. No GitHub organization, billing or repository access changes are required. This static baseline has different coverage from CodeQL; see `32_SECURITY_REGRESSION_AUTOMATION/semgrep/README.md`. Existing security and production admission gates remain in force.
+
 ## V126 — Processing HTTP, managed drain boundary and service lifecycle
 
 V126 adds a dedicated metadata-only processing HTTP API bound to the V125 domain handlers, a managed shared-drain backend contract with explicit unknown-outcome reconciliation, and a six-pool service root that schedules fresh synthetic canaries and refuses optimistic shutdown/restart. The common readiness coordinator retains real provider ownership across deadlines/invalidation and rejects cached health on clock rollback. No schema migration is introduced. See `40_PLATFORM_FOUNDATION_BUILD/docs/V126_PROCESSING_SERVICE_BATCH.md`.
