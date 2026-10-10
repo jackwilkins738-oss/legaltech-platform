@@ -4,6 +4,12 @@
 
 A partner-firm user reports (second hand, SINGLE USER REPORT) that handlers' tasks stall for hours waiting on supervisor approval by email. Desk research found that the SRA's June 2026 post-*Mazur* supervision guidance expects escalation routes, available supervisors and management information on case flow. That makes the hypothesis worth testing, not validated. It changes no wedge or priority. The partner is logging approvals for a week. See `01_RESEARCH_EVIDENCE/APPROVAL_WAIT_DESK_RESEARCH_2026-10.md` (actions A1–A8) and the raw note in `39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/`. V131 (durable writeback execution) is paused until that evidence is in.
 
+## V141 — Exact emergency-stop release fencing
+
+V141 requires reviewed activation/incident pins for reference and PostgreSQL emergency-stop release. A delayed request cannot lift a rearmed stop, even for the same incident. Authorization is bound to the locked activation and requested resolution; release SQL predicates and returned metadata must match. Only the same actor/resolution can replay a confirmed release without another event. Missing pins have no compatibility fallback. See `40_PLATFORM_FOUNDATION_BUILD/docs/V141_INTERLOCK_RELEASE_FENCING.md`.
+
+Local suites pass 2,997 platform and 140 scaffold tests, including 50 new regressions. Two real PostgreSQL concurrency/replay cases are added; native PostgreSQL is unavailable locally and the PostgreSQL 17 CI suite must pass before merge. No migration/dependency or operator credential widening is added. Trusted direct SQL, current operator authority, approval provenance, incident adapter adoption and deployment-wide response drills remain outstanding. D-018, the pre-TO/customer-data gates and V131 execution pause remain in force.
+
 ## V140 — Confirmed incident containment and atomic emergency stops
 
 V140 verifies synchronous, exact incident/tenant/control activation receipts and same-tenant status readback before reference containment succeeds. Partial or uncertain provider/audit outcomes retain a full pinned CONTAINING plan and block recovery; retries cannot silently reduce the plan. Incident lifecycle/audit failures cannot commit successful local evidence. Interlock release failures preserve ACTIVE stops and their operation blocks. Strict mutation fields, validated clocks and callback recursion checks cover both registries. See `40_PLATFORM_FOUNDATION_BUILD/docs/V140_INCIDENT_BOUNDARY_BATCH.md`.

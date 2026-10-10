@@ -428,3 +428,10 @@ confirmation. Uncertain effects retain the complete pending plan; failed stop
 release and incident audit cannot claim success. See
 [V140 incident boundary](docs/V140_INCIDENT_BOUNDARY_BATCH.md) for reference
 guarantees, retry rules and outstanding durable/provider enforcement.
+
+### V141 exact emergency-stop release
+
+Reference and PostgreSQL operators require reviewed activation/incident pins;
+stale requests cannot lift rearmed stops, and exact authorized replay creates no
+new event. See [V141 release fencing](docs/V141_INTERLOCK_RELEASE_FENCING.md) for
+the mandatory caller contract and operating limits.
