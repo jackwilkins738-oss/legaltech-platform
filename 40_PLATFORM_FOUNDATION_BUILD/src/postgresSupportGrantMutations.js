@@ -1,3 +1,4 @@
+import {PostgresTenantTransactions} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 import crypto from 'node:crypto';
 // V153 reference durable mutation adapter. transact MUST be a trusted,
 // tenant-scoped PostgreSQL transaction with operator authorization and RLS.
@@ -80,4 +81,31 @@ export class PostgresSupportGrantMutations {
       });
     }catch{throw denied();}
   }
+}
+
+export function createTenantScopedPostgresSupportGrantMutations({pool,expectedRole,timeoutMs=3000,liveSession}={}){
+  if(typeof expectedRole!=='string'||!/^legaltech_support_operator_[a-z0-9_]{1,30}$/.test(expectedRole))
+    throw new Error('DURABLE_SUPPORT_MUTATION_CONFIGURATION_INVALID');
+  const transaction=new PostgresTenantTransactions({pool,expectedRole,timeoutMs});
+  return new PostgresSupportGrantMutations({liveSession,transact:(context,work)=>{
+    if(context.readOnly!==false||!context.tenantId||!context.actorId)throw new Error('DURABLE_SUPPORT_MUTATION_UNAVAILABLE');
+    return transaction.run({...context,readOnly:false},async tx=>{
+      const proof=await tx.query(`SELECT
+        pg_has_role(current_user,'legaltech_support_operator','MEMBER') AS member,
+        row_security_active('public.support_access_requests'::regclass) AS rls_request,
+        row_security_active('public.support_access_approvals'::regclass) AS rls_approval,
+        row_security_active('public.support_access_revocations'::regclass) AS rls_revocation,
+        row_security_active('public.support_access_events'::regclass) AS rls_event,
+        has_table_privilege(current_user,'public.support_access_requests','UPDATE,DELETE,TRUNCATE') AS request_mutation,
+        has_table_privilege(current_user,'public.support_access_approvals','UPDATE,DELETE,TRUNCATE') AS approval_mutation,
+        has_table_privilege(current_user,'public.support_access_revocations','UPDATE,DELETE,TRUNCATE') AS revocation_mutation,
+        has_table_privilege(current_user,'public.support_access_events','SELECT,UPDATE,DELETE,TRUNCATE') AS event_read_mutation`);
+      const r=proof.rows?.[0];
+      if(proof.rows?.length!==1||r.member!==true||r.rls_request!==true||r.rls_approval!==true||
+        r.rls_revocation!==true||r.rls_event!==true||r.request_mutation!==false||
+        r.approval_mutation!==false||r.revocation_mutation!==false||r.event_read_mutation!==false)
+        throw new Error('DURABLE_SUPPORT_MUTATION_UNAVAILABLE');
+      return work(tx);
+    });
+  }});
 }
