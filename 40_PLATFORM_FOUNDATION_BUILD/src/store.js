@@ -315,5 +315,16 @@ export class PlatformStore {
   listNotificationDeliveryEvents(t,notificationId,limit=200){const n=Math.max(1,Math.min(Number(limit)||200,500));return this.db.prepare('SELECT data_json FROM notification_delivery_events WHERE tenant_id=? AND notification_id=? ORDER BY seq LIMIT ?').all(t,notificationId,n).map(r=>parse(r.data_json));}
   recoveryEvidence(input){const previous=this.db.prepare('SELECT data_json FROM recovery_evidence WHERE tenant_id=? ORDER BY seq DESC LIMIT 1').get(input.tenantId);const previousItem=parse(previous?.data_json),previousHash=previousItem?.entryHash??'0'.repeat(64);const base={id:this.uid('rec'),at:new Date().toISOString(),...input};const item={...base,previousHash,entryHash:auditEntryHash(previousHash,base)};this.db.prepare('INSERT INTO recovery_evidence(id,tenant_id,at,trace_id,data_json) VALUES(?,?,?,?,?)').run(item.id,item.tenantId,item.at,item.traceId,json(item));return item;}
   listRecoveryEvidence(t,limit=100){const n=Math.max(1,Math.min(Number(limit)||100,500));return this.db.prepare('SELECT data_json FROM (SELECT seq,data_json FROM recovery_evidence WHERE tenant_id=? ORDER BY seq DESC LIMIT ?) ORDER BY seq').all(t,n).map(r=>parse(r.data_json));}
-  verifyRecoveryEvidenceChain(t){const items=this.db.prepare('SELECT data_json FROM recovery_evidence WHERE tenant_id=? ORDER BY seq').all(t).map(r=>parse(r.data_json));return verifyAuditChainEntries(items);}
+  recoveryBackupState(t,backupSetId,backupId){
+    const rows=this.db.prepare("SELECT data_json FROM recovery_evidence WHERE tenant_id=? AND json_extract(data_json,'$.eventType')='BACKUP_VERIFIED' AND json_extract(data_json,'$.backupId')=? ORDER BY seq LIMIT 1").get(t,backupId);
+    const high=this.db.prepare("SELECT MAX(CAST(json_extract(data_json,'$.generation') AS INTEGER)) AS generation FROM recovery_evidence WHERE tenant_id=? AND json_extract(data_json,'$.eventType')='BACKUP_VERIFIED' AND json_extract(data_json,'$.backupSetId')=?").get(t,backupSetId);
+    return {existing:parse(rows?.data_json),highestGeneration:Number(high.generation??0)};
+  }
+  recoveryRestoreState(t,restoreId){return this.db.prepare("SELECT data_json FROM recovery_evidence WHERE tenant_id=? AND json_extract(data_json,'$.restoreId')=? ORDER BY seq").all(t,restoreId).map(r=>parse(r.data_json));}
+  verifyRecoveryEvidenceChain(t){
+    let previous='0'.repeat(64);
+    try{for(const row of this.db.prepare('SELECT id,at,trace_id,data_json FROM recovery_evidence WHERE tenant_id=? ORDER BY seq').iterate(t)){
+      const item=parse(row.data_json);if(!verifyAuditChainEntries([item],{genesis:previous})||item.tenantId!==t||item.id!==row.id||item.at!==row.at||item.traceId!==row.trace_id)return false;previous=item.entryHash;
+    }return true;}catch{return false;}
+  }
 }
