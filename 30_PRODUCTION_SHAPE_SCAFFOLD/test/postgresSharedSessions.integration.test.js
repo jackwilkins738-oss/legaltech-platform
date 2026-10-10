@@ -413,6 +413,36 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     const count=await admin.query(`SELECT count(*)::integer AS n FROM public.support_access_approvals WHERE tenant_id=$1 AND request_id=$2`,[tenantA,id]);
     assert.equal(count.rows[0].n,1);
   });
+  await t.test('V165 operator cannot cross tenant boundaries through any support mutation or audit row',async()=>{
+    const login='legaltech_support_operator_v165';
+    await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+    await admin.query(`GRANT legaltech_support_operator TO ${login}`);
+    const operator=new PostgresTenantTransactions({pool:makePool(login,3),expectedRole:login});
+    const matter='11700000-0000-4000-8000-000000000031',id=uuid();
+    await admin.query(`INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,ticket_ref_hash,purpose_hash,trace_id,expires_at)
+      VALUES($1,$2,$3,$4,'MATTER_READ',$5,$6,'v165-fixture',statement_timestamp()+interval '10 minutes')`,
+      [id,tenantA,actorA,matter,'a'.repeat(64),'b'.repeat(64)]);
+    const attacks=[
+      [`INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,ticket_ref_hash,purpose_hash,trace_id,expires_at)
+        VALUES($1,$2,$3,$4,'MATTER_READ',$5,$6,'v165-probe',statement_timestamp()+interval '10 minutes')`,
+        [uuid(),tenantA,actorA,matter,'a'.repeat(64),'b'.repeat(64)]],
+      [`INSERT INTO public.support_access_approvals(tenant_id,request_id,approver_id,trace_id) VALUES($1,$2,$3,'v165-probe')`,
+        [tenantA,id,actorB]],
+      [`INSERT INTO public.support_access_revocations(tenant_id,request_id,revoked_by,reason_hash,trace_id) VALUES($1,$2,$3,$4,'v165-probe')`,
+        [tenantA,id,actorB,'c'.repeat(64)]],
+      [`INSERT INTO public.support_access_events(tenant_id,request_id,actor_id,matter_id,event_type,trace_id) VALUES($1,$2,$3,$4,'DENIED','v165-probe')`,
+        [tenantA,id,actorB,matter]]
+    ];
+    const outcomes=await Promise.allSettled(attacks.map(([sql,args])=>operator.run({tenantId:tenantB,actorId:actorB},tx=>tx.query(sql,args))));
+    assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,0,'cross-tenant inserts must never succeed');
+    const untouched=await admin.query(`SELECT count(*)::integer AS n FROM public.support_access_events WHERE request_id=$1`,[id]);
+    assert.equal(untouched.rows[0].n,0);
+    await operator.run({tenantId:tenantB,actorId:actorB},async tx=>{
+      const r=await tx.query('SELECT id FROM public.support_access_requests WHERE id=$1',[id]);
+      assert.equal(r.rows.length,0);
+    });
+    assert.equal((await admin.query('SELECT count(*)::integer AS n FROM public.support_access_requests WHERE id=$1',[id])).rows[0].n,1);
+  });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
     const results=await Promise.all(Array.from({length:12},(_,i)=>transactions.run(scopes[i%2],async tx=>{
