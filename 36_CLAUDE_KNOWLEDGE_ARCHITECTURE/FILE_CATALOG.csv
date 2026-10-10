@@ -498,7 +498,7 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/test/offboarding-export-v113.test.js,production_shape,reference,low,js,979
 30_PRODUCTION_SHAPE_SCAFFOLD/test/onboarding-readiness-v109.test.js,production_shape,reference,low,js,766
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresRuntimeV117.test.js,production_shape,reference,low,js,4603
-30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,153277
+30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,153430
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresTransactionsV118.test.js,production_shape,reference,low,js,7779
 30_PRODUCTION_SHAPE_SCAFFOLD/test/secret-rotation-v111.test.js,production_shape,reference,low,js,1044
 30_PRODUCTION_SHAPE_SCAFFOLD/test/security-contract.test.js,engineering,reference,medium,js,228816
@@ -816,7 +816,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/src/offboardingExport.js,platform_build,current,medium,js,5671
 40_PLATFORM_FOUNDATION_BUILD/src/onboardingReadiness.js,platform_build,current,medium,js,4038
 40_PLATFORM_FOUNDATION_BUILD/src/organizationDirectory.js,platform_build,current,medium,js,8807
-40_PLATFORM_FOUNDATION_BUILD/src/outboxRelaySupervisor.js,platform_build,current,medium,js,7492
+40_PLATFORM_FOUNDATION_BUILD/src/outboxRelaySupervisor.js,platform_build,current,medium,js,7586
 40_PLATFORM_FOUNDATION_BUILD/src/platform.js,engineering,current,high,js,27287
 40_PLATFORM_FOUNDATION_BUILD/src/postgresAbuseControl.js,platform_build,current,medium,js,7231
 40_PLATFORM_FOUNDATION_BUILD/src/postgresAudit.js,platform_build,current,medium,js,11394
@@ -904,7 +904,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/test/deploymentDrainV102.test.js,platform_build,current,medium,js,2781
 40_PLATFORM_FOUNDATION_BUILD/test/documentDeliveryV86.test.js,platform_build,current,medium,js,7450
 40_PLATFORM_FOUNDATION_BUILD/test/documentSecurityV60.test.js,platform_build,current,medium,js,9354
-40_PLATFORM_FOUNDATION_BUILD/test/domainPipelineV123.test.js,platform_build,current,medium,js,19595
+40_PLATFORM_FOUNDATION_BUILD/test/domainPipelineV123.test.js,platform_build,current,medium,js,19646
 40_PLATFORM_FOUNDATION_BUILD/test/egressPolicyV100.test.js,platform_build,current,medium,js,3754
 40_PLATFORM_FOUNDATION_BUILD/test/exportSafetyV81.test.js,platform_build,current,medium,js,6962
 40_PLATFORM_FOUNDATION_BUILD/test/graphBoundary.test.js,platform_build,current,medium,js,15707
@@ -1007,7 +1007,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V128.md,platform_build,current,medium,md,880
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V129.md,platform_build,current,medium,md,917
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V130.md,platform_build,current,medium,md,1405
-40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V132.md,platform_build,current,medium,md,917
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V132.md,platform_build,current,medium,md,1022
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V29.md,engineering,current,high,md,687
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V30.md,engineering,current,high,md,575
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V31.md,engineering,current,medium,md,1385

@@ -2,7 +2,7 @@
 
 - Platform: 2,368 passing tests, including 107 new V132 boundary regressions.
 - Production-shape scaffold: 140 passing tests; the actual PostgreSQL integration parent is skipped locally.
-- PostgreSQL 17 CI: all 122 tests pass, including 17 new V132 cases, on commit `3d02fec0e9cea82887357e25e3e7a7c3cde24565`. Later changes only fix the pre-existing random-substring cursor test and this report; final-head CI must pass before merge.
+- PostgreSQL 17 CI: all 122 tests pass, including 17 new V132 cases, on commit `3d02fec0e9cea82887357e25e3e7a7c3cde24565`. A later rerun identified the same cancellation race in existing outbox/worker supervisor lease acquisition. All supervisors now await acquisition acknowledgement before cancellation/release; final-head CI must pass before merge.
 - All 57 checksum-pinned migrations are verified locally. Migration 057 is additive; earlier migration bytes are unchanged.
 - Repository security policy, regression scan, knowledge lint and pinned Semgrep scans must pass before merge.
 

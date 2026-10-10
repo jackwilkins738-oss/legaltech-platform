@@ -160,7 +160,7 @@ test('V123 malformed relay receipts fail supervision without a healthy-cycle rep
 });
 test('V123 a drain lease acquired after shutdown is released before reporting stopped',async()=>{
   let resolve,released=0;const host=new OutboxRelaySupervisor({relay:{relay:async()=>{throw new Error('UNREACHABLE')}},getScopes:async()=>[scope],authorizeScope:async()=>true,
-    drain:{acquire:async()=>new Promise(r=>{resolve=r}),release:async()=>{released++;}}});
+    drain:{acquire:async input=>{assert.equal(input.signal,undefined);return new Promise(r=>{resolve=r});},release:async()=>{released++;}}});
   host.start();await until(()=>!!resolve);assert.equal((await host.stop({timeoutMs:10})).drained,false);assert.throws(()=>host.start(),/ALREADY_ACTIVE/);
   resolve({token:'late-lease',generation:1});await until(()=>!host.status().inFlight);assert.equal(released,1);assert.equal(host.status().state,'STOPPED');
 });
