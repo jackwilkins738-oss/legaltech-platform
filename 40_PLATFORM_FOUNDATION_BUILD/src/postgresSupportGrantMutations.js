@@ -7,7 +7,6 @@ const TRACE=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 const SCOPES=new Set(['MATTER_READ','DOCUMENT_READ','DIAGNOSTIC_READ']);
 const denied=()=>new Error('DURABLE_SUPPORT_MUTATION_UNAVAILABLE');
 function uuid(x){return typeof x==='string'&&UUID.test(x);}
-function sha(x){return crypto.createHash('sha256').update(x).digest('hex');}
 function base(s,traceId){if(!s||!uuid(s.tenantId)||!uuid(s.actorId)||!uuid(s.sessionId)||typeof traceId!=='string'||!TRACE.test(traceId))throw denied();}
 async function live(boundary,session){if(await boundary.assertCurrent(session)!==true)throw denied();}
 export class PostgresSupportGrantMutations {
@@ -52,7 +51,7 @@ export class PostgresSupportGrantMutations {
         const revoked=await tx.query('SELECT 1 FROM public.support_access_revocations WHERE tenant_id=$1 AND request_id=$2',[session.tenantId,requestId]);
         if(revoked.rows?.length)throw denied();
         const added=await tx.query(`INSERT INTO public.support_access_approvals(tenant_id,request_id,approver_id,trace_id)
-          VALUES($1,$2,$3,$4) ON CONFLICT (tenant_id,request_id) DO NOTHING RETURNING id`,
+          VALUES($1,$2,$3,$4) ON CONFLICT (tenant_id,request_id) DO NOTHING RETURNING request_id`,
           [session.tenantId,requestId,session.actorId,traceId]);
         if(added.rows?.length!==1)throw denied();
         await tx.query(`INSERT INTO public.support_access_events(tenant_id,request_id,actor_id,matter_id,event_type,resource_hash,trace_id)
@@ -71,7 +70,7 @@ export class PostgresSupportGrantMutations {
         const r=await tx.query('SELECT matter_id,document_ref_hash FROM public.support_access_requests WHERE tenant_id=$1 AND id=$2',[session.tenantId,requestId]);
         if(r.rows?.length!==1)throw denied();
         const added=await tx.query(`INSERT INTO public.support_access_revocations(tenant_id,request_id,revoked_by,reason_hash,trace_id)
-          VALUES($1,$2,$3,$4,$5) ON CONFLICT (tenant_id,request_id) DO NOTHING RETURNING id`,
+          VALUES($1,$2,$3,$4,$5) ON CONFLICT (tenant_id,request_id) DO NOTHING RETURNING request_id`,
           [session.tenantId,requestId,session.actorId,reasonHash,traceId]);
         if(added.rows?.length!==1)throw denied();
         await tx.query(`INSERT INTO public.support_access_events(tenant_id,request_id,actor_id,matter_id,event_type,resource_hash,trace_id)
