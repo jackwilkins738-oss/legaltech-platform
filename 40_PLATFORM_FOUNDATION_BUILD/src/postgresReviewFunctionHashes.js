@@ -1,0 +1,3 @@
+// Exact reviewed migration 056 trigger bodies; migration 058 revokes public execution.
+export const REVIEW_FUNCTION_HASHES=Object.freeze({"check_domain_review_decision":"159e6a92c1ac9b2ea1b11d07e79bb574cd5d650b61177c5046ae4dc6e6c44d54","check_inbound_review_transition":"85f9833e5e95c835de23ab39921ca92a8920d9faa4ee6d5e1428349b722d30d4"});
+export const REVIEW_SCOPE_FUNCTION_HASH='9ac3429a32725cfc268478db42ceb2695b0b2d2496406ddff4e264e020032ac0';

@@ -1,6 +1,11 @@
 {
   "mandatory_security_tests": [
     {
+      "id": "SEC-V133-REVIEW-BOUNDARY",
+      "concept": "V133 production review boundary",
+      "severity": "BLOCKER"
+    },
+    {
       "id": "SEC-V132-DURABLE-GRAPH",
       "concept": "V132 durable Graph intake",
       "severity": "BLOCKER"

@@ -50,6 +50,10 @@ BEGIN
       AND (pg_catalog.pg_has_role(current_user,n.nspowner,'MEMBER')
         OR pg_catalog.has_schema_privilege(current_user,n.oid,'CREATE'))
   ) THEN RAISE EXCEPTION 'RUNTIME_SCHEMA_MUTATION_FORBIDDEN'; END IF;
+  IF NOT pg_catalog.pg_has_role(current_user,'legaltech_domain_reviewer','MEMBER') AND EXISTS(
+    SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='review_security' AND pg_catalog.has_function_privilege(current_user,p.oid,'EXECUTE')
+  ) THEN RAISE EXCEPTION 'RUNTIME_REVIEW_API_ACCESS_FORBIDDEN'; END IF;
   -- No unreviewed alternative access path may bypass the base-table checks.
   IF EXISTS (
     SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
