@@ -1,3 +1,4 @@
+import {createTenantScopedPostgresSupportGrantLookup} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportGrantLookup.js';
 import {ManagedReviewDocuments} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedReviewDocuments.js';
 import {ReviewClient} from '../../40_PLATFORM_FOUNDATION_BUILD/browser/reviewClient.js';
 import {PostgresReviewReader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresReviewReader.js';
@@ -136,6 +137,15 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
         }
       });
     }
+    const grantLookup=createTenantScopedPostgresSupportGrantLookup({pool:readerPool,expectedRole:readerLogin});
+    const authorized={tenantId:tenantA,actorId:actorA,requestId:requestA,
+      matterId:'11700000-0000-4000-8000-000000000031',scope:'MATTER_READ',documentRefHash:null};
+    assert.equal((await grantLookup(authorized)).active,true);
+    await assert.rejects(grantLookup({...authorized,tenantId:tenantB,actorId:actorB}),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    await assert.rejects(grantLookup({...authorized,requestId:requestB}),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
+    await admin.query(`INSERT INTO public.support_access_revocations(tenant_id,request_id,revoked_by,reason_hash,trace_id)
+      VALUES($1,$2,$3,$4,'v152')`,[tenantA,requestA,actorA,'c'.repeat(64)]);
+    await assert.rejects(grantLookup(authorized),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
     await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA},async tx=>
       tx.query('INSERT INTO public.support_access_requests(tenant_id) VALUES($1)',[tenantA])),/UNAVAILABLE/);
     await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA,readOnly:true},async tx=>
