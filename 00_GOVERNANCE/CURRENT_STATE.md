@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V129 — Production source ingress integration
+
+V129 binds approved upload references, validated Graph notifications and published policy requests to stable PostgreSQL commands with current source authorization, immutable version/evidence checks, metadata audit and shared deployment leases. Production legacy inbound HTTP adopts the registered bridge, source readiness joins the nine-pool root, and old direct commands are disabled when source ingress is configured. Graph duplicates still verify durable delivery; client-state simulation is blocked in production. See `40_PLATFORM_FOUNDATION_BUILD/docs/V129_PRODUCTION_INGRESS_BATCH.md`.
+
+Local suites pass 2,248 platform and 140 scaffold tests, including 87 new regressions. Ten actual PostgreSQL cases are added; local database execution is skipped and CI must pass before merge. All 55 migrations remain unchanged. Cloud upload publishing, durable webhook intake, real source/permission/evidence adapters, durable read/review UI adoption and Proclaim outputs remain outstanding. This continues the authorized D-018 integration exception; the pre-TO freeze and customer-data deployment gate remain in force.
+
 ## V128 — Artifact resource containment
 
 V128 moves final immutable version, evidence and permission checks after stream cleanup, propagates bounded read cancellation while retaining actual provider ownership, shares bounded payload/policy read capacity and rejects optimistic readiness during cancelled or saturated reads. Workers wipe authentic managed loader buffers after actual execution and settlement; legacy provider-owned buffers remain copied. Probes retain non-overlap ownership until callbacks settle. See `40_PLATFORM_FOUNDATION_BUILD/docs/V128_ARTIFACT_RESOURCE_CONTAINMENT.md`.

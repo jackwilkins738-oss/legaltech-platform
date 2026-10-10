@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {appError,publicError} from './errors.js';
 import {isUtf8} from 'node:buffer';
+import {isManagedProcessingIngress} from './managedProcessingIngress.js';
 import {decodeInboundBody} from './inboundRequest.js';
 import {requireCapability,normalizeSession,assertMatterAccess,matterAccessAllowed,StaticAuthProvider} from './auth.js';
 import {InMemoryAbuseLimiter} from './abuseControl.js';
@@ -151,9 +152,10 @@ function assertBodyTenant(body, session) {
   }
 }
 
-export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter(), identitySessionService = null, workApi = null, readiness = null, productionMode = false, readinessTimeoutMs = 1500}) {
+export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter(), identitySessionService = null, workApi = null, readiness = null, productionMode = false, readinessTimeoutMs = 1500, processingIngress = null}) {
   if(typeof productionMode!=='boolean'||!Number.isInteger(readinessTimeoutMs)||readinessTimeoutMs<100||readinessTimeoutMs>6000) throw new Error('API_ADMISSION_CONFIGURATION_INVALID');
   const production=productionMode||process.env.NODE_ENV==='production';
+  if(processingIngress!==null&&!isManagedProcessingIngress(processingIngress))throw new Error('PRODUCTION_INGRESS_REQUIRED');
   if(production) {
     if(!isProductionReadiness(readiness)) throw new Error('PRODUCTION_READINESS_REQUIRED');
     if(devWorkers||platform instanceof Platform||platform?.store instanceof PlatformStore||platform?.objectStorage instanceof LocalObjectStorage||authProvider instanceof StaticAuthProvider||abuseLimiter instanceof InMemoryAbuseLimiter||usesReferenceSessionStore(authProvider)||usesReferenceSessionStore(identitySessionService)) throw new Error('PRODUCTION_REFERENCE_ADAPTER_FORBIDDEN');
@@ -196,6 +198,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         return send(res,state==='NOT_READY'?503:200,{status:state},traceId);
       }
       if(!await admitted(res,traceId)) return;
+      if(production&&url.pathname==='/api/v1/integrations/graph/webhooks/simulate')throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
       if (req.method === 'GET' && serveStatic(res, uiRoot, url.pathname)) return;
       if (identitySessionService && req.method === 'POST' && url.pathname === '/api/v1/auth/session') {
         const exchanged=await identitySessionService.exchange(req.headers);
@@ -290,6 +293,18 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         requireCapability(session, 'inbound:create');
         const body = await readJson(req);
         assertBodyTenant(body, session);
+        if(production){
+          if(!processingIngress)throw appError('processing unavailable',{status:503});
+          if(!body||Object.getPrototypeOf(body)!==Object.prototype||Object.keys(body).length!==1||typeof body.uploadId!=='string'||idempotencyKey(req)!==body.uploadId)throw appError('invalid request',{code:'INVALID_REQUEST'});
+          const controller=new AbortController(),abort=()=>controller.abort();res.once('close',abort);if(res.destroyed||req.aborted)abort();
+          try{const result=await processingIngress.submitUpload({tenantId:session.tenantId,actorId:session.actorId,uploadId:body.uploadId,signal:controller.signal});return send(res,202,result,traceId);}
+          catch(error){const code=error?.message;
+            if(code==='PROCESSING_INGRESS_INPUT_INVALID')throw appError('invalid request',{code:'INVALID_REQUEST'});
+            if(code==='PROCESSING_INGRESS_FORBIDDEN')throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+            if(code==='PROCESSING_INGRESS_CONFLICT')throw appError('command conflict',{status:409,code:'COMMAND_CONFLICT'});
+            return send(res,503,{status:code==='PROCESSING_INGRESS_OUTCOME_UNKNOWN'?'OUTCOME_UNVERIFIED':'NOT_READY'},traceId);
+          }finally{res.off('close',abort);}
+        }
         const result = platform.ingest({tenantId: session.tenantId, idempotencyKey: idempotencyKey(req), input: decodeInboundBody(body)});
         return send(res, 202, result, result.traceId || traceId);
       }

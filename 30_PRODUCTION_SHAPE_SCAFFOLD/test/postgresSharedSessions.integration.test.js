@@ -25,6 +25,10 @@ import {REQUIRED_PRODUCTION_PROBES} from '../../40_PLATFORM_FOUNDATION_BUILD/src
 import {createPostgresWorkerPipeline} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerPipeline.js';
 import {PostgresWorkerDomainLoader} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresWorkerDomain.js';
 import {PostgresDeploymentDrainBackend} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresDeploymentDrain.js';
+import {ManagedProcessingIngress,createGraphProcessingDispatch} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedProcessingIngress.js';
+import {GraphWebhookIngress} from '../../40_PLATFORM_FOUNDATION_BUILD/src/graphWebhookIngress.js';
+import {GraphWebhookValidationQueue} from '../../40_PLATFORM_FOUNDATION_BUILD/src/graphWebhookQueue.js';
+import {createApiServer} from '../../40_PLATFORM_FOUNDATION_BUILD/src/httpApi.js';
 import {ManagedWorkerArtifacts} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedWorkerArtifacts.js';
 import {ManagedDeploymentDrain} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedDeploymentDrain.js';
 import {createDurablePostgresProcessingService} from '../../40_PLATFORM_FOUNDATION_BUILD/src/durableProcessingService.js';
@@ -36,7 +40,7 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
@@ -848,5 +852,102 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128 real PostgreSQL sha
       do{status=await durable.status(scope);if(status.state==='DRAINED')break;await new Promise(r=>setTimeout(r,10));}while(Date.now()<end);
       assert.equal(status.state,'DRAINED');assert.equal(status.inFlight,0);assert.equal(await queueReader.getResult({tenantId:tenantA,jobId:input.jobId}),null);assert.equal((await provider.probe()).ok,true);
     }finally{finish();await worker.supervisor.stop({timeoutMs:5000});}
+  });
+
+  await resumeDurable();
+  const ingressNamespace=uuid(),approvedSources=new Map();
+  function approvedUpload(uploadId=uuid()){
+    const payloadId=uuid(),binding={tenantId:tenantA,actorId:actorA,sourceKey:uploadId,payloadId,payloadHash:artifactHash,versionId:'immutable-v129',evidenceHash:reason,revision:1,state:'PROCESSING_ALLOWED'};
+    approvedSources.set(uploadId,binding);manifests.set(payloadId,{tenantId:tenantA,id:payloadId,kind:'PAYLOAD',hash:artifactHash,objectKey:`${tenantA}/v129/${payloadId}`,versionId:binding.versionId,size:bytes.length,state:'PROCESSING_ALLOWED',evidenceHash:reason,region:'synthetic-region',revision:1});
+    return {tenantId:tenantA,actorId:actorA,uploadId};
+  }
+  const ingressOptions={namespace:ingressNamespace,resolveUpload:async r=>({...approvedSources.get(r.uploadId)}),resolveGraph:async r=>({...approvedSources.get(r.notificationFingerprint)}),resolvePolicy:async r=>({...approvedSources.get(r.requestId)}),
+    authorizeIngress:async()=>true,verifySourceEvidence:async()=>true,audit:async()=>{},probeSources:async()=>({ok:true})};
+  const actualIngress=()=>new ManagedProcessingIngress({...ingressOptions,handlers:pipeline.handlers,drain:new ManagedDeploymentDrain({backend:durable,authorize:async()=>true,deploymentId:drainDeployment}),readiness:syntheticReady()});
+  let ingressReplayInput,ingressReplayReceipt;
+  await t.test('V129 approved upload commits exactly one immutable PostgreSQL command and replays across router reconstruction',async()=>{
+    ingressReplayInput=approvedUpload();ingressReplayReceipt=await actualIngress().submitUpload(ingressReplayInput);
+    const replay=await actualIngress().submitUpload(ingressReplayInput);assert.equal(replay.replayed,true);assert.equal(replay.commandId,ingressReplayReceipt.commandId);assert.equal(replay.jobId,ingressReplayReceipt.jobId);
+    const row=(await admin.query('SELECT * FROM public.domain_job_commands WHERE command_id=$1',[replay.commandId])).rows[0];assert.equal(row.actor_id,actorA);assert.equal(row.payload_hash,artifactHash);
+    assert.equal((await admin.query('SELECT count(*)::integer AS n FROM public.domain_outbox_events WHERE job_id=$1',[replay.jobId])).rows[0].n,1);
+  });
+  await t.test('V129 changed approved artifact on an ingress retry conflicts without overwriting the durable command',async()=>{
+    const prior=approvedSources.get(ingressReplayInput.uploadId);approvedSources.set(ingressReplayInput.uploadId,{...prior,payloadHash:'d'.repeat(64)});
+    try{await assert.rejects(actualIngress().submitUpload(ingressReplayInput),/CONFLICT/);assert.equal((await admin.query('SELECT payload_hash FROM public.domain_job_commands WHERE command_id=$1',[ingressReplayReceipt.commandId])).rows[0].payload_hash,artifactHash);}
+    finally{approvedSources.set(ingressReplayInput.uploadId,prior);}
+  });
+  await t.test('V129 actor withdrawal blocks approved upload replay through actual PostgreSQL authorization',async()=>{
+    await admin.query("UPDATE public.actors SET status='DISABLED' WHERE id=$1",[actorA]);try{await assert.rejects(actualIngress().submitUpload(ingressReplayInput),/FORBIDDEN/);}
+    finally{await admin.query("UPDATE public.actors SET status='ACTIVE' WHERE id=$1",[actorA]);}
+  });
+  await t.test('V129 validated Graph fingerprint derives the registered service actor and a durable replay binding',async()=>{
+    const base=approvedUpload(),notificationFingerprint=crypto.createHash('sha256').update(uuid()).digest('hex'),subscriptionId=uuid();
+    const graphBinding={...approvedSources.get(base.uploadId),actorId:serviceActor,sourceKey:notificationFingerprint,subscriptionId,changeType:'created'};approvedSources.set(notificationFingerprint,graphBinding);
+    const input={subscriptionId,notificationFingerprint},first=await actualIngress().dispatchGraph(input),replay=await actualIngress().dispatchGraph(input);assert.equal(replay.replayed,true);assert.equal(first.commandId,replay.commandId);
+    const row=(await admin.query('SELECT actor_id,kind FROM public.domain_job_commands WHERE command_id=$1',[first.commandId])).rows[0];assert.equal(row.actor_id,serviceActor);assert.equal(row.kind,'PROCESS_INBOUND');
+    assert.equal((await admin.query('SELECT source_system FROM public.inbound_events WHERE id=$1',[first.objectId])).rows[0].source_system,'MICROSOFT_GRAPH');
+  });
+  await t.test('V129 a cross-tenant registered Graph actor cannot commit another tenant command',async()=>{
+    const base=approvedUpload(),notificationFingerprint=crypto.createHash('sha256').update(uuid()).digest('hex'),subscriptionId=uuid();
+    approvedSources.set(notificationFingerprint,{...approvedSources.get(base.uploadId),tenantId:tenantB,actorId:serviceActor,sourceKey:notificationFingerprint,subscriptionId,changeType:'created'});
+    const before=(await admin.query('SELECT count(*)::integer AS n FROM public.domain_job_commands')).rows[0].n;
+    await assert.rejects(actualIngress().dispatchGraph({subscriptionId,notificationFingerprint}),/FORBIDDEN/);assert.equal((await admin.query('SELECT count(*)::integer AS n FROM public.domain_job_commands')).rows[0].n,before);
+  });
+  await t.test('V129 approved published policy produces one matter-bound PostgreSQL command on replay',async()=>{
+    const matterId=uuid(),requestId=uuid(),policyVersionId=uuid();await admin.query('INSERT INTO public.matters(id,tenant_id,display_reference) VALUES($1,$2,$3)',[matterId,tenantA,`synthetic-v129-${matterId}`]);
+    const record={tenantId:tenantA,actorId:actorA,sourceKey:requestId,matterId,policyVersionId,policyVersionHash:artifactHash,versionId:'published-v129',evidenceHash:reason,revision:1,state:'PUBLISHED'};approvedSources.set(requestId,record);
+    manifests.set(policyVersionId,{tenantId:tenantA,id:policyVersionId,kind:'POLICY',hash:artifactHash,objectKey:`${tenantA}/v129/${policyVersionId}`,versionId:record.versionId,size:bytes.length,state:'PUBLISHED',evidenceHash:reason,region:'synthetic-region',revision:1});
+    const input={tenantId:tenantA,actorId:actorA,matterId,requestId},first=await actualIngress().submitPolicy(input),replay=await actualIngress().submitPolicy(input);assert.equal(replay.replayed,true);assert.equal(first.commandId,replay.commandId);
+    const row=(await admin.query('SELECT matter_id,policy_version_id FROM public.domain_job_commands WHERE command_id=$1',[first.commandId])).rows[0];assert.equal(row.matter_id,matterId);assert.equal(row.policy_version_id,policyVersionId);
+  });
+  await t.test('V129 production legacy upload endpoint commits PostgreSQL through the registered bridge and never synthetic ingest',async()=>{
+    const input=approvedUpload();let synthetic=0;const server=createApiServer({productionMode:true,processingIngress:actualIngress(),readiness:syntheticReady(),platform:{store:{audit:async()=>{}},ingest:()=>{synthetic++;throw new Error('synthetic-route-forbidden');}},authProvider:httpFixture.authProvider,abuseLimiter:{...httpFixture.abuseLimiter,checkRead:async()=>{}}});
+    await new Promise(r=>server.listen(0,'127.0.0.1',r));try{const base=`http://127.0.0.1:${server.address().port}`,send=()=>fetch(base+'/api/v1/inbound-events',{method:'POST',headers:{'content-type':'application/json','idempotency-key':input.uploadId},body:JSON.stringify({uploadId:input.uploadId})});
+      const response=await send();assert.equal(response.status,202);const first=await response.json(),again=await send();assert.equal(again.status,202);assert.equal((await again.json()).replayed,true);assert.equal(synthetic,0);
+      assert.equal((await admin.query('SELECT payload_hash FROM public.domain_job_commands WHERE command_id=$1',[first.commandId])).rows[0].payload_hash,artifactHash);
+    }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}
+  });
+  await t.test('V129 stalled source resolution keeps the PostgreSQL drain closed until actual provider settlement',async()=>{
+    const input=approvedUpload();let finish,entered=false,sourceSignal;const gate=new Promise(r=>{finish=r});const router=new ManagedProcessingIngress({...ingressOptions,handlers:pipeline.handlers,drain:new ManagedDeploymentDrain({backend:durable,authorize:async()=>true,deploymentId:drainDeployment}),readiness:syntheticReady(),timeoutMs:100,maxPending:1,
+      resolveUpload:async r=>{entered=true;sourceSignal=r.signal;await gate;return {...approvedSources.get(r.uploadId)};}});let settled=false;const task=router.submitUpload(input).catch(e=>{settled=true;return e;});
+    try{const deadline=Date.now()+5000;while(!sourceSignal?.aborted&&Date.now()<deadline)await new Promise(r=>setTimeout(r,10));assert.equal(entered,true);assert.equal(sourceSignal.aborted,true);assert.equal(settled,false);
+      assert.equal((await beginDurable()).state,'DRAINING');assert.equal((await durable.status(scope)).inFlight,1);await assert.rejects(resumeDurable(),/UNVERIFIED/);assert.equal((await router.probe()).ok,false);
+      finish();assert.match((await task).message,/UNAVAILABLE/);assert.equal((await durable.status(scope)).state,'DRAINED');
+    }finally{finish();await task;await resumeDurable();}
+  });
+
+  await t.test('V129 validated Graph queue retries a lost postcommit acknowledgement without suppressing durable replay',async()=>{
+    const subscriptionId=uuid(),directoryTenantId=uuid(),expiresAt=new Date(Date.now()+3600000).toISOString();
+    const webhook=new GraphWebhookIngress({resolveSubscription:async()=>({tenantId:tenantA,subscriptionId,directoryTenantId,clientState:'synthetic-v129-client-state',status:'ACTIVE',expiresAt,richData:false})});
+    const payload={value:[{id:uuid(),subscriptionId,tenantId:directoryTenantId,clientState:'synthetic-v129-client-state',resource:'/users/synthetic/messages/synthetic-v129',changeType:'created',subscriptionExpirationDateTime:expiresAt}]};
+    const staged=webhook.receive(payload,{traceId:'synthetic-v129-validation'}),[validated]=await webhook.validate(staged.intakeId),base=approvedUpload();
+    approvedSources.set(validated.notificationFingerprint,{...approvedSources.get(base.uploadId),actorId:serviceActor,sourceKey:validated.notificationFingerprint,subscriptionId,changeType:'created'});
+    let lost=true;const router=new ManagedProcessingIngress({...ingressOptions,handlers:pipeline.handlers,drain:new ManagedDeploymentDrain({backend:durable,authorize:async()=>true,deploymentId:drainDeployment}),readiness:syntheticReady(),audit:async c=>{if(c.phase==='ACCEPTED'&&lost){lost=false;throw new Error('synthetic-lost-acknowledgement');}}});
+    const queue=new GraphWebhookValidationQueue({ingress:webhook,dispatch:createGraphProcessingDispatch(router)}),intake=queue.receive(payload,{traceId:'synthetic-v129-dispatch'});
+    assert.equal((await queue.processNext({intakeId:intake.intakeId})).status,'QUEUED');const replay=await queue.processNext({intakeId:intake.intakeId});assert.equal(replay.status,'DONE');assert.equal(replay.duplicateCount,1);
+    const sourceHash=crypto.createHash('sha256').update(JSON.stringify(['ingress-source-v129','MICROSOFT_GRAPH',JSON.stringify([subscriptionId,validated.notificationFingerprint])])).digest('hex');
+    const row=(await admin.query('SELECT id FROM public.inbound_events WHERE tenant_id=$1 AND external_event_id=$2',[tenantA,crypto.createHash('sha256').update(sourceHash).digest('hex')])).rows;
+    assert.equal(row.length,1);assert.equal((await admin.query('SELECT count(*)::integer AS n FROM public.domain_job_commands WHERE object_id=$1',[row[0].id])).rows[0].n,1);
+  });
+  await t.test('V129 nine-pool service binds source readiness ingress workers and durable global shutdown',async()=>{
+    const {drain:unusedDomain,...serviceDomain}=pipelineOptions,{drain:unusedWorker,...serviceWorker}=managedWorker;let sourceHealthy=true;
+    const options={drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},ingress:{...ingressOptions,probeSources:async()=>({ok:sourceHealthy})},processing:{domain:serviceDomain,worker:serviceWorker,
+      queueReaderPool,expectedQueueReaderRole:'legaltech_queue_reader_ci',authorizeResultRead:async()=>true,authorizeAdoption:async()=>true,
+      artifacts:{manifest:{resolveVersion:async r=>manifests.get(r.id),probe:async()=>({ok:true})},storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.hash,contentLength:r.size,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},authorizeVersion:async()=>true,verifyEvidence:async()=>true},
+      canary:{tenantId:tenantA,actorId:actorA,serviceActorId:serviceActor,authorizeCanary:async()=>true,createFixture:async()=>{const fixture=approvedUpload(),m=approvedSources.get(fixture.uploadId);return {confirmedSynthetic:true,payloadId:m.payloadId,payloadHash:m.payloadHash,expectedResultCode:'CLASSIFIED',expectedResultHash:resultHash};},timeoutMs:5000,maxAgeMs:30000}},
+      http:httpFixture,probes:Object.fromEntries(REQUIRED_PRODUCTION_PROBES.map(k=>[k,async()=>({ok:true})])),readiness:{probeTimeoutMs:5000},canaryIntervalMs:10000};
+    for(const field of ['handlers','drain','readiness'])assert.throws(()=>createDurablePostgresProcessingService({...options,ingress:{...options.ingress,[field]:{}}}),/INGRESS_OVERRIDE_FORBIDDEN/);
+    assert.throws(()=>createDurablePostgresProcessingService({...options,http:{...options.http,allowDirectCommands:true}}),/HTTP_OVERRIDE_FORBIDDEN/);
+    const root=createDurablePostgresProcessingService(options);let stopped;
+    try{await root.start({port:0});const base=`http://127.0.0.1:${root.server.address().port}`;
+      const ready=async()=>{const deadline=Date.now()+10000;let response;do{response=await fetch(base+'/api/v1/ready');await response.arrayBuffer();if(response.status===200)return;await new Promise(r=>setTimeout(r,25));}while(Date.now()<deadline);assert.equal(response.status,200);};
+      await ready();const bypass=await fetch(base+'/api/v1/processing/inbound',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});assert.equal(bypass.status,404);await bypass.arrayBuffer();
+      sourceHealthy=false;root.readiness.invalidate();const unavailable=await fetch(base+'/api/v1/ready');assert.equal(unavailable.status,503);await unavailable.arrayBuffer();
+      const input=approvedUpload();await assert.rejects(root.ingress.submitUpload(input),/UNAVAILABLE/);sourceHealthy=true;root.readiness.invalidate();await ready();
+      const receipt=await root.ingress.submitUpload(input);const end=Date.now()+5000;let result;
+      do{result=await queueReader.getResult({tenantId:tenantA,jobId:receipt.jobId});if(result)break;await new Promise(r=>setTimeout(r,25));}while(Date.now()<end);
+      assert.equal(result.commandId,receipt.commandId);assert.equal(result.resultCode,'CLASSIFIED');
+      stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true);assert.equal((await durable.status(scope)).state,'DRAINED');assert.equal((await durable.status(scope)).inFlight,0);
+    }finally{sourceHealthy=true;if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
   });
 });

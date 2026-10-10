@@ -1,3 +1,4 @@
+import {ManagedProcessingIngress,createGraphProcessingDispatch} from './managedProcessingIngress.js';
 import {ManagedDeploymentDrain,isManagedDeploymentDrain} from './managedDeploymentDrain.js';
 import {createPostgresManagedProcessing} from './postgresManagedProcessing.js';
 import {createProcessingHttp} from './processingHttp.js';
@@ -5,18 +6,31 @@ import {REQUIRED_PRODUCTION_PROBES} from './productionAdmission.js';
 
 // Deployment supplies provider implementations and principals; this root binds
 // the same shared drain to HTTP, relay, workers and mandatory readiness.
-export function createPostgresProcessingService({processing,drain:drainOptions,http,probes,readiness:readinessOptions,canaryIntervalMs=10000}={}){
+export function createPostgresProcessingService({processing,drain:drainOptions,http,probes,readiness:readinessOptions,ingress:ingressOptions,canaryIntervalMs=10000}={}){
+  if(http&&Object.hasOwn(http,'allowDirectCommands'))throw new Error('PROCESSING_SERVICE_HTTP_OVERRIDE_FORBIDDEN');
   const drain=new ManagedDeploymentDrain(drainOptions);
   if(!processing?.domain||!processing?.worker||Object.hasOwn(processing.domain,'drain')||Object.hasOwn(processing.worker,'drain'))throw new Error('PROCESSING_SERVICE_DRAIN_OVERRIDE_FORBIDDEN');
   const age=processing.canary?.maxAgeMs??30000;
   if(!Number.isInteger(canaryIntervalMs)||canaryIntervalMs<100||canaryIntervalMs>age/2)throw new Error('PROCESSING_SERVICE_CONFIGURATION_INVALID');
   const pipeline=createPostgresManagedProcessing({...processing,domain:{...processing.domain,drain},worker:{...processing.worker,drain}});
   if(!probes||Reflect.ownKeys(probes).length!==REQUIRED_PRODUCTION_PROBES.length||REQUIRED_PRODUCTION_PROBES.some(k=>typeof Object.getOwnPropertyDescriptor(probes,k)?.value!=='function'))throw new Error('PRODUCTION_READINESS_PROBES_REQUIRED');
+  let ingress;
+  const sourceProbes={...probes};
+  if(ingressOptions!==undefined){
+    if(!ingressOptions||['handlers','drain','readiness'].some(k=>Object.hasOwn(ingressOptions,k)))throw new Error('PROCESSING_SERVICE_INGRESS_OVERRIDE_FORBIDDEN');
+    const storage=sourceProbes.OBJECT_STORAGE;
+    sourceProbes.OBJECT_STORAGE=async({signal}={})=>{
+      if(signal?.aborted||(await storage({signal}))?.ok!==true)return {ok:false,code:'PROCESSING_INGRESS_UNVERIFIED'};
+      return ingress?ingress.probe({signal}):{ok:false,code:'PROCESSING_INGRESS_UNVERIFIED'};
+    };
+  }
   const original=probes.DEPLOYMENT_DRAIN;
-  const readiness=pipeline.createReadiness({...readinessOptions,probes:{...probes,DEPLOYMENT_DRAIN:async({signal})=>{
+  const readiness=pipeline.createReadiness({...readinessOptions,probes:{...sourceProbes,DEPLOYMENT_DRAIN:async({signal})=>{
     if(signal?.aborted||(await original({signal}))?.ok!==true)return {ok:false,code:'MANAGED_DRAIN_UNVERIFIED'};const result=await drain.probe();return signal?.aborted?{ok:false,code:'MANAGED_DRAIN_UNVERIFIED'}:result;
   }}});
-  return createProcessingService({pipeline,drain,readiness,http,canaryIntervalMs});
+  if(ingressOptions!==undefined)ingress=new ManagedProcessingIngress({...ingressOptions,handlers:pipeline.handlers,drain,readiness});
+  const service=createProcessingService({pipeline,drain,readiness,http:{...http,allowDirectCommands:ingressOptions===undefined},canaryIntervalMs});
+  return Object.freeze({...service,ingress,graphDispatch:ingress?createGraphProcessingDispatch(ingress):undefined});
 }
 
 // Separately exported lifecycle for adapter contract tests. Production uses the
