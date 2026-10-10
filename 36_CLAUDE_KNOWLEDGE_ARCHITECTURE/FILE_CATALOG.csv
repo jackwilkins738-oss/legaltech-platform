@@ -971,7 +971,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/test/vulnerabilityEvidenceV98.test.js,platform_build,current,medium,js,4877
 40_PLATFORM_FOUNDATION_BUILD/test/workApiServiceV70.test.js,platform_build,current,medium,js,5880
 40_PLATFORM_FOUNDATION_BUILD/test/workAuthorizationV69.test.js,platform_build,current,medium,js,8037
-40_PLATFORM_FOUNDATION_BUILD/test/workCursorV74.test.js,platform_build,current,medium,js,4850
+40_PLATFORM_FOUNDATION_BUILD/test/workCursorV74.test.js,platform_build,current,medium,js,4996
 40_PLATFORM_FOUNDATION_BUILD/test/workerClaimSafety.test.js,platform_build,current,medium,js,17158
 40_PLATFORM_FOUNDATION_BUILD/test/workerExecutionV84.test.js,platform_build,current,medium,js,9717
 40_PLATFORM_FOUNDATION_BUILD/test/workerPostgresV124.test.js,platform_build,current,medium,js,14872
@@ -1007,7 +1007,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V128.md,platform_build,current,medium,md,880
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V129.md,platform_build,current,medium,md,917
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V130.md,platform_build,current,medium,md,1405
-40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V132.md,platform_build,current,medium,md,814
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V132.md,platform_build,current,medium,md,917
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V29.md,engineering,current,high,md,687
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V30.md,engineering,current,high,md,575
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V31.md,engineering,current,medium,md,1385
