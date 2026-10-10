@@ -43,7 +43,7 @@ const tenantA='11700000-0000-4000-8000-000000000001',actorA='11700000-0000-4000-
 const tenantB='11700000-0000-4000-8000-000000000002',actorB='11700000-0000-4000-8000-000000000012';
 const uuid=()=>crypto.randomUUID();
 
-test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
+test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133 real PostgreSQL shared identity, security and tenant isolation',{skip:!enabled,timeout:120000},async t=>{
   if(process.env.PGDATABASE!=='legaltech_security_ci')throw new Error('EMPTY_SYNTHETIC_CI_DATABASE_REQUIRED');
   const {Pool}=await import('pg');
   const base={host:process.env.PGHOST??'127.0.0.1',port:Number(process.env.PGPORT??5432),database:process.env.PGDATABASE,connectionTimeoutMillis:5000,idleTimeoutMillis:1000,max:2};
@@ -1133,6 +1133,88 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132 real
   const eventStatus=async eventId=>(await admin.query('SELECT status FROM public.inbound_events WHERE id=$1',[eventId])).rows[0].status;
   const decisionsFor=async eventId=>(await admin.query('SELECT * FROM public.domain_review_decisions WHERE event_id=$1',[eventId])).rows;
   const writebacksFor=async eventId=>(await admin.query("SELECT job_id FROM public.domain_outbox_events WHERE kind='PROCLAIM_WRITEBACK' AND object_id=$1",[eventId])).rows;
+  const pinnedDecision=async(input,over={})=>{const result=(await admin.query('SELECT result_hash FROM public.domain_job_results WHERE job_id=$1',[input.jobId])).rows[0];return decisionFor(input.eventId,{expectedResultJobId:input.jobId,expectedResultHash:result.result_hash,...over});};
+  await t.test('V133 actual review posture attests pinned functions policies triggers and narrow grants',async()=>{
+    assert.equal((await reviews.probe()).ok,true);
+    const rights=await reviewerPool.query("SELECT has_function_privilege(current_user,'public.check_domain_review_decision()','EXECUTE') OR has_function_privilege(current_user,'public.check_inbound_review_transition()','EXECUTE') AS executable");assert.equal(rights.rows[0].executable,false);
+    for(const role of ['legaltech_runtime_ci','legaltech_broker_ci','legaltech_graph_worker_ci','legaltech_drain_worker_ci'])assert.equal((await admin.query("SELECT has_function_privilege($1,'review_security.lock_scope(uuid,uuid,uuid)','EXECUTE') AS permitted",[role])).rows[0].permitted,false);
+  });
+  await t.test('V133 scope lock rejects missing context forged tenant actor and cross-tenant matter',async()=>{
+    await assert.rejects(reviewerPool.query('SELECT review_security.lock_scope($1,$2,NULL)',[tenantA,actorA]));
+    for(const [tenant,actor] of [[tenantB,actorA],[tenantA,actorB]])await assert.rejects(reviewerTransactions.run({tenantId:tenantA,actorId:actorA},tx=>tx.query('SELECT review_security.lock_scope($1,$2,NULL)',[tenant,actor])),/UNAVAILABLE/);
+    const foreign=await openMatter(tenantB),local=await openMatter();
+    const check=matter=>reviewerTransactions.run({tenantId:tenantA,actorId:actorA},tx=>tx.query('SELECT review_security.lock_scope($1,$2,$3) AS locked',[tenantA,actorA,matter]));
+    assert.equal((await check(foreign)).rows[0].locked,false);assert.equal((await check(local)).rows[0].locked,true);
+    const rights=(await reviewerPool.query("SELECT has_any_column_privilege(current_user,'public.actors','UPDATE') OR has_any_column_privilege(current_user,'public.matters','UPDATE') AS writable")).rows[0];assert.equal(rights.writable,false);
+  });
+  await t.test('V133 ten-pool service exposes human review HTTP durable lost-ack replay and global shutdown',async()=>{
+    await resumeDurable();const input=await adoptNew(),request=await pinnedDecision(input,{decision:'REJECT'});let lost=true,reviewHealthy=true;
+    const {drain:unusedDomain,...serviceDomain}=pipelineOptions,{drain:unusedWorker,...serviceWorker}=managedWorker;
+    const review={pool:reviewerPool,expectedRole:'legaltech_reviewer_ci',authorizeAppend:async()=>true,authorizeDecision:async()=>true,authorizeReview:async()=>true,
+      audit:async c=>{if(c.phase==='ACCEPTED'&&lost){lost=false;throw new Error('synthetic-lost-review-ack');}},probeReview:async()=>({ok:reviewHealthy})};
+    const session={tenantId:tenantA,actorId:actorA,capabilities:['inbound:review'],authContext:{method:'OIDC',mfaVerified:false},status:'ACTIVE'};
+    const options={drain:{...drainOptions,ownerId:uuid(),authorize:async()=>true},ingress:ingressOptions,review,processing:{domain:serviceDomain,worker:serviceWorker,
+      queueReaderPool,expectedQueueReaderRole:'legaltech_queue_reader_ci',authorizeResultRead:async()=>true,authorizeAdoption:async()=>true,
+      artifacts:{manifest:{resolveVersion:async r=>manifests.get(r.id),probe:async()=>({ok:true})},storage:{readVersion:async r=>({tenantId:r.tenantId,objectKey:r.objectKey,versionId:r.versionId,hash:r.hash,contentLength:r.size,body:(async function*(){yield bytes;})()}),probe:async()=>({ok:true})},authorizeVersion:async()=>true,verifyEvidence:async()=>true},
+      canary:{tenantId:tenantA,actorId:actorA,serviceActorId:serviceActor,authorizeCanary:async()=>true,createFixture:async()=>{const f=approvedUpload(),m=approvedSources.get(f.uploadId);return {confirmedSynthetic:true,payloadId:m.payloadId,payloadHash:m.payloadHash,expectedResultCode:'CLASSIFIED',expectedResultHash:resultHash};},timeoutMs:5000,maxAgeMs:30000}},
+      http:{...httpFixture,authProvider:{authenticate:async()=>session}},probes:Object.fromEntries(REQUIRED_PRODUCTION_PROBES.map(k=>[k,async()=>({ok:true})])),readiness:{probeTimeoutMs:5000},canaryIntervalMs:10000};
+    for(const field of ['reviews','domainOutbox','drain','readiness'])assert.throws(()=>createDurablePostgresProcessingService({...options,review:{...review,[field]:{}}}),/REVIEW_OVERRIDE_FORBIDDEN/);
+    assert.throws(()=>createDurablePostgresProcessingService({...options,review:{...review,pool:drainWorkerPool}}),/REVIEW_SEPARATE_POOL_REQUIRED/);
+    assert.throws(()=>createDurablePostgresProcessingService({...options,http:{...options.http,reviewIntake:{}}}),/HTTP_OVERRIDE_FORBIDDEN/);
+    const root=createDurablePostgresProcessingService(options);let stopped;
+    try{await root.start({port:0});const base=`http://127.0.0.1:${root.server.address().port}`;
+      const ready=async()=>{let r;const end=Date.now()+15000;do{r=await fetch(base+'/api/v1/ready');await r.arrayBuffer();if(r.status===200)return;await new Promise(resolve=>setTimeout(resolve,50));}while(Date.now()<end);assert.equal(r.status,200,JSON.stringify({service:root.status(),review:root.reviewIntake.status(),probe:await root.reviewIntake.probe()}));};await ready();
+      const body={eventId:request.eventId,decision:'REJECT',matterId:null,decisionKey:request.decisionKey,expectedResultJobId:request.expectedResultJobId,expectedResultHash:request.expectedResultHash};
+      const send=()=>fetch(base+'/api/v1/processing/review-decisions',{method:'POST',headers:{'content-type':'application/json','idempotency-key':body.decisionKey},body:JSON.stringify(body)});
+      let first;const end=Date.now()+10000;do{first=await send();await first.arrayBuffer();if(!lost)break;assert.equal(first.status,503);await new Promise(resolve=>setTimeout(resolve,100));}while(Date.now()<end);
+      assert.equal(lost,false);assert.equal(first.status,503);assert.equal((await decisionsFor(input.eventId)).length,1);
+      let replay;const retryEnd=Date.now()+10000;do{replay=await send();if(replay.status!==503)break;await replay.arrayBuffer();await new Promise(resolve=>setTimeout(resolve,100));}while(Date.now()<retryEnd);
+      assert.equal(replay.status,200);const output=await replay.json();assert.equal(output.replayed,true);assert.equal(output.resultHash,request.expectedResultHash);assert.equal(output.tenantId,undefined);assert.equal(await eventStatus(input.eventId),'REJECTED');assert.equal((await writebacksFor(input.eventId)).length,0);
+      reviewHealthy=false;root.readiness.invalidate();const unavailable=await fetch(base+'/api/v1/ready');assert.equal(unavailable.status,503);await unavailable.arrayBuffer();reviewHealthy=true;root.readiness.invalidate();await ready();
+      stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true,JSON.stringify({stopped,review:root.reviewIntake.status(),drain:await durable.status(scope)}));assert.equal((await durable.status(scope)).inFlight,0);assert.equal((await durable.status(scope)).state,'DRAINED');
+    }finally{reviewHealthy=true;if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
+  });
+  await t.test('V133 stale result pins cannot decide an actual adopted event',async()=>{
+    const input=await adoptNew(),request=await pinnedDecision(input,{matterId:await openMatter()});
+    for(const change of [{expectedResultJobId:uuid()},{expectedResultHash:'0'.repeat(64)}])await assert.rejects(reviews.decide({...request,...change}),/CONFLICT/);
+    assert.equal(await eventStatus(input.eventId),'PROCESSED');assert.equal((await decisionsFor(input.eventId)).length,0);assert.equal((await writebacksFor(input.eventId)).length,0);
+  });
+  await t.test('V133 final review authority withdrawal rolls back decision transition and writeback',async()=>{
+    const input=await adoptNew(),request=await pinnedDecision(input,{matterId:await openMatter()}),phases=[];
+    const guarded=new PostgresReviewDecisions({domainOutbox:new PostgresDomainOutbox({pool:reviewerPool,expectedRole:'legaltech_reviewer_ci',authorizeAppend:async()=>true}),authorizeDecision:async c=>{phases.push(c.phase);return c.phase!=='COMMIT';}});
+    await assert.rejects(guarded.decide(request),/FORBIDDEN/);assert.deepEqual(phases,['ADMIT','COMMIT']);assert.equal(await eventStatus(input.eventId),'PROCESSED');assert.equal((await decisionsFor(input.eventId)).length,0);assert.equal((await writebacksFor(input.eventId)).length,0);
+  });
+  await t.test('V133 simultaneous identical approvals serialize to one decision and one writeback',async()=>{
+    const input=await adoptNew(),request=await pinnedDecision(input,{matterId:await openMatter()});const receipts=await Promise.all([reviews.decide(request),reviews.decide(request)]);
+    assert.deepEqual(receipts.map(r=>r.replayed).sort(),[false,true]);assert.equal((await decisionsFor(input.eventId)).length,1);assert.equal((await writebacksFor(input.eventId)).length,1);
+  });
+  await t.test('V133 approval replay cannot acknowledge a matter that has since closed',async()=>{
+    const input=await adoptNew(),matterId=await openMatter(),request=await pinnedDecision(input,{matterId});await reviews.decide(request);await admin.query("UPDATE public.matters SET status='CLOSED' WHERE id=$1",[matterId]);
+    await assert.rejects(reviews.decide(request),/FORBIDDEN/);assert.equal((await decisionsFor(input.eventId)).length,1);assert.equal((await writebacksFor(input.eventId)).length,1);
+  });
+  await t.test('V133 widened reviewer grants and leaked review API execution fail readiness',async()=>{
+    for(const table of ['inbound_events','actors']){await admin.query(`GRANT UPDATE ON public.${table} TO legaltech_reviewer_ci`);try{assert.equal((await reviews.probe()).ok,false);}finally{await admin.query(`REVOKE UPDATE ON public.${table} FROM legaltech_reviewer_ci`);}}
+    await admin.query('GRANT USAGE ON SCHEMA review_security TO legaltech_runtime_ci');await admin.query('GRANT EXECUTE ON FUNCTION review_security.lock_scope(uuid,uuid,uuid) TO legaltech_runtime_ci');
+    try{assert.equal((await createPostgresRuntimeProbe({pool:runtime,expectedRole:'legaltech_runtime_ci'})({})).ok,false);}finally{await admin.query('REVOKE EXECUTE ON FUNCTION review_security.lock_scope(uuid,uuid,uuid) FROM legaltech_runtime_ci');await admin.query('REVOKE USAGE ON SCHEMA review_security FROM legaltech_runtime_ci');}
+    assert.equal((await reviews.probe()).ok,true);
+  });
+  await t.test('V133 tampered review function policy and conditional trigger fail readiness',async()=>{
+    await admin.query('GRANT EXECUTE ON FUNCTION public.check_domain_review_decision() TO PUBLIC');try{assert.equal((await reviews.probe()).ok,false);}finally{await admin.query('REVOKE EXECUTE ON FUNCTION public.check_domain_review_decision() FROM PUBLIC');}
+    const definition=(await admin.query("SELECT pg_get_functiondef('public.check_domain_review_decision()'::regprocedure) AS sql")).rows[0].sql;
+    await admin.query(definition.replace('AS $function$','AS $function$\n-- synthetic tamper\n'));try{assert.equal((await reviews.probe()).ok,false);}finally{await admin.query(definition);}
+    await admin.query('ALTER POLICY domain_review_append ON public.domain_review_decisions WITH CHECK(true)');try{assert.equal((await reviews.probe()).ok,false);}finally{await admin.query('ALTER POLICY domain_review_append ON public.domain_review_decisions WITH CHECK(tenant_id=public.app_current_tenant_id() AND decided_by=public.app_current_actor_id())');}
+    const trigger=(await admin.query("SELECT pg_get_triggerdef(oid) AS sql FROM pg_trigger WHERE tgname='inbound_review_transition' AND tgrelid='public.inbound_events'::regclass")).rows[0].sql;
+    await admin.query('DROP TRIGGER inbound_review_transition ON public.inbound_events');try{await admin.query(trigger.replace('EXECUTE FUNCTION','WHEN (false) EXECUTE FUNCTION'));assert.equal((await reviews.probe()).ok,false);}finally{await admin.query('DROP TRIGGER IF EXISTS inbound_review_transition ON public.inbound_events');await admin.query(trigger);}
+    assert.equal((await reviews.probe()).ok,true);
+  });
+  await t.test('V133 actor revocation waits for the acknowledged review transaction',async()=>{
+    const input=await adoptNew(),request=await pinnedDecision(input,{decision:'REJECT'});let finish,entered=false;const gate=new Promise(resolve=>{finish=resolve;});
+    const guarded=new PostgresReviewDecisions({domainOutbox:new PostgresDomainOutbox({pool:reviewerPool,expectedRole:'legaltech_reviewer_ci',authorizeAppend:async()=>true}),authorizeDecision:async c=>{if(c.phase==='COMMIT'){entered=true;await gate;}return true;}});
+    const task=guarded.decide(request);let changed=false,revocation;
+    try{const end=Date.now()+5000;while(!entered&&Date.now()<end)await new Promise(resolve=>setTimeout(resolve,10));assert.equal(entered,true);
+      revocation=admin.query("UPDATE public.actors SET status='DISABLED' WHERE id=$1",[actorA]).then(()=>{changed=true;});await new Promise(resolve=>setTimeout(resolve,30));assert.equal(changed,false);finish();assert.equal((await task).status,'DECIDED');await revocation;assert.equal(changed,true);await assert.rejects(reviews.decide(request),/FORBIDDEN/);
+    }finally{finish();await task.catch(()=>{});await revocation;await admin.query("UPDATE public.actors SET status='ACTIVE' WHERE id=$1",[actorA]);}
+  });
   await t.test('V130 approval atomically records the decision, the APPROVED transition and one writeback intent, and replays',async()=>{
     const input=await adoptNew(),matterId=await openMatter(),request=decisionFor(input.eventId,{matterId});
     const receipt=await reviews.decide(request);assert.equal(receipt.status,'DECIDED');assert.equal(receipt.replayed,false);assert.equal(receipt.resultJobId,input.jobId);

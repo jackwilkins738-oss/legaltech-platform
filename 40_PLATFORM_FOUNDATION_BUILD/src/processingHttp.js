@@ -1,3 +1,4 @@
+import {isManagedReviewDecisions} from './managedReviewDecisions.js';
 import {isManagedGraphWebhookIntake} from './managedGraphWebhookIntake.js';
 import {graphValidationResponse} from './graphWebhookIngress.js';
 import http from 'node:http';
@@ -34,13 +35,13 @@ function receipt(value,expected){shape(value,['tenantId','commandId','jobId','ki
 // Dedicated metadata command API. It never falls back to the synthetic platform
 // or exposes worker, adoption, provider, drain-admin or raw result endpoints.
 export function createProcessingHttp({handlers,authProvider,abuseLimiter,readiness,drain,authorizeRequest,audit,accepting=()=>true,
-  requestTimeoutMs=10000,readinessTimeoutMs=1500,maxBodyBytes=16384,maxInFlight=100,allowDirectCommands=true,graphIntake,maxGraphBodyBytes=256*1024}={}){
+  requestTimeoutMs=10000,readinessTimeoutMs=1500,maxBodyBytes=16384,maxInFlight=100,allowDirectCommands=true,graphIntake,reviewIntake,maxGraphBodyBytes=256*1024}={}){
   if(!isProductionReadiness(readiness)||!isManagedDeploymentDrain(drain)||['registerInbound','requestPolicyEvaluation'].some(k=>typeof handlers?.[k]!=='function')
     ||typeof authProvider?.authenticate!=='function'||authProvider instanceof StaticAuthProvider||usesReferenceSessionStore(authProvider)
     ||abuseLimiter instanceof InMemoryAbuseLimiter||['checkIp','checkTenant'].some(k=>typeof abuseLimiter?.[k]!=='function')
-    ||typeof authorizeRequest!=='function'||typeof audit!=='function'||typeof accepting!=='function'||typeof allowDirectCommands!=='boolean'||graphIntake!==undefined&&!isManagedGraphWebhookIntake(graphIntake))throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
+    ||typeof authorizeRequest!=='function'||typeof audit!=='function'||typeof accepting!=='function'||typeof allowDirectCommands!=='boolean'||graphIntake!==undefined&&!isManagedGraphWebhookIntake(graphIntake)||reviewIntake!==undefined&&!isManagedReviewDecisions(reviewIntake))throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
   for(const [v,min,max] of [[maxGraphBodyBytes,1024,1024*1024],[requestTimeoutMs,100,60000],[readinessTimeoutMs,100,6000],[maxBodyBytes,1024,65536],[maxInFlight,1,1000]])if(!Number.isInteger(v)||v<min||v>max)throw new Error('PROCESSING_HTTP_CONFIGURATION_INVALID');
-  const graphReceive=graphIntake?.receive.bind(graphIntake);
+  const graphReceive=graphIntake?.receive.bind(graphIntake),reviewDecide=reviewIntake?.decide.bind(reviewIntake);
   const bound=Object.freeze({registerInbound:handlers.registerInbound.bind(handlers),requestPolicyEvaluation:handlers.requestPolicyEvaluation.bind(handlers),authenticate:authProvider.authenticate.bind(authProvider),checkIp:abuseLimiter.checkIp.bind(abuseLimiter),checkTenant:abuseLimiter.checkTenant.bind(abuseLimiter)});
   const pending=new Set(),controllers=new Set();let closed=false,uncertain=false;
   const available=()=>{try{return !closed&&!uncertain&&accepting()===true;}catch{return false;}};
@@ -75,6 +76,22 @@ export function createProcessingHttp({handlers,authProvider,abuseLimiter,readine
           shape(result,['status','accepted','replayed']);if(result.status!==202||!Number.isInteger(result.accepted)||result.accepted<1||result.accepted>100||!Number.isInteger(result.replayed)||result.replayed<0||result.replayed>result.accepted)throw new Error('GRAPH_INBOX_UNVERIFIED');
           send(res,202,{status:'ACCEPTED',accepted:result.accepted,replayed:result.replayed},traceId);return;
         }
+        if(req.method==='POST'&&url.pathname==='/api/v1/processing/review-decisions'){
+          if(!reviewDecide)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
+          if(url.search||req.headers['content-type']!=='application/json')throw invalid();
+          await admitted(signal);
+          const session=normalizeSession(await bound.authenticate(req.headers,{method:req.method,url:req.url}));check(signal);
+          if(!['OIDC','SERVER_SESSION'].includes(session.authContext.method))throw appError('authentication required',{status:401,code:'AUTH_REQUIRED'});
+          uuid(session.tenantId);uuid(session.actorId);requireCapability(session,'inbound:review');await bound.checkTenant(session);check(signal);
+          const value=await body(req,signal,maxBodyBytes);shape(value,['eventId','decision','matterId','decisionKey','expectedResultJobId','expectedResultHash']);
+          uuid(value.eventId);uuid(value.expectedResultJobId);hash(value.expectedResultHash);
+          if(typeof value.decisionKey!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,255}$/.test(value.decisionKey)||req.headers['idempotency-key']!==value.decisionKey
+            ||!['APPROVE','REJECT'].includes(value.decision)||value.decision==='APPROVE'&&!UUID.test(value.matterId)||value.decision==='REJECT'&&value.matterId!==null)throw invalid();
+          const context=Object.freeze({...value,tenantId:session.tenantId,actorId:session.actorId,kind:'REVIEW_DECISION',signal});
+          if(await authorizeRequest({...context,phase:'ADMIT'})!==true)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});await admitted(signal);
+          committing=true;const result=await reviewDecide({...value,tenantId:session.tenantId,actorId:session.actorId},{signal});
+          if(!signal.aborted){const {tenantId,...output}=result;send(res,200,output,traceId);}return;
+        }
         await admitted(signal);
         const kind=!allowDirectCommands?null:req.method==='POST'&&req.url==='/api/v1/processing/inbound'?'PROCESS_INBOUND':req.method==='POST'&&req.url==='/api/v1/processing/policy-evaluations'?'POLICY_EVALUATION':null;
         if(!kind)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});
@@ -90,7 +107,7 @@ export function createProcessingHttp({handlers,authProvider,abuseLimiter,readine
         const context=Object.freeze({tenantId:session.tenantId,actorId:session.actorId,kind,commandId:value.commandId,jobId:value.jobId,objectId:value.eventId??value.matterId,artifactId:value.payloadId??value.policyVersionId,artifactHash:value.payloadHash??value.policyVersionHash,signal});
         if(await authorizeRequest({...context,phase:'ADMIT'})!==true)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});await admitted(signal);
         // Unknown acquisition remains latched in the shared drain adapter.
-        try{lease=await drain.acquire({kind:'INGRESS',operationId:`http:${crypto.randomUUID()}`,signal});}catch{uncertain=true;throw notReady();}check(signal);
+        try{lease=await drain.acquire({kind:'INGRESS',operationId:`http:${crypto.randomUUID()}`});}catch{uncertain=true;throw notReady();}check(signal);
         await audit({...context,phase:'ATTEMPT'});check(signal);
         if(await authorizeRequest({...context,phase:'DISPATCH'})!==true)throw appError('resource unavailable',{status:404,code:'NOT_FOUND'});await admitted(signal);
         committing=true;
@@ -99,7 +116,10 @@ export function createProcessingHttp({handlers,authProvider,abuseLimiter,readine
         await audit({...context,phase:'ACCEPTED'});if(!signal.aborted)send(res,202,output,traceId);
       }catch(error){
         if(!res.writableEnded){
-          if(error?.message==='GRAPH_INBOX_INPUT_INVALID')send(res,400,{code:'INVALID_REQUEST'},traceId);
+          if(['MANAGED_REVIEW_INPUT_INVALID','REVIEW_DECISION_INPUT_INVALID'].includes(error?.message))send(res,400,{code:'INVALID_REQUEST'},traceId);
+          else if(error?.message==='REVIEW_DECISION_CONFLICT')send(res,409,{code:'REVIEW_CONFLICT'},traceId);
+          else if(['REVIEW_DECISION_FORBIDDEN','MANAGED_REVIEW_FORBIDDEN'].includes(error?.message))send(res,404,{code:'NOT_FOUND'},traceId);
+          else if(error?.message==='GRAPH_INBOX_INPUT_INVALID')send(res,400,{code:'INVALID_REQUEST'},traceId);
           else if(committing&&(accepted||!['DOMAIN_COMMAND_CONFLICT','DOMAIN_COMMAND_FORBIDDEN'].includes(error?.message)))send(res,503,{status:'OUTCOME_UNVERIFIED'},traceId);
           else if(error?.message==='DOMAIN_COMMAND_CONFLICT')send(res,409,{code:'COMMAND_CONFLICT'},traceId);
           else if(error?.message==='DOMAIN_COMMAND_FORBIDDEN')send(res,404,{code:'NOT_FOUND'},traceId);

@@ -1,3 +1,6 @@
+import {ManagedReviewDecisions} from './managedReviewDecisions.js';
+import {PostgresReviewDecisions} from './postgresReviewDecisions.js';
+import {PostgresDomainOutbox} from './postgresOutbox.js';
 import {ManagedGraphWebhookIntake} from './managedGraphWebhookIntake.js';
 import {PostgresGraphInboxProducer,PostgresGraphInboxWorker,PostgresGraphInboxReader} from './postgresGraphInbox.js';
 import {OutboxRelaySupervisor} from './outboxRelaySupervisor.js';
@@ -9,15 +12,15 @@ import {REQUIRED_PRODUCTION_PROBES} from './productionAdmission.js';
 
 // Deployment supplies provider implementations and principals; this root binds
 // the same shared drain to HTTP, relay, workers and mandatory readiness.
-export function createPostgresProcessingService({processing,drain:drainOptions,http,probes,readiness:readinessOptions,ingress:ingressOptions,webhooks:graphOptions,canaryIntervalMs=10000}={}){
-  if(http&&['allowDirectCommands','graphIntake'].some(k=>Object.hasOwn(http,k)))throw new Error('PROCESSING_SERVICE_HTTP_OVERRIDE_FORBIDDEN');
+export function createPostgresProcessingService({processing,drain:drainOptions,http,probes,readiness:readinessOptions,ingress:ingressOptions,webhooks:graphOptions,review:reviewOptions,canaryIntervalMs=10000}={}){
+  if(http&&['allowDirectCommands','graphIntake','reviewIntake'].some(k=>Object.hasOwn(http,k)))throw new Error('PROCESSING_SERVICE_HTTP_OVERRIDE_FORBIDDEN');
   const drain=new ManagedDeploymentDrain(drainOptions);
   if(!processing?.domain||!processing?.worker||Object.hasOwn(processing.domain,'drain')||Object.hasOwn(processing.worker,'drain'))throw new Error('PROCESSING_SERVICE_DRAIN_OVERRIDE_FORBIDDEN');
   const age=processing.canary?.maxAgeMs??30000;
   if(!Number.isInteger(canaryIntervalMs)||canaryIntervalMs<100||canaryIntervalMs>age/2)throw new Error('PROCESSING_SERVICE_CONFIGURATION_INVALID');
   const pipeline=createPostgresManagedProcessing({...processing,domain:{...processing.domain,drain},worker:{...processing.worker,drain}});
   if(!probes||Reflect.ownKeys(probes).length!==REQUIRED_PRODUCTION_PROBES.length||REQUIRED_PRODUCTION_PROBES.some(k=>typeof Object.getOwnPropertyDescriptor(probes,k)?.value!=='function'))throw new Error('PRODUCTION_READINESS_PROBES_REQUIRED');
-  let ingress,graphIntake,graphSupervisor;
+  let ingress,graphIntake,graphSupervisor,reviewIntake;
   if(graphOptions!==undefined){
     if(!ingressOptions||!graphOptions||Object.getPrototypeOf(graphOptions)!==Object.prototype||Reflect.ownKeys(graphOptions).some(k=>!Object.hasOwn(Object.getOwnPropertyDescriptor(graphOptions,k)??{},'value'))||['producer','worker','reader','processingIngress','drain','readiness','operation','relay'].some(k=>Object.hasOwn(graphOptions,k)))throw new Error('PROCESSING_SERVICE_GRAPH_OVERRIDE_FORBIDDEN');
     const graphPools=[graphOptions.producerOptions?.pool,graphOptions.workerOptions?.pool,graphOptions.readerOptions?.pool];
@@ -25,6 +28,12 @@ export function createPostgresProcessingService({processing,drain:drainOptions,h
     const processingPools=[processing.domain.domainPool,processing.domain.relayPool,processing.domain.producerPool,processing.worker.workerPool,processing.worker.domainReaderPool,processing.queueReaderPool];
     const processingRoles=[processing.domain.expectedDomainRole,processing.domain.expectedRelayRole,processing.domain.expectedProducerRole,processing.worker.expectedWorkerRole,processing.worker.expectedDomainReaderRole,processing.expectedQueueReaderRole];
     if(graphPools.some(p=>typeof p?.connect!=='function')||new Set([...processingPools,...graphPools]).size!==9||graphRoles.some(r=>typeof r!=='string')||new Set([...processingRoles,...graphRoles]).size!==9)throw new Error('PROCESSING_SERVICE_GRAPH_SEPARATE_POOLS_REQUIRED');
+  }
+  if(reviewOptions!==undefined){
+    if(!reviewOptions||Object.getPrototypeOf(reviewOptions)!==Object.prototype||Reflect.ownKeys(reviewOptions).some(k=>!Object.hasOwn(Object.getOwnPropertyDescriptor(reviewOptions,k)??{},'value'))||['reviews','domainOutbox','drain','readiness'].some(k=>Object.hasOwn(reviewOptions,k)))throw new Error('PROCESSING_SERVICE_REVIEW_OVERRIDE_FORBIDDEN');
+    const pools=[processing.domain.domainPool,processing.domain.relayPool,processing.domain.producerPool,processing.worker.workerPool,processing.worker.domainReaderPool,processing.queueReaderPool,...(graphOptions?[graphOptions.producerOptions.pool,graphOptions.workerOptions.pool,graphOptions.readerOptions.pool]:[])];
+    const roles=[processing.domain.expectedDomainRole,processing.domain.expectedRelayRole,processing.domain.expectedProducerRole,processing.worker.expectedWorkerRole,processing.worker.expectedDomainReaderRole,processing.expectedQueueReaderRole,...(graphOptions?[graphOptions.producerOptions.expectedRole,graphOptions.workerOptions.expectedRole,graphOptions.readerOptions.expectedRole]:[])];
+    if(typeof reviewOptions.pool?.connect!=='function'||pools.includes(reviewOptions.pool)||roles.includes(reviewOptions.expectedRole))throw new Error('PROCESSING_SERVICE_REVIEW_SEPARATE_POOL_REQUIRED');
   }
   const sourceProbes={...probes};
   if(ingressOptions!==undefined){
@@ -40,6 +49,13 @@ export function createPostgresProcessingService({processing,drain:drainOptions,h
     sourceProbes.QUEUE=async({signal}={})=>{
       if(signal?.aborted||(await queue({signal}))?.ok!==true||!graphIntake||graphSupervisor?.status().state!=='RUNNING')return {ok:false,code:'GRAPH_INBOX_UNVERIFIED'};
       return graphIntake.probe({signal});
+    };
+  }
+  if(reviewOptions!==undefined){
+    const authorization=sourceProbes.WORKER_AUTHORIZATION;
+    sourceProbes.WORKER_AUTHORIZATION=async({signal}={})=>{
+      if(signal?.aborted||(await authorization({signal}))?.ok!==true||!reviewIntake)return {ok:false,code:'REVIEW_UNVERIFIED'};
+      return reviewIntake.probe({signal});
     };
   }
   const original=probes.DEPLOYMENT_DRAIN;
@@ -58,8 +74,18 @@ export function createPostgresProcessingService({processing,drain:drainOptions,h
       async stop(options){const results=await Promise.allSettled([graphIntake.stop(options),graphSupervisor.stop(options),pipeline.stop(options)]);return Object.freeze({drained:results.every(r=>r.status==='fulfilled'&&r.value.drained===true)});},
     });
   }
-  const service=createProcessingService({pipeline:composed,drain,readiness,http:{...http,allowDirectCommands:ingressOptions===undefined,graphIntake},canaryIntervalMs});
-  return Object.freeze({...service,ingress,graphDispatch:ingress?createGraphProcessingDispatch(ingress):undefined,graphIntake,graphReader});
+  if(reviewOptions!==undefined){
+    const domainOutbox=new PostgresDomainOutbox({pool:reviewOptions.pool,expectedRole:reviewOptions.expectedRole,authorizeAppend:reviewOptions.authorizeAppend,timeoutMs:reviewOptions.transactionTimeoutMs??5000});
+    const reviews=new PostgresReviewDecisions({domainOutbox,authorizeDecision:reviewOptions.authorizeDecision});
+    reviewIntake=new ManagedReviewDecisions({...reviewOptions,reviews,drain,readiness});
+    const original=composed;
+    composed=Object.freeze({...original,
+      async start(options){reviewIntake.resume();return original.start(options);},
+      async stop(options){const results=await Promise.allSettled([reviewIntake.stop(options),original.stop(options)]);return Object.freeze({drained:results.every(r=>r.status==='fulfilled'&&r.value.drained===true)});},
+    });
+  }
+  const service=createProcessingService({pipeline:composed,drain,readiness,http:{...http,allowDirectCommands:ingressOptions===undefined,graphIntake,reviewIntake},canaryIntervalMs});
+  return Object.freeze({...service,ingress,graphDispatch:ingress?createGraphProcessingDispatch(ingress):undefined,graphIntake,graphReader,reviewIntake});
 }
 
 // Separately exported lifecycle for adapter contract tests. Production uses the

@@ -19,9 +19,9 @@ const brokerSql=`SELECT pg_has_role(current_user,'legaltech_session_broker','MEM
   EXISTS (SELECT 1 FROM pg_namespace n WHERE n.nspname='identity_security'
     AND (pg_has_role(current_user,n.nspowner,'MEMBER') OR has_schema_privilege(current_user,n.oid,'CREATE'))) AS owns_schema,
   EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-    WHERE n.nspname IN ('public','operational_security','audit_security','queue_security','drain_security','graph_security') AND c.relkind IN ('r','p','v','m','f')
+    WHERE n.nspname IN ('public','operational_security','audit_security','queue_security','drain_security','graph_security','review_security') AND c.relkind IN ('r','p','v','m','f')
       AND (has_table_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,DELETE')
-        OR has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE'))) OR EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='drain_security' AND has_function_privilege(current_user,p.oid,'EXECUTE')) AS can_access_domain
+        OR has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE'))) OR EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('drain_security','review_security') AND has_function_privilege(current_user,p.oid,'EXECUTE')) AS can_access_domain
   FROM pg_roles r WHERE r.rolname=current_user`;
 
 export class PostgresServerSessionStore {

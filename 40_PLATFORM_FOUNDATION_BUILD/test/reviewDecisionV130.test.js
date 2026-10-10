@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import {reviewFixture as fixture} from '../test-support/reviewV133.js';
 import {PostgresReviewDecisions,decisionKeyHash,normalizeReviewDecision,reviewRequestHash,writebackJobId} from '../src/postgresReviewDecisions.js';
 
 const id=n=>`13010000-0000-4000-8000-${String(n).padStart(12,'0')}`,tenantId=id(1),userId=id(2),serviceId=id(3),eventId=id(4),matterId=id(5),resultJobId=id(6);
@@ -10,43 +11,14 @@ const sha=v=>crypto.createHash('sha256').update(v).digest('hex');
 const approve={tenantId,actorId:userId,eventId,decision:'APPROVE',matterId,decisionKey:'approve-1',traceId:'trace-v130'};
 const reject={tenantId,actorId:userId,eventId,decision:'REJECT',decisionKey:'reject-1',traceId:'trace-v130'};
 
-function fixture({authorizeDecision=async()=>true,grants=true,triggers=true,unknownCommit=false,changeFails=false,enqueueFails=false,mutate=()=>{}}={}){
-  const state={event:{id:eventId,tenant_id:tenantId,event_type:'INBOUND_DOCUMENT',status:'PROCESSED'},matter:{id:matterId,tenant_id:tenantId,status:'OPEN'},
-    actors:[{id:userId,tenant_id:tenantId,actor_type:'USER',status:'ACTIVE',tenant_status:'ACTIVE'},{id:serviceId,tenant_id:tenantId,actor_type:'SERVICE',status:'ACTIVE',tenant_status:'ACTIVE'}],
-    results:[{tenant_id:tenantId,job_id:resultJobId,kind:'PROCESS_INBOUND',object_id:eventId,result_hash:sha('result')}],decisions:[],intents:[]};
-  mutate(state);const calls=[],auth=[];
-  const outbox={async run(context,work){
-    const local=structuredClone(state);
-    const result=await work({signal:context.signal,
-      enqueue:async intent=>{calls.push({enqueue:intent});if(enqueueFails)throw new Error('OUTBOX_APPEND_CONFLICT');
-        if(!local.intents.some(i=>i.jobId===intent.jobId))local.intents.push(intent);return {tenantId:intent.tenantId,jobId:intent.jobId};},
-      query:async(sql,v=[])=>{
-        calls.push({sql,v});
-        if(sql.endsWith('AS grants_safe'))return {rows:[{grants_safe:grants}]};
-        if(sql.includes('FROM pg_trigger'))return {rows:triggers?[{tgname:'domain_review_decision_binding',tgenabled:'O',tgdeferrable:true,tginitdeferred:true},{tgname:'inbound_review_transition',tgenabled:'O'}]:[]};
-        if(sql.includes('FROM public.actors a'))return {rows:local.actors.filter(a=>a.id===v[1])};
-        if(sql.includes('FROM public.inbound_events'))return {rows:local.event?[local.event]:[]};
-        if(sql.includes('FROM public.domain_job_results'))return {rows:local.results};
-        if(sql.includes('FROM public.matters'))return {rows:local.matter?[local.matter]:[]};
-        if(sql.startsWith('SELECT * FROM public.domain_review_decisions'))return {rows:local.decisions.filter(d=>d.event_id===v[1]||d.decision_key_hash===v[2])};
-        if(sql.includes('INSERT INTO public.domain_review_decisions')){
-          const cols=['tenant_id','event_id','result_job_id','result_hash','decision','matter_id','decided_by','decision_key_hash','request_hash','writeback_job_id'];
-          const saved=Object.fromEntries(cols.map((c,i)=>[c,v[i]]));local.decisions.push(saved);return {rows:[saved]};
-        }
-        if(sql.startsWith('UPDATE public.inbound_events')){if(changeFails)return {rows:[]};local.event.status=v[2];return {rows:[{id:eventId,status:v[2]}]};}
-        return {rows:[]};
-      }});
-    Object.assign(state,local);if(unknownCommit)throw new Error('OUTBOX_DOMAIN_COMMIT_OUTCOME_UNKNOWN');return result;
-  }};
-  return {state,calls,auth,reviews:new PostgresReviewDecisions({domainOutbox:outbox,authorizeDecision:async c=>{auth.push(c);return authorizeDecision(c);}})};
-}
+
 
 test('V130 approval records the decision, moves the event to APPROVED and queues exactly one writeback',async()=>{
   const f=fixture(),r=await f.reviews.decide(approve);
   assert.equal(r.status,'DECIDED');assert.equal(r.replayed,false);assert.equal(r.matterId,matterId);assert.equal(r.resultJobId,resultJobId);
   assert.equal(f.state.event.status,'APPROVED');assert.equal(f.state.decisions.length,1);assert.equal(f.state.decisions[0].decided_by,userId);
   assert.deepEqual(f.state.intents,[{tenantId,jobId:writebackJobId(tenantId,eventId),kind:'PROCLAIM_WRITEBACK',objectId:eventId,traceId:'trace-v130',idempotencyKey:`review-writeback:${eventId}`}]);
-  assert.equal(f.auth.length,1);assert.equal(f.auth[0].operation,'REVIEW_DECISION');assert.equal(f.auth[0].resultHash,sha('result'));
+  assert.equal(f.auth.length,2);assert.deepEqual(f.auth.map(c=>c.phase),['ADMIT','COMMIT']);assert.equal(f.auth[0].operation,'REVIEW_DECISION');assert.equal(f.auth[0].resultHash,sha('result'));
 });
 test('V130 rejection records the decision and queues nothing',async()=>{
   const f=fixture(),r=await f.reviews.decide(reject);

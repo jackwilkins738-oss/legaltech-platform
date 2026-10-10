@@ -286,6 +286,11 @@
       "file": "057_durable_graph_inbox.sql",
       "sha256": "1cf91b9e45b3a1d964a0960df50a431af3d4853402e0f143be6cc022e714a022",
       "destructive": false
+    },
+    {
+      "file": "058_review_function_boundary.sql",
+      "sha256": "dc2f609c36da394f8852da76db28ea5f36638d12424f2b28949b3b99adf243b8",
+      "destructive": false
     }
   ]
 }
