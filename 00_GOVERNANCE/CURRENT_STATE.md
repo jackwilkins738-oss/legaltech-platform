@@ -4,6 +4,12 @@
 
 A partner-firm user reports (second hand, SINGLE USER REPORT) that handlers' tasks stall for hours waiting on supervisor approval by email. Desk research found that the SRA's June 2026 post-*Mazur* supervision guidance expects escalation routes, available supervisors and management information on case flow. That makes the hypothesis worth testing, not validated. It changes no wedge or priority. The partner is logging approvals for a week. See `01_RESEARCH_EVIDENCE/APPROVAL_WAIT_DESK_RESEARCH_2026-10.md` (actions A1–A8) and the raw note in `39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/`. V131 (durable writeback execution) is paused until that evidence is in.
 
+## V139 — Tenant-safe atomic key and credential metadata
+
+V139 removes a tenant/purpose key-identity collision, requires exact stored tenant/purpose bindings for decrypt eligibility, and rejects coerced generations and hidden/accessor mutation fields. Key and secret lifecycle transitions now commit reference metadata/events together with one validated clock observation. Clock/authorization recursion cannot commit a partially changed registry, even if the callback catches the nested error. Failed credential activation preserves the old active generation. See `40_PLATFORM_FOUNDATION_BUILD/docs/V139_KEY_CREDENTIAL_SAFETY_BATCH.md`.
+
+Local suites pass 2,860 platform and 140 scaffold tests, including 94 new regressions. PostgreSQL is skipped locally and PostgreSQL 17 CI must pass before merge. No migration/dependency is added. These remain process-local metadata reference registries; durable provider adapters, actual KMS rotation/retained-key recovery, provider revocation and backup/ciphertext evidence remain outstanding. D-018, the pre-TO/customer-data gates and V131 execution pause remain in force.
+
 ## V138 — Recovery artifact and historical evidence integrity
 
 V138 binds reference restore verification to an exact database/object inventory and actual byte checks, rejects forged or mismatched restore proofs, and matches the committed backup content hash. Complete tenant history now drives backup generation, authorization and replay controls beyond the 500-record display window. Each transition validates the full evidence chain and commits recovery/audit rows together. Explicit isolation and key/deletion/external-effect observations are required. A bounded local file checker and synthetic SQLite/document restore exercise are included. See `40_PLATFORM_FOUNDATION_BUILD/docs/V138_RECOVERY_EVIDENCE_BATCH.md`.

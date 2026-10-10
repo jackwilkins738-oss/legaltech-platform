@@ -413,3 +413,10 @@ Restore evidence now checks actual database/document bytes against a committed
 inventory, verifies complete history and rolls recovery/audit rows back together.
 See [V138 recovery evidence](docs/V138_RECOVERY_EVIDENCE_BATCH.md) for the bounded
 local checker, trusted-provider contract and outstanding managed-restore limits.
+
+### V139 key and credential lifecycle safeguards
+
+Tenant/purpose key identities cannot collide, lifecycle metadata/events change
+atomically, and clocks, authorization callbacks and mutation requests fail closed.
+See [V139 key/credential safety](docs/V139_KEY_CREDENTIAL_SAFETY_BATCH.md) for the
+reference boundary and outstanding durable KMS/provider work.
