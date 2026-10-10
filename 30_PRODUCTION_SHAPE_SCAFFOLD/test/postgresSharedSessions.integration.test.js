@@ -1,3 +1,4 @@
+import {fork} from 'node:child_process';
 import {createTenantScopedPostgresSupportGrantMutations} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportGrantMutations.js';
 import {createTenantScopedPostgresSupportGrantLookup} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportGrantLookup.js';
 import {ManagedReviewDocuments} from '../../40_PLATFORM_FOUNDATION_BUILD/src/managedReviewDocuments.js';
@@ -240,6 +241,63 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     const stored=await admin.query('SELECT count(*)::int AS n FROM public.support_access_revocations WHERE tenant_id=$1 AND request_id=$2',[tenantA,mixed.requestId]);
     assert.equal(stored.rows[0].n,1);
     await assert.rejects(first.approve({session:approver,requestId:mixed.requestId,traceId:'v156'}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+  });
+  await t.test('V158 independent processes observe committed revocation and restart denial',async t=>{
+    const expectedRole='legaltech_support_operator_ci';
+    const service=createTenantScopedPostgresSupportGrantMutations({pool:makePool(expectedRole),expectedRole,liveSession:{assertCurrent:async()=>true}});
+    const requester={tenantId:tenantA,actorId:actorA,sessionId:uuid()};
+    const approver={tenantId:tenantA,actorId:'11700000-0000-4000-8000-000000000013',sessionId:uuid()};
+    const matterId='11700000-0000-4000-8000-000000000031';
+    const request=await service.request({session:requester,matterId,scope:'DIAGNOSTIC_READ',ticketRefHash:'a'.repeat(64),purposeHash:'b'.repeat(64),traceId:'v158'});
+    await service.approve({session:approver,requestId:request.requestId,traceId:'v158'});
+    const input={tenantId:tenantA,actorId:actorA,requestId:request.requestId,matterId,scope:'DIAGNOSTIC_READ',documentRefHash:null};
+    const startReader=async()=>{
+      const child=fork(fileURLToPath(new URL('../test-support/supportReaderProcess.js',import.meta.url)),[],{
+        execArgv:[],stdio:['ignore','ignore','ignore','ipc'],
+        env:{PATH:process.env.PATH,LEGALTECH_RUN_POSTGRES_TESTS:'true',PGHOST:base.host,PGPORT:String(base.port),PGDATABASE:base.database,PGUSER:'legaltech_support_reader_ci',PGPASSWORD:password}
+      });
+      t.after(()=>{if(child.exitCode===null)child.kill();});
+      const response=()=>new Promise((resolve,reject)=>{
+        const timeout=setTimeout(()=>finish(Error('SUPPORT_CHILD_TIMEOUT')),5000);
+        const onMessage=value=>finish(null,value),onExit=()=>finish(Error('SUPPORT_CHILD_EXIT')),onError=()=>finish(Error('SUPPORT_CHILD_ERROR'));
+        function finish(error,value){clearTimeout(timeout);child.off('message',onMessage);child.off('exit',onExit);child.off('error',onError);error?reject(error):resolve(value);}
+        child.once('message',onMessage);child.once('exit',onExit);child.once('error',onError);
+      });
+      const ready=await response();assert.equal(ready.ready,true);assert.notEqual(ready.pid,process.pid);
+      return {pid:ready.pid,async read(value){const id=uuid(),pending=response();child.send({id,operation:'read',input:value});const result=await pending;assert.equal(result.id,id);assert.equal(result.pid,ready.pid);return result.allowed;},async close(){const exited=new Promise(resolve=>child.once('exit',resolve));child.send({operation:'close'});await exited;}};
+    };
+    const first=await startReader(),second=await startReader();assert.notEqual(first.pid,second.pid);
+    assert.equal(await first.read(input),true);assert.equal(await second.read(input),true);
+    assert.equal(await first.read({...input,tenantId:tenantB,actorId:actorB}),false);
+    assert.equal(await second.read({...input,scope:'MATTER_READ'}),false);
+    await service.revoke({session:approver,requestId:request.requestId,reasonHash:'c'.repeat(64),traceId:'v158'});
+    assert.equal(await first.read(input),false);assert.equal(await second.read(input),false);
+    await first.close();const restarted=await startReader();assert.notEqual(restarted.pid,first.pid);
+    assert.equal(await restarted.read(input),false);
+    const events=await admin.query('SELECT event_type FROM public.support_access_events WHERE tenant_id=$1 AND request_id=$2 ORDER BY id',[tenantA,request.requestId]);
+    assert.deepEqual(events.rows.map(row=>row.event_type),['REQUESTED','APPROVED','REVOKED']);
+    await second.close();await restarted.close();
+  });
+  await t.test('V158 final session denial rolls back support mutations and audit together',async()=>{
+    const expectedRole='legaltech_support_operator_ci',pool=makePool(expectedRole);
+    const requester={tenantId:tenantA,actorId:actorA,sessionId:uuid()};
+    const approver={tenantId:tenantA,actorId:'11700000-0000-4000-8000-000000000013',sessionId:uuid()};
+    const service=createTenantScopedPostgresSupportGrantMutations({pool,expectedRole,liveSession:{assertCurrent:async()=>true}});
+    const args={matterId:'11700000-0000-4000-8000-000000000031',scope:'MATTER_READ',ticketRefHash:'a'.repeat(64),purposeHash:'b'.repeat(64),traceId:'v158-rollback'};
+    for(const operation of ['request','approve','revoke']){
+      const request=operation==='request'?null:await service.request({session:requester,...args});
+      let checks=0;
+      const denying=createTenantScopedPostgresSupportGrantMutations({pool,expectedRole,liveSession:{assertCurrent:async()=>++checks===1}});
+      await assert.rejects(denying[operation]({session:operation==='request'?requester:approver,...args,requestId:request?.requestId,reasonHash:'c'.repeat(64)}),/DURABLE_SUPPORT_MUTATION_UNAVAILABLE/);
+      assert.equal(checks,2);
+      if(operation==='request'){
+        const rows=await admin.query('SELECT id FROM public.support_access_requests WHERE trace_id=$1',[args.traceId]);assert.equal(rows.rows.length,0);
+      }else{
+        const table=operation==='approve'?'support_access_approvals':'support_access_revocations';
+        const rows=await admin.query(`SELECT id FROM public.${table} WHERE tenant_id=$1 AND request_id=$2`,[tenantA,request.requestId]);assert.equal(rows.rows.length,0);
+        const events=await admin.query('SELECT event_type FROM public.support_access_events WHERE tenant_id=$1 AND request_id=$2',[tenantA,request.requestId]);assert.deepEqual(events.rows.map(row=>row.event_type),['REQUESTED']);
+      }
+    }
   });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
