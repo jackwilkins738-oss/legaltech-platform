@@ -113,6 +113,15 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       has_column_privilege('legaltech_support_reader','public.support_access_requests','tenant_id','SELECT') AS tenant_read,
       has_column_privilege('legaltech_support_reader','public.support_access_requests','ticket_ref_hash','SELECT') AS ticket_read`);
     assert.deepEqual(grants.rows[0],{request_write:false,approval_write:false,revoke_write:false,event_read:false,tenant_read:true,ticket_read:false});
+    const requestA=uuid(),requestB=uuid();
+    await admin.query(`INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,ticket_ref_hash,purpose_hash,trace_id,expires_at)
+      VALUES($1,$2,$3,$4,'MATTER_READ',$5,$6,'v152',statement_timestamp()+interval '10 minutes')`,
+      [requestA,tenantA,actorA,'11700000-0000-4000-8000-000000000031','a'.repeat(64),'b'.repeat(64)]);
+    await admin.query(`INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,ticket_ref_hash,purpose_hash,trace_id,expires_at)
+      VALUES($1,$2,$3,$4,'MATTER_READ',$5,$6,'v152',statement_timestamp()+interval '10 minutes')`,
+      [requestB,tenantB,actorB,'11700000-0000-4000-8000-000000000036','a'.repeat(64),'b'.repeat(64)]);
+    await admin.query(`INSERT INTO public.support_access_approvals(tenant_id,request_id,approver_id,trace_id) VALUES($1,$2,$3,'v152')`,
+      [tenantA,requestA,'11700000-0000-4000-8000-000000000013']);
     const readerLogin='legaltech_support_reader_ci';
     await admin.query(`CREATE ROLE ${readerLogin} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
     await admin.query(`GRANT legaltech_support_reader TO ${readerLogin}`);
@@ -123,6 +132,7 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
         for(const table of ['support_access_requests','support_access_approvals','support_access_revocations']){
           const result=await tx.query(`SELECT tenant_id FROM public.${table}`);
           assert.ok(result.rows.every(row=>row.tenant_id===scope.tenantId));
+          if(table==='support_access_requests')assert.deepEqual(result.rows.map(row=>row.tenant_id),[scope.tenantId]);
         }
       });
     }
