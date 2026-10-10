@@ -157,10 +157,10 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     const role=await admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='legaltech_support_operator'");
     assert.deepEqual(role.rows[0],{rolcanlogin:false,rolsuper:false,rolbypassrls:false});
     const rights=await admin.query(`SELECT
-      has_table_privilege('legaltech_support_operator','public.support_access_requests','INSERT') AS request_insert,
-      has_table_privilege('legaltech_support_operator','public.support_access_approvals','INSERT') AS approval_insert,
-      has_table_privilege('legaltech_support_operator','public.support_access_revocations','INSERT') AS revocation_insert,
-      has_table_privilege('legaltech_support_operator','public.support_access_events','INSERT') AS audit_insert,
+      has_column_privilege('legaltech_support_operator','public.support_access_requests','tenant_id','INSERT') AS request_insert,
+      has_column_privilege('legaltech_support_operator','public.support_access_approvals','tenant_id','INSERT') AS approval_insert,
+      has_column_privilege('legaltech_support_operator','public.support_access_revocations','tenant_id','INSERT') AS revocation_insert,
+      has_column_privilege('legaltech_support_operator','public.support_access_events','tenant_id','INSERT') AS audit_insert,
       has_table_privilege('legaltech_support_operator','public.support_access_events','SELECT') AS audit_read,
       has_table_privilege('legaltech_support_operator','public.support_access_requests','UPDATE,DELETE,TRUNCATE') AS request_mutation`);
     assert.deepEqual(rights.rows[0],{request_insert:true,approval_insert:true,revocation_insert:true,audit_insert:true,audit_read:false,request_mutation:false});
