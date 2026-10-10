@@ -9,6 +9,7 @@ on:
     - cron: '17 3 * * 1'
 
 permissions:
+  actions: read # Required to read workflow metadata when uploading private-repository results.
   contents: read
   security-events: write
 

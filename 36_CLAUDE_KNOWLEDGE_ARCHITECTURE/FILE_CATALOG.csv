@@ -22,7 +22,7 @@ path,domain,status,authority,type,bytes
 .github/dependabot.yml,github_governance,current,medium,yaml,480
 .github/pull_request_template.md,governance,current,high,md,589
 .github/workflows/ci.yml,governance,current,high,yml,3373
-.github/workflows/codeql.yml,github_governance,current,medium,yaml,709
+.github/workflows/codeql.yml,github_governance,current,medium,yaml,805
 .github/workflows/dependency-review.yml,github_governance,current,medium,yaml,439
 .github/workflows/security-regression.yml,other,reference,medium,yml,520
 .gitignore,governance,current,high,file,649
@@ -493,7 +493,7 @@ path,domain,status,authority,type,bytes
 30_PRODUCTION_SHAPE_SCAFFOLD/test/offboarding-export-v113.test.js,production_shape,reference,low,js,979
 30_PRODUCTION_SHAPE_SCAFFOLD/test/onboarding-readiness-v109.test.js,production_shape,reference,low,js,766
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresRuntimeV117.test.js,production_shape,reference,low,js,4603
-30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,75783
+30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresSharedSessions.integration.test.js,production_shape,reference,low,js,76121
 30_PRODUCTION_SHAPE_SCAFFOLD/test/postgresTransactionsV118.test.js,production_shape,reference,low,js,7779
 30_PRODUCTION_SHAPE_SCAFFOLD/test/secret-rotation-v111.test.js,production_shape,reference,low,js,1044
 30_PRODUCTION_SHAPE_SCAFFOLD/test/security-contract.test.js,engineering,reference,medium,js,228816
@@ -971,7 +971,7 @@ path,domain,status,authority,type,bytes
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V123.md,platform_build,current,medium,md,1158
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V124.md,platform_build,current,medium,md,1318
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V125.md,platform_build,current,medium,md,1240
-40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V126.md,platform_build,current,medium,md,1200
+40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V126.md,platform_build,current,medium,md,1507
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V29.md,engineering,current,high,md,687
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V30.md,engineering,current,high,md,575
 40_PLATFORM_FOUNDATION_BUILD/TEST_RESULTS_V31.md,engineering,current,medium,md,1385
