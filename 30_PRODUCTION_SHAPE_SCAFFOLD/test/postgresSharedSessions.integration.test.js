@@ -604,79 +604,6 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130 real Post
     await admin.query('ALTER TABLE public.domain_job_results DISABLE TRIGGER domain_result_binding');
     try{await assert.rejects(adopter.adopt({tenantId:tenantA,serviceActorId:serviceActor,jobId:adoptedInput.jobId}),/UNAVAILABLE/);}finally{await admin.query('ALTER TABLE public.domain_job_results ENABLE TRIGGER domain_result_binding');}
   });
-  // V130: the durable human review decision, through its own reviewer login. The
-  // reviewer holds the reviewer and outbox-writer groups only - never the result
-  // writer or command author - so the identity adopting a machine result is not
-  // the one approving it.
-  await admin.query(`CREATE ROLE legaltech_reviewer_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
-  await admin.query('GRANT USAGE ON SCHEMA public TO legaltech_reviewer_ci');
-  await admin.query('GRANT legaltech_outbox_writer,legaltech_domain_reviewer TO legaltech_reviewer_ci');
-  await admin.query('GRANT SELECT ON public.actors,public.tenants,public.inbound_events,public.matters TO legaltech_reviewer_ci');
-  await admin.query('GRANT SELECT ON public.matter_actor_access,public.matter_break_glass_grants,public.actor_security_zones TO legaltech_reviewer_ci');
-  const reviewerPool=makePool('legaltech_reviewer_ci',2);
-  const reviewerTransactions=new PostgresTenantTransactions({pool:reviewerPool,expectedRole:'legaltech_reviewer_ci'});
-  let decisionAllowed=true;
-  const reviews=new PostgresReviewDecisions({domainOutbox:new PostgresDomainOutbox({pool:reviewerPool,expectedRole:'legaltech_reviewer_ci',authorizeAppend:async()=>true}),authorizeDecision:async()=>decisionAllowed});
-  const adoptNew=async()=>{const input=await createInbound();assert.equal((await runInbound()).status,'SUCCEEDED');await adopter.adopt({tenantId:tenantA,serviceActorId:serviceActor,jobId:input.jobId});return input;};
-  const openMatter=async(tenant=tenantA)=>{const m=uuid();await admin.query('INSERT INTO public.matters(id,tenant_id,display_reference) VALUES($1,$2,$3)',[m,tenant,`v130-${m}`]);return m;};
-  const decisionFor=(eventId,over={})=>({tenantId:tenantA,actorId:actorA,eventId,decision:'APPROVE',decisionKey:`v130-${uuid()}`,traceId:'synthetic-v130',...over});
-  const eventStatus=async eventId=>(await admin.query('SELECT status FROM public.inbound_events WHERE id=$1',[eventId])).rows[0].status;
-  const decisionsFor=async eventId=>(await admin.query('SELECT * FROM public.domain_review_decisions WHERE event_id=$1',[eventId])).rows;
-  const writebacksFor=async eventId=>(await admin.query("SELECT job_id FROM public.domain_outbox_events WHERE kind='PROCLAIM_WRITEBACK' AND object_id=$1",[eventId])).rows;
-  await t.test('V130 approval atomically records the decision, the APPROVED transition and one writeback intent, and replays',async()=>{
-    const input=await adoptNew(),matterId=await openMatter(),request=decisionFor(input.eventId,{matterId});
-    const receipt=await reviews.decide(request);assert.equal(receipt.status,'DECIDED');assert.equal(receipt.replayed,false);assert.equal(receipt.resultJobId,input.jobId);
-    assert.equal(await eventStatus(input.eventId),'APPROVED');const rows=await decisionsFor(input.eventId);assert.equal(rows.length,1);assert.equal(rows[0].decided_by,actorA);assert.equal(rows[0].matter_id,matterId);
-    assert.deepEqual((await writebacksFor(input.eventId)).map(r=>r.job_id),[receipt.writebackJobId]);
-    const replay=await reviews.decide(request);assert.equal(replay.replayed,true);assert.equal((await decisionsFor(input.eventId)).length,1);assert.equal((await writebacksFor(input.eventId)).length,1);
-  });
-  await t.test('V130 rejection records the decision and the REJECTED transition with no writeback',async()=>{
-    const input=await adoptNew(),receipt=await reviews.decide(decisionFor(input.eventId,{decision:'REJECT'}));
-    assert.equal(receipt.writebackJobId,null);assert.equal(await eventStatus(input.eventId),'REJECTED');assert.equal((await writebacksFor(input.eventId)).length,0);
-  });
-  await t.test('V130 a second, different decision for a decided event is a conflict and changes nothing',async()=>{
-    const input=await adoptNew(),matterId=await openMatter(),request=decisionFor(input.eventId,{matterId});await reviews.decide(request);
-    await assert.rejects(reviews.decide(decisionFor(input.eventId,{decision:'REJECT'})),/REVIEW_DECISION_CONFLICT/);
-    await assert.rejects(reviews.decide({...request,matterId:await openMatter()}),/REVIEW_DECISION_CONFLICT/);
-    assert.equal(await eventStatus(input.eventId),'APPROVED');assert.equal((await decisionsFor(input.eventId)).length,1);assert.equal((await writebacksFor(input.eventId)).length,1);
-  });
-  await t.test('V130 unadopted events, closed or cross-tenant matters, service identities and withdrawn authority are denied',async()=>{
-    const unadopted=await createInbound();await assert.rejects(reviews.decide(decisionFor(unadopted.eventId,{matterId:await openMatter()})),/FORBIDDEN/);
-    assert.equal(await eventStatus(unadopted.eventId),'RECEIVED');assert.equal((await runInbound()).status,'SUCCEEDED');
-    const input=await adoptNew(),closed=await openMatter();await admin.query("UPDATE public.matters SET status='CLOSED' WHERE id=$1",[closed]);
-    for(const [request,setup] of [[decisionFor(input.eventId,{matterId:closed}),null],[decisionFor(input.eventId,{matterId:await openMatter(tenantB)}),null],
-      [decisionFor(input.eventId,{actorId:serviceActor,matterId:await openMatter()}),null],[decisionFor(input.eventId,{matterId:await openMatter()}),'deny']]){
-      if(setup==='deny')decisionAllowed=false;
-      try{await assert.rejects(reviews.decide(request),/FORBIDDEN/);}finally{decisionAllowed=true;}
-    }
-    assert.equal(await eventStatus(input.eventId),'PROCESSED');assert.equal((await decisionsFor(input.eventId)).length,0);assert.equal((await writebacksFor(input.eventId)).length,0);
-  });
-  await t.test('V130 direct SQL cannot record a decision without its transition, transition without a decision, or bind a forged result',async()=>{
-    const input=await adoptNew(),result=(await admin.query('SELECT * FROM public.domain_job_results WHERE job_id=$1',[input.jobId])).rows[0];
-    const insert=(tx,over={})=>{const row={tenant_id:tenantA,event_id:input.eventId,result_job_id:input.jobId,result_hash:result.result_hash,decision:'REJECT',matter_id:null,decided_by:actorA,decision_key_hash:'d'.repeat(64),request_hash:'e'.repeat(64),writeback_job_id:null,...over};
-      return tx.query(`INSERT INTO public.domain_review_decisions(tenant_id,event_id,result_job_id,result_hash,decision,matter_id,decided_by,decision_key_hash,request_hash,writeback_job_id)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,Object.values(row));};
-    await assert.rejects(reviewerTransactions.run({tenantId:tenantA,actorId:actorA},tx=>insert(tx)),/UNAVAILABLE|OUTCOME_UNKNOWN/);
-    await assert.rejects(reviewerTransactions.run({tenantId:tenantA,actorId:actorA},tx=>tx.query("UPDATE public.inbound_events SET status='REJECTED' WHERE id=$1",[input.eventId])),/UNAVAILABLE/);
-    await assert.rejects(reviewerTransactions.run({tenantId:tenantA,actorId:actorA},async tx=>{await insert(tx,{result_hash:'c'.repeat(64)});await tx.query("UPDATE public.inbound_events SET status='REJECTED' WHERE id=$1",[input.eventId]);}),/UNAVAILABLE|OUTCOME_UNKNOWN/);
-    await assert.rejects(reviewerTransactions.run({tenantId:tenantA,actorId:actorA},async tx=>{await insert(tx,{decided_by:serviceActor});await tx.query("UPDATE public.inbound_events SET status='REJECTED' WHERE id=$1",[input.eventId]);}),/UNAVAILABLE|OUTCOME_UNKNOWN/);
-    assert.equal(await eventStatus(input.eventId),'PROCESSED');assert.equal((await decisionsFor(input.eventId)).length,0);
-  });
-  await t.test('V130 append-only grants, tenant RLS and separation of duties hold for every other principal',async()=>{
-    assert.equal((await reviewerTransactions.run({tenantId:tenantB,actorId:actorB},tx=>tx.query('SELECT * FROM public.domain_review_decisions'))).rows.length,0);
-    for(const sql of ['UPDATE public.domain_review_decisions SET decision=decision','DELETE FROM public.domain_review_decisions','TRUNCATE public.domain_review_decisions'])assert.equal(await reviewerPool.query(sql).then(()=>false,e=>e.code==='42501'),true);
-    for(const pool of [runtime,queueWorkerPool,queueReaderPool,relayPool,domainReaderPool])assert.equal(await pool.query('SELECT * FROM public.domain_review_decisions').then(()=>false,e=>e.code==='42501'),true);
-    const input=await adoptNew(),matterId=await openMatter();
-    await admin.query('GRANT legaltech_domain_result_writer TO legaltech_reviewer_ci');
-    try{await assert.rejects(reviews.decide(decisionFor(input.eventId,{matterId})),/REVIEW_DECISION_UNAVAILABLE/);}finally{await admin.query('REVOKE legaltech_domain_result_writer FROM legaltech_reviewer_ci');}
-    assert.equal(await eventStatus(input.eventId),'PROCESSED');
-  });
-  await t.test('V130 a disabled decision trigger fails closed before any decision',async()=>{
-    const input=await adoptNew(),matterId=await openMatter();
-    await admin.query('ALTER TABLE public.domain_review_decisions DISABLE TRIGGER domain_review_decision_binding');
-    try{await assert.rejects(reviews.decide(decisionFor(input.eventId,{matterId})),/REVIEW_DECISION_UNAVAILABLE/);}finally{await admin.query('ALTER TABLE public.domain_review_decisions ENABLE TRIGGER domain_review_decision_binding');}
-    assert.equal((await decisionsFor(input.eventId)).length,0);
-  });
   // SDK/version manifest below are sealed synthetic fixtures, not live cloud SDKs.
   const manifests=new Map();let evidenceAllowed=true,canaryAllowed=true;
   const {loadPayload:unusedPayload,loadPolicy:unusedPolicy,...managedWorker}=workerOptions;
@@ -1023,5 +950,86 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130 real Post
       assert.equal(result.commandId,receipt.commandId);assert.equal(result.resultCode,'CLASSIFIED');
       stopped=await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});assert.equal(stopped.drained,true);assert.equal((await durable.status(scope)).state,'DRAINED');assert.equal((await durable.status(scope)).inFlight,0);
     }finally{sourceHealthy=true;if(!stopped?.drained){await root.stop({actorId:'synthetic-operator',reasonHash:reason,timeoutMs:5000});root.server.closeAllConnections();}}
+  });
+  // V130 runs last: its approvals queue PROCLAIM_WRITEBACK work that nothing in this
+  // suite executes yet (V131), so it must not precede the service drain cases.
+  // V130: the durable human review decision, through its own reviewer login. The
+  // reviewer holds the reviewer and outbox-writer groups only - never the result
+  // writer or command author - so the identity adopting a machine result is not
+  // the one approving it.
+  await admin.query(`CREATE ROLE legaltech_reviewer_ci LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+  await admin.query('GRANT USAGE ON SCHEMA public TO legaltech_reviewer_ci');
+  await admin.query('GRANT legaltech_outbox_writer,legaltech_domain_reviewer TO legaltech_reviewer_ci');
+  await admin.query('GRANT SELECT ON public.actors,public.tenants,public.inbound_events,public.matters TO legaltech_reviewer_ci');
+  await admin.query('GRANT SELECT ON public.matter_actor_access,public.matter_break_glass_grants,public.actor_security_zones TO legaltech_reviewer_ci');
+  const reviewerPool=makePool('legaltech_reviewer_ci',2);
+  const reviewerTransactions=new PostgresTenantTransactions({pool:reviewerPool,expectedRole:'legaltech_reviewer_ci'});
+  let decisionAllowed=true;
+  const reviews=new PostgresReviewDecisions({domainOutbox:new PostgresDomainOutbox({pool:reviewerPool,expectedRole:'legaltech_reviewer_ci',authorizeAppend:async()=>true}),authorizeDecision:async()=>decisionAllowed});
+  // The queue hands out the oldest due job, so process until THIS job has its result,
+  // recording every attempt so a CI failure names the worker's actual error code.
+  const processOwn=async jobId=>{const seen=[];
+    for(let i=0;i<20;i++){if(await queueReader.getResult({tenantId:tenantA,jobId}))return;const r=await runInbound();
+      seen.push(r?{status:r.status,errorCode:r.errorCode??null,own:r.jobId===jobId}:null);if(!r||r.status!=='SUCCEEDED')await new Promise(res=>setTimeout(res,100));}
+    assert.fail(`V130 fixture job was not processed: ${JSON.stringify(seen)}`);};
+  const adoptNew=async()=>{const input=await createInbound();await processOwn(input.jobId);const adopted=await adopter.adopt({tenantId:tenantA,serviceActorId:serviceActor,jobId:input.jobId});assert.equal(adopted.status,'APPLIED');return input;};
+  const openMatter=async(tenant=tenantA)=>{const m=uuid();await admin.query('INSERT INTO public.matters(id,tenant_id,display_reference) VALUES($1,$2,$3)',[m,tenant,`v130-${m}`]);return m;};
+  const decisionFor=(eventId,over={})=>({tenantId:tenantA,actorId:actorA,eventId,decision:'APPROVE',decisionKey:`v130-${uuid()}`,traceId:'synthetic-v130',...over});
+  const eventStatus=async eventId=>(await admin.query('SELECT status FROM public.inbound_events WHERE id=$1',[eventId])).rows[0].status;
+  const decisionsFor=async eventId=>(await admin.query('SELECT * FROM public.domain_review_decisions WHERE event_id=$1',[eventId])).rows;
+  const writebacksFor=async eventId=>(await admin.query("SELECT job_id FROM public.domain_outbox_events WHERE kind='PROCLAIM_WRITEBACK' AND object_id=$1",[eventId])).rows;
+  await t.test('V130 approval atomically records the decision, the APPROVED transition and one writeback intent, and replays',async()=>{
+    const input=await adoptNew(),matterId=await openMatter(),request=decisionFor(input.eventId,{matterId});
+    const receipt=await reviews.decide(request);assert.equal(receipt.status,'DECIDED');assert.equal(receipt.replayed,false);assert.equal(receipt.resultJobId,input.jobId);
+    assert.equal(await eventStatus(input.eventId),'APPROVED');const rows=await decisionsFor(input.eventId);assert.equal(rows.length,1);assert.equal(rows[0].decided_by,actorA);assert.equal(rows[0].matter_id,matterId);
+    assert.deepEqual((await writebacksFor(input.eventId)).map(r=>r.job_id),[receipt.writebackJobId]);
+    const replay=await reviews.decide(request);assert.equal(replay.replayed,true);assert.equal((await decisionsFor(input.eventId)).length,1);assert.equal((await writebacksFor(input.eventId)).length,1);
+  });
+  await t.test('V130 rejection records the decision and the REJECTED transition with no writeback',async()=>{
+    const input=await adoptNew(),receipt=await reviews.decide(decisionFor(input.eventId,{decision:'REJECT'}));
+    assert.equal(receipt.writebackJobId,null);assert.equal(await eventStatus(input.eventId),'REJECTED');assert.equal((await writebacksFor(input.eventId)).length,0);
+  });
+  await t.test('V130 a second, different decision for a decided event is a conflict and changes nothing',async()=>{
+    const input=await adoptNew(),matterId=await openMatter(),request=decisionFor(input.eventId,{matterId});await reviews.decide(request);
+    await assert.rejects(reviews.decide(decisionFor(input.eventId,{decision:'REJECT'})),/REVIEW_DECISION_CONFLICT/);
+    await assert.rejects(reviews.decide({...request,matterId:await openMatter()}),/REVIEW_DECISION_CONFLICT/);
+    assert.equal(await eventStatus(input.eventId),'APPROVED');assert.equal((await decisionsFor(input.eventId)).length,1);assert.equal((await writebacksFor(input.eventId)).length,1);
+  });
+  await t.test('V130 unadopted events, closed or cross-tenant matters, service identities and withdrawn authority are denied',async()=>{
+    const unadopted=await createInbound();await assert.rejects(reviews.decide(decisionFor(unadopted.eventId,{matterId:await openMatter()})),/FORBIDDEN/);
+    assert.equal(await eventStatus(unadopted.eventId),'RECEIVED');await processOwn(unadopted.jobId);
+    const input=await adoptNew(),closed=await openMatter();await admin.query("UPDATE public.matters SET status='CLOSED' WHERE id=$1",[closed]);
+    for(const [request,setup] of [[decisionFor(input.eventId,{matterId:closed}),null],[decisionFor(input.eventId,{matterId:await openMatter(tenantB)}),null],
+      [decisionFor(input.eventId,{actorId:serviceActor,matterId:await openMatter()}),null],[decisionFor(input.eventId,{matterId:await openMatter()}),'deny']]){
+      if(setup==='deny')decisionAllowed=false;
+      try{await assert.rejects(reviews.decide(request),/FORBIDDEN/);}finally{decisionAllowed=true;}
+    }
+    assert.equal(await eventStatus(input.eventId),'PROCESSED');assert.equal((await decisionsFor(input.eventId)).length,0);assert.equal((await writebacksFor(input.eventId)).length,0);
+  });
+  await t.test('V130 direct SQL cannot record a decision without its transition, transition without a decision, or bind a forged result',async()=>{
+    const input=await adoptNew(),result=(await admin.query('SELECT * FROM public.domain_job_results WHERE job_id=$1',[input.jobId])).rows[0];
+    const insert=(tx,over={})=>{const row={tenant_id:tenantA,event_id:input.eventId,result_job_id:input.jobId,result_hash:result.result_hash,decision:'REJECT',matter_id:null,decided_by:actorA,decision_key_hash:'d'.repeat(64),request_hash:'e'.repeat(64),writeback_job_id:null,...over};
+      return tx.query(`INSERT INTO public.domain_review_decisions(tenant_id,event_id,result_job_id,result_hash,decision,matter_id,decided_by,decision_key_hash,request_hash,writeback_job_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,Object.values(row));};
+    await assert.rejects(reviewerTransactions.run({tenantId:tenantA,actorId:actorA},tx=>insert(tx)),/UNAVAILABLE|OUTCOME_UNKNOWN/);
+    await assert.rejects(reviewerTransactions.run({tenantId:tenantA,actorId:actorA},tx=>tx.query("UPDATE public.inbound_events SET status='REJECTED' WHERE id=$1",[input.eventId])),/UNAVAILABLE/);
+    await assert.rejects(reviewerTransactions.run({tenantId:tenantA,actorId:actorA},async tx=>{await insert(tx,{result_hash:'c'.repeat(64)});await tx.query("UPDATE public.inbound_events SET status='REJECTED' WHERE id=$1",[input.eventId]);}),/UNAVAILABLE|OUTCOME_UNKNOWN/);
+    await assert.rejects(reviewerTransactions.run({tenantId:tenantA,actorId:actorA},async tx=>{await insert(tx,{decided_by:serviceActor});await tx.query("UPDATE public.inbound_events SET status='REJECTED' WHERE id=$1",[input.eventId]);}),/UNAVAILABLE|OUTCOME_UNKNOWN/);
+    assert.equal(await eventStatus(input.eventId),'PROCESSED');assert.equal((await decisionsFor(input.eventId)).length,0);
+  });
+  await t.test('V130 append-only grants, tenant RLS and separation of duties hold for every other principal',async()=>{
+    assert.equal((await reviewerTransactions.run({tenantId:tenantB,actorId:actorB},tx=>tx.query('SELECT * FROM public.domain_review_decisions'))).rows.length,0);
+    for(const sql of ['UPDATE public.domain_review_decisions SET decision=decision','DELETE FROM public.domain_review_decisions','TRUNCATE public.domain_review_decisions'])assert.equal(await reviewerPool.query(sql).then(()=>false,e=>e.code==='42501'),true);
+    for(const pool of [runtime,queueWorkerPool,queueReaderPool,relayPool,domainReaderPool])assert.equal(await pool.query('SELECT * FROM public.domain_review_decisions').then(()=>false,e=>e.code==='42501'),true);
+    const input=await adoptNew(),matterId=await openMatter();
+    await admin.query('GRANT legaltech_domain_result_writer TO legaltech_reviewer_ci');
+    try{await assert.rejects(reviews.decide(decisionFor(input.eventId,{matterId})),/REVIEW_DECISION_UNAVAILABLE/);}finally{await admin.query('REVOKE legaltech_domain_result_writer FROM legaltech_reviewer_ci');}
+    assert.equal(await eventStatus(input.eventId),'PROCESSED');
+  });
+  await t.test('V130 a disabled decision trigger fails closed before any decision',async()=>{
+    const input=await adoptNew(),matterId=await openMatter();
+    await admin.query('ALTER TABLE public.domain_review_decisions DISABLE TRIGGER domain_review_decision_binding');
+    try{await assert.rejects(reviews.decide(decisionFor(input.eventId,{matterId})),/REVIEW_DECISION_UNAVAILABLE/);}finally{await admin.query('ALTER TABLE public.domain_review_decisions ENABLE TRIGGER domain_review_decision_binding');}
+    assert.equal((await decisionsFor(input.eventId)).length,0);
   });
 });
