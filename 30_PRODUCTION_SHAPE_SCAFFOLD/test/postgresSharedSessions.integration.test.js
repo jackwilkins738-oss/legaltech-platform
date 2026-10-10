@@ -101,6 +101,38 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
     assert.equal(await brokerOne.query('SELECT * FROM public.matters').then(()=>false,error=>error.code==='42501'),true);
   });
+  await t.test('V152 support reader is SELECT-only and tenant RLS isolated',async()=>{
+    const role=await admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname='legaltech_support_reader'");
+    assert.equal(role.rows.length,1);
+    assert.deepEqual(role.rows[0],{rolcanlogin:false,rolsuper:false,rolbypassrls:false,rolcreatedb:false,rolcreaterole:false});
+    const grants=await admin.query(`SELECT
+      has_table_privilege('legaltech_support_reader','public.support_access_requests','INSERT,UPDATE,DELETE,TRUNCATE') AS request_write,
+      has_table_privilege('legaltech_support_reader','public.support_access_approvals','INSERT,UPDATE,DELETE,TRUNCATE') AS approval_write,
+      has_table_privilege('legaltech_support_reader','public.support_access_revocations','INSERT,UPDATE,DELETE,TRUNCATE') AS revoke_write,
+      has_table_privilege('legaltech_support_reader','public.support_access_events','SELECT') AS event_read,
+      has_column_privilege('legaltech_support_reader','public.support_access_requests','tenant_id','SELECT') AS tenant_read,
+      has_column_privilege('legaltech_support_reader','public.support_access_requests','ticket_ref_hash','SELECT') AS ticket_read`);
+    assert.deepEqual(grants.rows[0],{request_write:false,approval_write:false,revoke_write:false,event_read:false,tenant_read:true,ticket_read:false});
+    const readerLogin='legaltech_support_reader_ci';
+    await admin.query(`CREATE ROLE ${readerLogin} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+    await admin.query(`GRANT legaltech_support_reader TO ${readerLogin}`);
+    const readerPool=makePool(readerLogin);
+    const reader=new PostgresTenantTransactions({pool:readerPool,expectedRole:readerLogin});
+    for(const scope of [{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}]){
+      await reader.run({...scope,readOnly:true},async tx=>{
+        for(const table of ['support_access_requests','support_access_approvals','support_access_revocations']){
+          const result=await tx.query(`SELECT tenant_id FROM public.${table}`);
+          assert.ok(result.rows.every(row=>row.tenant_id===scope.tenantId));
+        }
+      });
+    }
+    await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA},async tx=>
+      tx.query('INSERT INTO public.support_access_requests(tenant_id) VALUES($1)',[tenantA])),/UNAVAILABLE/);
+    await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA,readOnly:true},async tx=>
+      tx.query('SELECT ticket_ref_hash FROM public.support_access_requests')),/UNAVAILABLE/);
+    await assert.rejects(reader.run({tenantId:tenantA,actorId:actorA,readOnly:true},async tx=>
+      tx.query('SELECT * FROM public.support_access_events')),/UNAVAILABLE/);
+  });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
     const results=await Promise.all(Array.from({length:12},(_,i)=>transactions.run(scopes[i%2],async tx=>{
