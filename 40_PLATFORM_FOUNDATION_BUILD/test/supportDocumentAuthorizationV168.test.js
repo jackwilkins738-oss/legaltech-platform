@@ -83,3 +83,35 @@ test('V170 existing document callback cannot mutate caller input to change autho
   assert.equal(await authorizer(original),true);
   assert.equal(seen.tenantId,tenantId);
 });
+
+test('V171 document-to-matter mapping changed while provider awaited fails closed',async()=>{
+  let changed=false,reads=0,resolutions=0;
+  const authorizer=createSupportDocumentAuthorization({
+    authorizeDocument:async()=>{changed=true;return true;},
+    resolveBinding:async()=>{resolutions++;return {...binding(),matterId:changed?'11700000-0000-4000-8000-000000000032':matterId};},
+    readCurrentGrant:async()=>{reads++;return {active:true};}
+  });
+  await assert.rejects(authorizer(input('RELEASE')),/SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE/);
+  assert.equal(resolutions,2);
+  assert.equal(reads,1,'must never query original grant a second time after changed binding');
+});
+test('V171 stable trusted event binding is checked twice before authorization succeeds',async()=>{
+  let resolutions=0,reads=0;
+  const authorizer=createSupportDocumentAuthorization({
+    authorizeDocument:async()=>true,
+    resolveBinding:async()=>{resolutions++;return binding();},
+    readCurrentGrant:async()=>{reads++;return {active:true};}
+  });
+  assert.equal(await authorizer(input('RELEASE')),true);
+  assert.equal(resolutions,2);
+  assert.equal(reads,2);
+});
+test('V171 unexpected binding accessor is rejected after permission await',async()=>{
+  let resolutions=0;
+  const authorizer=createSupportDocumentAuthorization({
+    authorizeDocument:async()=>true,
+    resolveBinding:async()=>{resolutions++;const result=binding();if(resolutions===2)Object.defineProperty(result,'requestId',{enumerable:true,get(){throw new Error('getter called');}});return result;},
+    readCurrentGrant:async()=>({active:true})
+  });
+  await assert.rejects(authorizer(input('RELEASE')),/SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE/);
+});
