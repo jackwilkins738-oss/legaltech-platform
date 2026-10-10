@@ -4,6 +4,12 @@
 
 A partner-firm user reports (second hand, SINGLE USER REPORT) that handlers' tasks stall for hours waiting on supervisor approval by email. Desk research found that the SRA's June 2026 post-*Mazur* supervision guidance expects escalation routes, available supervisors and management information on case flow. That makes the hypothesis worth testing, not validated. It changes no wedge or priority. The partner is logging approvals for a week. See `01_RESEARCH_EVIDENCE/APPROVAL_WAIT_DESK_RESEARCH_2026-10.md` (actions A1–A8) and the raw note in `39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/`. V131 (durable writeback execution) is paused until that evidence is in.
 
+## V135 — Authenticated browser review interface
+
+V135 groups the opt-in verified-server-session review page, protected local assets, strict CSP/origin admission, fresh adopted detail pins, explicit source-review acknowledgement and manual identical-key decision retry. The interface uses the existing V133/V134 read/decision providers and eleven-pool root; no migration, dependency, external executor or identity provider is introduced. See `40_PLATFORM_FOUNDATION_BUILD/docs/V135_AUTHENTICATED_REVIEW_INTERFACE.md`.
+
+Local suites pass 2,562 platform and 140 scaffold tests, including 46 new browser/client/HTTP regressions. All 141 PostgreSQL 17 CI tests are required before merge; native PostgreSQL is unavailable locally. The connected PostgreSQL case now runs the actual browser client through adopted result selection, rejection, lost acknowledgement, immutable retry and shutdown. Authenticated document viewing, live session/permission/audit providers, browser accessibility/compatibility and operating/release evidence remain outstanding. V131 execution stays paused pending partner evidence; D-018, the pre-TO freeze and customer-data gate remain in force.
+
 ## V134 — Authorized durable review browsing
 
 V134 groups the review read path: separate metadata-column-only PostgreSQL credentials, current human/object authorization, exact adopted result and decision bindings, encrypted caller/filter-bound keyset cursors, list/detail HTTP routes and production readiness/drain/shutdown wiring. Migration 059 supplies read-only tenant policies without outbox/decision/result writes. Prepared audit is followed by final authority and identity checks; transaction timeout retains actual callback and late-connection ownership. The connected root now supports eleven pools for review reads and decisions (fourteen with Graph). See `40_PLATFORM_FOUNDATION_BUILD/docs/V134_PRODUCTION_REVIEW_BROWSING.md`.
