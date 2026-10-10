@@ -1,3 +1,4 @@
+import {pinSupportSession} from './supportAuthorityInput.js';
 // V146 reference: fail-closed tenant-bound read of durable support grant rows.
 // readCurrent must use a tenant-scoped RLS-enforced PostgreSQL transaction.
 // This module never caches authority.
@@ -14,8 +15,8 @@ export class DurableSupportGrantReader{
     this.#readCurrent=readCurrent;this.#session=liveSession;this.#timeoutMs=timeoutMs;this.#maxConcurrent=maxConcurrent;
   }
   async assertCurrent(session,{requestId,matterId,scope,documentRefHash=null,signal}={}){
-    if(!plain(session)||!['tenantId','actorId','sessionId'].every(k=>own(session,k)&&uuid(session[k]))||
-      !uuid(requestId)||!uuid(matterId)||!SCOPES.has(scope)||
+    session=pinSupportSession(session,denied);
+    if(!uuid(requestId)||!uuid(matterId)||!SCOPES.has(scope)||
       (scope==='DOCUMENT_READ'?!/^[a-f0-9]{64}$/.test(documentRefHash??''):documentRefHash!==null)||signal?.aborted)throw denied();
     try{
       if(await this.#session.assertCurrent(session,{signal})!==true)throw denied();

@@ -1,5 +1,11 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V157 — Immutable support authorization identity
+
+The live-session boundary, durable grant reader, PostgreSQL lookup and request/approve/revoke adapters now copy validated identity fields before asynchronous work. Caller mutation cannot change the tenant, actor, session or grant binding after admission. Identity accessors, inherited fields and hidden fields are rejected without evaluating getters. Session callbacks receive a frozen minimal identity record. This fixes a mutable-input boundary defect; it introduces no workflow, database privilege or migration.
+
+V156 / PR #78 merged after all four workflows passed, including PostgreSQL 17 integration. V157 adds 28 synthetic identity and input regressions. Final handoff revocation fencing, separate-process verification, consumer adoption, audit reconciliation and operational evidence remain outstanding. D-018, pre-TO/customer-data restrictions and the V131 writeback execution pause remain unchanged. This is not production-readiness evidence.
+
 ## Open research item — supervisor approval wait (2026-10-10)
 
 A partner-firm user reports (second hand, SINGLE USER REPORT) that handlers' tasks stall for hours waiting on supervisor approval by email. Desk research found that the SRA's June 2026 post-*Mazur* supervision guidance expects escalation routes, available supervisors and management information on case flow. That makes the hypothesis worth testing, not validated. It changes no wedge or priority. The partner is logging approvals for a week. See `01_RESEARCH_EVIDENCE/APPROVAL_WAIT_DESK_RESEARCH_2026-10.md` (actions A1–A8) and the raw note in `39_POST_TO_EVIDENCE/00_RAW_IMMUTABLE/`. V131 (durable writeback execution) is paused until that evidence is in.

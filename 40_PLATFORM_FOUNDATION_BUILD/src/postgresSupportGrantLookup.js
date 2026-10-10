@@ -1,3 +1,4 @@
+import {pinSupportFields} from './supportAuthorityInput.js';
 import {PostgresTenantTransactions} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 // V149 database lookup adapter for V146 reader.
 // transact MUST supply a tenant-scoped read-only PostgreSQL transaction using
@@ -26,6 +27,7 @@ export function createPostgresSupportGrantLookup({transact}={}){
   if(typeof transact!=='function')throw new Error('DURABLE_SUPPORT_GRANT_CONFIGURATION_INVALID');
   return async function readCurrent(input){
     try{
+      input=pinSupportFields(input,['tenantId','actorId','requestId','matterId','scope','documentRefHash'],['signal'],denied);
       if(!input||Object.getPrototypeOf(input)!==Object.prototype||
         !['tenantId','actorId','requestId','matterId'].every(k=>typeof input[k]==='string'&&UUID.test(input[k]))||
         !SCOPES.has(input.scope)||input.signal?.aborted||

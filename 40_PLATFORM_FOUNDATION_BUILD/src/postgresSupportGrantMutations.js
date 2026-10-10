@@ -1,3 +1,4 @@
+import {pinSupportSession} from './supportAuthorityInput.js';
 import {PostgresTenantTransactions} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 import crypto from 'node:crypto';
 // V153 reference durable mutation adapter. transact MUST be a trusted,
@@ -17,6 +18,7 @@ export class PostgresSupportGrantMutations {
     this.#transact=transact;this.#live=liveSession;
   }
   async request({session,matterId,scope,documentRefHash=null,ticketRefHash,purposeHash,traceId}={}){
+    session=pinSupportSession(session,denied);
     base(session,traceId);
     if(!uuid(matterId)||!SCOPES.has(scope)||!/^([a-f0-9]{64})$/.test(ticketRefHash??'')||
       !/^([a-f0-9]{64})$/.test(purposeHash??'')||
@@ -41,6 +43,7 @@ export class PostgresSupportGrantMutations {
     }catch{throw denied();}
   }
   async approve({session,requestId,traceId}={}){
+    session=pinSupportSession(session,denied);
     base(session,traceId);if(!uuid(requestId))throw denied();
     try{
       await live(this.#live,session);
@@ -65,6 +68,7 @@ export class PostgresSupportGrantMutations {
     }catch{throw denied();}
   }
   async revoke({session,requestId,reasonHash,traceId}={}){
+    session=pinSupportSession(session,denied);
     base(session,traceId);if(!uuid(requestId)||!/^([a-f0-9]{64})$/.test(reasonHash??''))throw denied();
     try{
       await live(this.#live,session);
