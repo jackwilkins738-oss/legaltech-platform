@@ -148,3 +148,30 @@ test('V185 server-side socket failure during held transfer cannot commit documen
   assert.match(error?.message??'',/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
   assert.equal(committed,false);
 });
+
+test('V186 response error during held fence is rejected',async t=>{
+  let entered,release,complete,serverResponse;
+  const started=new Promise(resolve=>entered=resolve);
+  const held=new Promise(resolve=>release=resolve);
+  const completed=new Promise(resolve=>complete=resolve);
+  let committed=false;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{entered();await held;await work();committed=true;}
+  });
+  const {instance,port}=await server((_,res)=>{
+    serverResponse=res;
+    gate(ctx,document(),res).then(()=>complete(null),complete);
+  });
+  t.after(()=>instance.close());
+  const request=http.get({hostname:'127.0.0.1',port,path:'/'},res=>res.resume());
+  request.on('error',()=>{});
+  await started;
+  serverResponse.emit('error',Error('transport error'));
+  release();
+  const error=await completed;
+  assert.match(error?.message??'',/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+  assert.equal(serverResponse.headersSent,false);
+  request.destroy();
+});
