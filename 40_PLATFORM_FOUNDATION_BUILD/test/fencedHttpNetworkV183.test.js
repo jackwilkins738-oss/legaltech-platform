@@ -339,3 +339,24 @@ test('V193 response ending while binding is pending cannot deliver or commit',as
   assert.equal(response.listenerCount('error'),0);
   assert.equal(socket.listenerCount('error'),0);
 });
+
+test('V194 incomplete finish state never commits document delivery',async()=>{
+  for(const missing of ['headersSent','writableEnded']){
+    const socket=new EventEmitter();
+    socket.destroyed=false;
+    const response=new EventEmitter();
+    Object.assign(response,{socket,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+    response.writeHead=()=>{response.headersSent=true;};
+    response.end=()=>{response.writableEnded=true;response.writableFinished=true;response[missing]=false;response.emit('finish');};
+    response.destroy=()=>{response.destroyed=true;};
+    let committed=false;
+    const gate=createFencedHttpDocumentResponder({
+      resolveBinding:async()=>binding(),
+      transferFence:async(_,work)=>{await work();committed=true;}
+    });
+    await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+    assert.equal(committed,false);
+    assert.equal(response.listenerCount('error'),0);
+    assert.equal(socket.listenerCount('error'),0);
+  }
+});
