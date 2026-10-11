@@ -30,10 +30,12 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
         if(closed||transportFailed||socket?.destroyed||response.destroyed||response.headersSent)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
         const bytes=verified.bytes;
         if(!Buffer.isBuffer(bytes)||bytes.length!==verified.size)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
+        let failCompletion;
         const done=new Promise((resolve,reject)=>{
           const finish=()=>{cleanup();resolve();};
           const close=()=>{cleanup();reject(Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE'));};
           const failure=()=>{cleanup();reject(Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE'));};
+          failCompletion=failure;
           const cleanup=()=>{
             response.removeListener('finish',finish);
             response.removeListener('close',close);
@@ -46,11 +48,10 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
         try{
           response.writeHead(200,{'content-type':verified.contentType,'content-length':verified.size,'cache-control':'no-store','x-content-type-options':'nosniff'});
           response.end(bytes);
-        }catch(error){
-          // Release completion listeners when synchronous response APIs throw.
-          response.emit('error',error);
-          await done;
-          throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
+        }catch{
+          // Settle the completion promise directly: emitting a synthetic error
+          // can invoke unrelated response listeners and obscure the failure.
+          failCompletion();
         }
         await done;
         if(closed||transportFailed||!response.writableFinished)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
