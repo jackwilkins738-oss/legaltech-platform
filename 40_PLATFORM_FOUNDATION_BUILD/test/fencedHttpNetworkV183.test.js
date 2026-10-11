@@ -312,3 +312,30 @@ test('V192 rejects a finished or disconnected HTTP response before binding looku
     assert.equal(transfers,0);
   }
 });
+
+test('V193 response ending while binding is pending cannot deliver or commit',async()=>{
+  let bindingEntered,releaseBinding;
+  const started=new Promise(resolve=>bindingEntered=resolve);
+  const held=new Promise(resolve=>releaseBinding=resolve);
+  const response=new EventEmitter();
+  const socket=new EventEmitter();
+  socket.destroyed=false;
+  Object.assign(response,{socket,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+  let writes=0,commits=0;
+  response.writeHead=()=>{writes++;};
+  response.end=()=>{writes++;};
+  response.destroy=()=>{response.destroyed=true;};
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>{bindingEntered();await held;return binding();},
+    transferFence:async(_,work)=>{await work();commits++;}
+  });
+  const delivery=gate(ctx,document(),response);
+  await started;
+  response.writableEnded=true;
+  releaseBinding();
+  await assert.rejects(delivery,/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(writes,0);
+  assert.equal(commits,0);
+  assert.equal(response.listenerCount('error'),0);
+  assert.equal(socket.listenerCount('error'),0);
+});

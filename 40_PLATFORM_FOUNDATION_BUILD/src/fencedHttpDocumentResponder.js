@@ -28,7 +28,8 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
     }
     try{
       return await fenced(context,document,async verified=>{
-        if(closed||transportFailed||socket?.destroyed||response.destroyed||response.headersSent)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
+        if(closed||transportFailed||socket?.destroyed||response.destroyed||response.headersSent||
+          response.writableEnded||response.writableFinished)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
         const bytes=verified.bytes;
         if(!Buffer.isBuffer(bytes)||bytes.length!==verified.size)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
         let failCompletion;
