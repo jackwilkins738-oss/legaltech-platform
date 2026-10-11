@@ -7,8 +7,8 @@ const requestId='11700000-0000-4000-8000-000000000041',matterId='11700000-0000-4
 const context=()=>({tenantId,actorId,eventId});
 const document=()=>({eventId,resultJobId:requestId,resultHash:'b'.repeat(64),artifactHash:'c'.repeat(64),contentType:'application/pdf',size:5,bytes:Buffer.from('%PDF-')});
 const mapping=()=>({tenantId,actorId,eventId,requestId,matterId,documentRefHash:'a'.repeat(64)});
-function response(disconnect=false){const e=new EventEmitter();Object.assign(e,{headersSent:false,writableEnded:false,destroyed:false,
-  writeHead(){e.headersSent=true;},end(){if(disconnect){e.destroyed=true;e.emit('close');}else{e.writableEnded=true;e.emit('finish');}},
+function response(disconnect=false){const e=new EventEmitter();Object.assign(e,{headersSent:false,writableEnded:false,writableFinished:false,destroyed:false,
+  writeHead(){e.headersSent=true;},end(){if(disconnect){e.destroyed=true;e.emit('close');}else{e.writableEnded=true;e.writableFinished=true;e.emit('finish');}},
   destroy(){e.destroyed=true;e.emit('close');}});return e;}
 test('V182 successful HTTP finish stays inside transaction-held transfer callback',async()=>{
   const events=[];

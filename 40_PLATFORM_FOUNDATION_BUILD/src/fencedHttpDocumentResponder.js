@@ -13,7 +13,7 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
       response.headersSent||response.writableEnded||response.destroyed)
       throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
     let closed=false;
-    const disconnected=()=>{closed=true;};
+    const disconnected=()=>{if(!response.writableFinished)closed=true;};
     response.on('close',disconnected);
     try{
       return await fenced(context,document,async verified=>{
@@ -31,7 +31,7 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
         response.writeHead(200,{'content-type':verified.contentType,'content-length':verified.size,'cache-control':'no-store','x-content-type-options':'nosniff'});
         response.end(bytes);
         await done;
-        if(closed||response.destroyed)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
+        if(closed||!response.writableFinished)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
       });
     }catch{
       if(!response.writableEnded&&!response.destroyed&&typeof response.destroy==='function')response.destroy();
