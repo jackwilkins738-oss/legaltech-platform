@@ -437,9 +437,9 @@ test('V198 modified security headers during document delivery prevent commit',as
   const response=new EventEmitter();
   const headers=new Map();
   Object.assign(response,{socket,statusCode:200,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
-  response.writeHead=(status,values)=>{response.statusCode=status;response.headersSent=true;for(const [key,value] of Object.entries(values))headers.set(key,value);};
+  response.writeHead=(status,values)=>{response.statusCode=status;response.headersSent=true;for(const [key,value] of Object.entries(values))headers.set(key,value);headers.set('cache-control','public');};
   response.getHeader=name=>headers.get(name);
-  response.end=()=>{headers.set('cache-control','public');response.writableEnded=true;response.writableFinished=true;response.emit('finish');};
+  response.end=()=>{response.writableEnded=true;response.writableFinished=true;response.emit('finish');};
   response.destroy=()=>{response.destroyed=true;};
   let committed=false;
   const gate=createFencedHttpDocumentResponder({
