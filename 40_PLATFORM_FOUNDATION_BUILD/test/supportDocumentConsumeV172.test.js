@@ -51,3 +51,20 @@ test('V173 aborted transfer cannot report success after consumer completion',asy
   await assert.rejects(consume(payload),/SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE/);
   assert.equal(checks,1);
 });
+
+test('V174 malformed byte count fails before authorization and consumption',async()=>{
+  let checks=0,sends=0;
+  const gate=createSupportDocumentConsumeGate({authorizeRelease:async()=>{checks++;return true;},consume:async()=>{sends++;}});
+  await assert.rejects(gate({...value(),size:6}),/SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE/);
+  await assert.rejects(gate({...value(),bytes:'%PDF-'}),/SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE/);
+  assert.equal(checks,0);
+  assert.equal(sends,0);
+});
+test('V174 successful consumer gets original pinned bytes under both release checks',async()=>{
+  const payload=value();const seen=[];let sends=0;
+  const gate=createSupportDocumentConsumeGate({authorizeRelease:async v=>{seen.push(v.bytes);return true;},consume:async v=>{sends++;assert.equal(v.bytes,payload.bytes);}});
+  await gate(payload);
+  assert.equal(sends,1);
+  assert.equal(seen.length,2);
+  assert.ok(seen.every(x=>x===payload.bytes));
+});
