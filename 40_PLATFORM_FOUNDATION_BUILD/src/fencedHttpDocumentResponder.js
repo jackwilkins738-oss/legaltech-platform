@@ -54,10 +54,12 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
           failCompletion();
         }
         await done;
-        if(closed||transportFailed||socket?.destroyed||response.destroyed||!response.writableFinished)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
+        if(closed||transportFailed||!response.writableFinished)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
       });
     }catch{
-      if(!response.writableEnded&&!response.destroyed&&typeof response.destroy==='function')response.destroy();
+      if(!response.writableEnded&&!response.destroyed&&typeof response.destroy==='function'){
+        try{response.destroy();}catch{/* Fail closed even if transport teardown throws. */}
+      }
       throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
     }finally{
       response.removeListener('close',disconnected);
