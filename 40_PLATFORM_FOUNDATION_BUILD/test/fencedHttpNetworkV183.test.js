@@ -230,3 +230,24 @@ test('V188 late socket error while response finish is pending rejects without tr
   assert.equal(socket.listenerCount('error'),0);
   assert.equal(response.listenerCount('error'),0);
 });
+
+test('V189 synchronous writeHead failure rejects without committing and cleans listeners',async()=>{
+  const socket=new EventEmitter();
+  socket.destroyed=false;
+  const response=new EventEmitter();
+  Object.assign(response,{socket,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+  response.writeHead=()=>{throw Error('writeHead failed');};
+  response.end=()=>{throw Error('end must not be reached');};
+  response.destroy=()=>{response.destroyed=true;};
+  let committed=false;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{await work();committed=true;}
+  });
+  await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+  assert.equal(response.listenerCount('error'),0);
+  assert.equal(response.listenerCount('close'),0);
+  assert.equal(socket.listenerCount('error'),0);
+  assert.equal(socket.listenerCount('close'),0);
+});
