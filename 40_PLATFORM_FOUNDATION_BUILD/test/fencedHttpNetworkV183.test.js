@@ -451,3 +451,31 @@ test('V198 modified security headers during document delivery prevent commit',as
   assert.equal(response.listenerCount('finish'),0);
   assert.equal(socket.listenerCount('error'),0);
 });
+
+test('V199 incorrect content length or nosniff header prevents response body delivery',async()=>{
+  for(const [changed,value] of [['content-length','99'],['x-content-type-options','unsafe']]){
+    const socket=new EventEmitter();
+    socket.destroyed=false;
+    const response=new EventEmitter();
+    const headers=new Map();
+    Object.assign(response,{socket,statusCode:200,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+    let bytesWritten=false,committed=false;
+    response.writeHead=(status,values)=>{
+      response.statusCode=status;response.headersSent=true;
+      for(const [key,v] of Object.entries(values))headers.set(key,v);
+      headers.set(changed,value);
+    };
+    response.getHeader=name=>headers.get(name);
+    response.end=()=>{bytesWritten=true;response.writableEnded=true;response.writableFinished=true;response.emit('finish');};
+    response.destroy=()=>{response.destroyed=true;};
+    const gate=createFencedHttpDocumentResponder({
+      resolveBinding:async()=>binding(),
+      transferFence:async(_,work)=>{await work();committed=true;}
+    });
+    await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+    assert.equal(bytesWritten,false);
+    assert.equal(committed,false);
+    assert.equal(response.listenerCount('finish'),0);
+    assert.equal(socket.listenerCount('error'),0);
+  }
+});
