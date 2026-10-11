@@ -13,11 +13,15 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
       response.headersSent||response.writableEnded||response.destroyed)
       throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
     let closed=false;
+    // A peer can disconnect before writeHead/end. In that case ServerResponse
+    // may not emit close until later; the underlying socket closes immediately.
+    const socket=response.socket;
     const disconnected=()=>{if(!response.writableFinished)closed=true;};
     response.on('close',disconnected);
+    if(socket)socket.on('close',disconnected);
     try{
       return await fenced(context,document,async verified=>{
-        if(closed||response.destroyed||response.headersSent)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
+        if(closed||socket?.destroyed||response.destroyed||response.headersSent)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
         const bytes=verified.bytes;
         if(!Buffer.isBuffer(bytes)||bytes.length!==verified.size)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
         const done=new Promise((resolve,reject)=>{
@@ -36,6 +40,9 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
     }catch{
       if(!response.writableEnded&&!response.destroyed&&typeof response.destroy==='function')response.destroy();
       throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
-    }finally{response.removeListener('close',disconnected);}
+    }finally{
+      response.removeListener('close',disconnected);
+      if(socket)socket.removeListener('close',disconnected);
+    }
   };
 }
