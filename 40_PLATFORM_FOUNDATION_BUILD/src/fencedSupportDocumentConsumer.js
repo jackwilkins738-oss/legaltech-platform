@@ -9,8 +9,9 @@ const unavailable=()=>new Error('SUPPORT_DOCUMENT_TRANSFER_UNAVAILABLE');
  * PostgreSQL transfer fence. Actual byte consumption executes while the
  * transaction/advisory lock is held. Do not take this binding from an HTTP body.
  */
-export function createFencedSupportDocumentConsumer({resolveBinding,transferFence,consume}={}){
+export function createFencedSupportDocumentConsumer({resolveBinding,transferFence,consume,liveSession}={}){
   if([resolveBinding,transferFence,consume].some(fn=>typeof fn!=='function'))throw new Error('SUPPORT_DOCUMENT_TRANSFER_CONFIGURATION_INVALID');
+  if(liveSession!==undefined&&typeof liveSession?.assertCurrent!=='function')throw new Error('SUPPORT_DOCUMENT_TRANSFER_CONFIGURATION_INVALID');
   return async function deliver(context,payload){
     try{
       const identity=pinSupportFields(context,['tenantId','actorId','eventId'],['signal'],unavailable);
@@ -19,6 +20,7 @@ export function createFencedSupportDocumentConsumer({resolveBinding,transferFenc
         identity.eventId!==document.eventId||!HASH.test(document.resultHash)||!HASH.test(document.artifactHash)||
         !Buffer.isBuffer(document.bytes)||!Number.isSafeInteger(document.size)||document.size<1||
         document.size!==document.bytes.length||identity.signal?.aborted||document.signal?.aborted)throw unavailable();
+      if(liveSession&&await liveSession.assertCurrent(Object.freeze({...identity}))!==true)throw unavailable();
       const mapping=pinSupportFields(await resolveBinding(Object.freeze({...identity})),
         ['tenantId','actorId','eventId','requestId','matterId','documentRefHash'],[],unavailable);
       if(mapping.tenantId!==identity.tenantId||mapping.actorId!==identity.actorId||
@@ -30,7 +32,10 @@ export function createFencedSupportDocumentConsumer({resolveBinding,transferFenc
         const latest=pinSupportFields(await resolveBinding(Object.freeze({...identity})),
           ['tenantId','actorId','eventId','requestId','matterId','documentRefHash'],[],unavailable);
         if(Object.keys(mapping).some(key=>mapping[key]!==latest[key])||identity.signal?.aborted||document.signal?.aborted)throw unavailable();
-        return consume(Object.freeze({...document}),Object.freeze({...identity}));
+        if(liveSession&&await liveSession.assertCurrent(Object.freeze({...identity}))!==true)throw unavailable();
+        const result=await consume(Object.freeze({...document}),Object.freeze({...identity}));
+        if(liveSession&&await liveSession.assertCurrent(Object.freeze({...identity}))!==true)throw unavailable();
+        return result;
       });
     }catch{throw unavailable();}
   };
