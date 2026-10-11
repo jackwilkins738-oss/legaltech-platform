@@ -251,3 +251,25 @@ test('V189 synchronous writeHead failure rejects without committing and cleans l
   assert.equal(socket.listenerCount('error'),0);
   assert.equal(socket.listenerCount('close'),0);
 });
+
+test('V190 synchronous end failure never emits a synthetic error or commits',async()=>{
+  const response=new EventEmitter();
+  const socket=new EventEmitter();
+  socket.destroyed=false;
+  Object.assign(response,{socket,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+  let emittedErrors=0,committed=false;
+  response.on('error',()=>{emittedErrors++;});
+  response.writeHead=()=>{response.headersSent=true;};
+  response.end=()=>{throw Error('end failed');};
+  response.destroy=()=>{response.destroyed=true;};
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{await work();committed=true;}
+  });
+  await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(emittedErrors,0);
+  assert.equal(committed,false);
+  assert.equal(socket.listenerCount('error'),0);
+  assert.equal(response.listenerCount('error'),1);
+  response.removeAllListeners('error');
+});
