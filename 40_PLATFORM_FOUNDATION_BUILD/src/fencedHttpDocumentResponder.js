@@ -21,7 +21,10 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
     const failed=()=>{transportFailed=true;};
     response.on('error',failed);
     response.on('close',disconnected);
-    if(socket)socket.on('close',disconnected);
+    if(socket){
+      socket.on('close',disconnected);
+      socket.on('error',failed);
+    }
     try{
       return await fenced(context,document,async verified=>{
         if(closed||transportFailed||socket?.destroyed||response.destroyed||response.headersSent)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
@@ -46,7 +49,10 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
     }finally{
       response.removeListener('close',disconnected);
       response.removeListener('error',failed);
-      if(socket)socket.removeListener('close',disconnected);
+      if(socket){
+        socket.removeListener('close',disconnected);
+        socket.removeListener('error',failed);
+      }
     }
   };
 }

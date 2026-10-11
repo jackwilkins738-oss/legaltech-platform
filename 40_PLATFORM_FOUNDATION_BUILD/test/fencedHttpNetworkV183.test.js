@@ -175,3 +175,31 @@ test('V186 response error during held fence is rejected',async t=>{
   assert.equal(serverResponse.headersSent,false);
   request.destroy();
 });
+
+test('V187 socket error during held authorization prevents response and commit',async t=>{
+  let entered,release,complete,serverSocket,serverResponse;
+  const started=new Promise(resolve=>entered=resolve);
+  const held=new Promise(resolve=>release=resolve);
+  const completed=new Promise(resolve=>complete=resolve);
+  let committed=false;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{entered();await held;await work();committed=true;}
+  });
+  const {instance,port}=await server((_,res)=>{
+    serverSocket=res.socket;
+    serverResponse=res;
+    gate(ctx,document(),res).then(()=>complete(null),complete);
+  });
+  t.after(()=>instance.close());
+  const request=http.get({hostname:'127.0.0.1',port,path:'/'},res=>res.resume());
+  request.on('error',()=>{});
+  await started;
+  serverSocket.emit('error',Error('transport fault'));
+  release();
+  const error=await completed;
+  assert.match(error?.message??'',/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+  assert.equal(serverResponse.headersSent,false);
+  request.destroy();
+});
