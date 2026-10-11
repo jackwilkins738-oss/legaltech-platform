@@ -37,7 +37,7 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
           const finish=()=>{
             // Finish alone is insufficient when an error/close was observed
             // during the same response lifecycle.
-            if(closed||transportFailed||!response.writableFinished){failure();return;}
+            if(closed||transportFailed||!response.writableFinished||!response.headersSent||!response.writableEnded){failure();return;}
             cleanup();resolve();
           };
           const close=()=>{cleanup();reject(Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE'));};

@@ -385,3 +385,29 @@ test('V195 response close before finish cannot commit even if finish is emitted 
   assert.equal(response.listenerCount('close'),0);
   assert.equal(socket.listenerCount('error'),0);
 });
+
+test('V196 finish emitted without completed headers or end fails closed immediately',async()=>{
+  for(const incomplete of ['headersSent','writableEnded']){
+    const socket=new EventEmitter();
+    socket.destroyed=false;
+    const response=new EventEmitter();
+    Object.assign(response,{socket,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+    response.writeHead=()=>{response.headersSent=true;};
+    response.end=()=>{
+      response.writableEnded=true;
+      response.writableFinished=true;
+      response[incomplete]=false;
+      response.emit('finish');
+    };
+    response.destroy=()=>{response.destroyed=true;};
+    let committed=false;
+    const gate=createFencedHttpDocumentResponder({
+      resolveBinding:async()=>binding(),
+      transferFence:async(_,work)=>{await work();committed=true;}
+    });
+    await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+    assert.equal(committed,false);
+    assert.equal(response.listenerCount('finish'),0);
+    assert.equal(socket.listenerCount('error'),0);
+  }
+});
