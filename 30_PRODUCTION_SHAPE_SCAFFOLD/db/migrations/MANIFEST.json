@@ -311,6 +311,11 @@
       "file": "062_support_actor_restrictive_rls.sql",
       "sha256": "fba33e9b60f2bc1050ec5665e251941a54a785d8487cb23f81bf8c496c4ab78a",
       "destructive": false
+    },
+    {
+      "file": "063_support_revocation_serialization.sql",
+      "sha256": "37a67410fd3439b9ca59170ac771fcffde03c88afe62f6e1aa18fcb71df901ca",
+      "destructive": false
     }
   ]
 }
