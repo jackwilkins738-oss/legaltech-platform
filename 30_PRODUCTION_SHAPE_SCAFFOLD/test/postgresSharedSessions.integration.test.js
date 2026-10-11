@@ -1,3 +1,4 @@
+import {createFencedReviewDocumentConsume} from '../../40_PLATFORM_FOUNDATION_BUILD/src/fencedReviewDocumentConsume.js';
 import {createTenantScopedPostgresSupportTransferFence} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportTransferFence.js';
 import {fork} from 'node:child_process';
 import {createTenantScopedPostgresSupportGrantMutations} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportGrantMutations.js';
@@ -584,6 +585,40 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     await rawRevocation;
     assert.equal(completed,true);
     await assert.rejects(fence(input,async()=>true),/SUPPORT_TRANSFER_FENCE_UNAVAILABLE/);
+  });
+  await t.test('V180 fenced review-document consumer serializes SQL revocation and refuses later delivery',async()=>{
+    const readerLogin='legaltech_support_reader_v180',operatorLogin='legaltech_support_operator_v180';
+    for(const [login,group] of [[readerLogin,'legaltech_support_reader'],[operatorLogin,'legaltech_support_operator']]){
+      await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+      await admin.query(`GRANT ${group} TO ${login}`);
+    }
+    const fence=createTenantScopedPostgresSupportTransferFence({pool:makePool(readerLogin,2),expectedRole:readerLogin,timeoutMs:5000});
+    const writer=createTenantScopedPostgresSupportGrantMutations({pool:makePool(operatorLogin,2),expectedRole:operatorLogin,liveSession:{assertCurrent:async()=>true},timeoutMs:5000});
+    const matterId='11700000-0000-4000-8000-000000000031',eventId='11700000-0000-4000-8000-000000000021',documentRefHash='a'.repeat(64);
+    const requester={tenantId:tenantA,actorId:actorA,sessionId:uuid()};
+    const approver={tenantId:tenantA,actorId:'11700000-0000-4000-8000-000000000013',sessionId:uuid()};
+    const created=await writer.request({session:requester,matterId,scope:'DOCUMENT_READ',documentRefHash,ticketRefHash:'b'.repeat(64),purposeHash:'c'.repeat(64),traceId:'v180'});
+    await writer.approve({session:approver,requestId:created.requestId,traceId:'v180'});
+    const adapter=createFencedReviewDocumentConsume({
+      resolveBinding:async()=>({tenantId:tenantA,actorId:actorA,eventId,requestId:created.requestId,matterId,documentRefHash}),
+      transferFence:fence
+    });
+    const context={tenantId:tenantA,actorId:actorA,eventId};
+    const document={eventId,resultJobId:uuid(),resultHash:'d'.repeat(64),artifactHash:'e'.repeat(64),contentType:'application/pdf',size:5,bytes:Buffer.from('%PDF-')};
+    let entered,release;
+    const started=new Promise(resolve=>entered=resolve),hold=new Promise(resolve=>release=resolve);
+    const delivering=adapter(context,document,async()=>{entered();await hold;return 'sent';});
+    await started;
+    let revoked=false;
+    const revoking=writer.revoke({session:approver,requestId:created.requestId,reasonHash:'f'.repeat(64),traceId:'v180'}).then(()=>{revoked=true;});
+    await new Promise(resolve=>setTimeout(resolve,40));
+    assert.equal(revoked,false);
+    release();
+    assert.equal(await delivering,'sent');
+    await revoking;
+    let sent=0;
+    await assert.rejects(adapter(context,document,async()=>{sent++;}),/SUPPORT_DOCUMENT_TRANSFER_UNAVAILABLE/);
+    assert.equal(sent,0);
   });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
