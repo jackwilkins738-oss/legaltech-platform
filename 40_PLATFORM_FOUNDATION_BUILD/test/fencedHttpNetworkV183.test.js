@@ -360,3 +360,28 @@ test('V194 incomplete finish state never commits document delivery',async()=>{
     assert.equal(socket.listenerCount('error'),0);
   }
 });
+
+test('V195 response close before finish cannot commit even if finish is emitted later',async()=>{
+  const socket=new EventEmitter();
+  socket.destroyed=false;
+  const response=new EventEmitter();
+  Object.assign(response,{socket,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+  response.writeHead=()=>{response.headersSent=true;};
+  response.end=()=>{
+    response.writableEnded=true;
+    response.emit('close');
+    response.writableFinished=true;
+    response.emit('finish');
+  };
+  response.destroy=()=>{response.destroyed=true;};
+  let committed=false;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{await work();committed=true;}
+  });
+  await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+  assert.equal(response.listenerCount('finish'),0);
+  assert.equal(response.listenerCount('close'),0);
+  assert.equal(socket.listenerCount('error'),0);
+});

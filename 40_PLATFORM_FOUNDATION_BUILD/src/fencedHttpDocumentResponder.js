@@ -34,7 +34,12 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
         if(!Buffer.isBuffer(bytes)||bytes.length!==verified.size)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
         let failCompletion;
         const done=new Promise((resolve,reject)=>{
-          const finish=()=>{cleanup();resolve();};
+          const finish=()=>{
+            // Finish alone is insufficient when an error/close was observed
+            // during the same response lifecycle.
+            if(closed||transportFailed||!response.writableFinished){failure();return;}
+            cleanup();resolve();
+          };
           const close=()=>{cleanup();reject(Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE'));};
           const failure=()=>{cleanup();reject(Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE'));};
           failCompletion=failure;
