@@ -10,7 +10,8 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
   return async function deliver(context,document,response){
     if(!response||typeof response.writeHead!=='function'||typeof response.end!=='function'||
       typeof response.on!=='function'||typeof response.removeListener!=='function'||
-      response.headersSent||response.writableEnded||response.destroyed)
+      response.headersSent||response.writableEnded||response.writableFinished||response.destroyed||
+      response.socket?.destroyed)
       throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
     let closed=false;
     let transportFailed=false;
