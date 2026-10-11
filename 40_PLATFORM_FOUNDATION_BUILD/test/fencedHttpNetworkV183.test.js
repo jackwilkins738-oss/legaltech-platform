@@ -273,3 +273,25 @@ test('V190 synchronous end failure never emits a synthetic error or commits',asy
   assert.equal(response.listenerCount('error'),1);
   response.removeAllListeners('error');
 });
+
+test('V191 teardown exceptions cannot override fail-closed delivery rejection',async()=>{
+  const socket=new EventEmitter();
+  socket.destroyed=false;
+  const response=new EventEmitter();
+  Object.assign(response,{socket,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+  response.writeHead=()=>{throw Error('writeHead failure');};
+  response.end=()=>{throw Error('end must not run');};
+  let destroyCalls=0,committed=false;
+  response.destroy=()=>{destroyCalls++;throw Error('teardown failure');};
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{await work();committed=true;}
+  });
+  await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+  assert.equal(destroyCalls,1);
+  assert.equal(response.listenerCount('error'),0);
+  assert.equal(response.listenerCount('close'),0);
+  assert.equal(socket.listenerCount('error'),0);
+  assert.equal(socket.listenerCount('close'),0);
+});
