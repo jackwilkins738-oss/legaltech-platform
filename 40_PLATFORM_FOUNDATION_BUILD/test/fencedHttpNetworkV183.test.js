@@ -79,8 +79,9 @@ test('V184 real TCP client abort before fenced release prevents document respons
   const req=http.get({hostname:'127.0.0.1',port,path:'/'},res=>res.resume());
   req.on('error',()=>{});
   await started;
+  const closed=new Promise(resolve=>req.once('close',resolve));
   req.destroy();
-  await new Promise(resolve=>req.once('close',resolve));
+  await closed;
   unlock();
   const error=await completed;
   assert.match(error?.message??'',/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
