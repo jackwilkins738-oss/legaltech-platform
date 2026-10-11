@@ -31,12 +31,17 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
         const bytes=verified.bytes;
         if(!Buffer.isBuffer(bytes)||bytes.length!==verified.size)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
         const done=new Promise((resolve,reject)=>{
-          let finished=false;
-          const finish=()=>{finished=true;cleanup();resolve();};
+          const finish=()=>{cleanup();resolve();};
           const close=()=>{cleanup();reject(Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE'));};
           const failure=()=>{cleanup();reject(Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE'));};
-          const cleanup=()=>{response.removeListener('finish',finish);response.removeListener('close',close);response.removeListener('error',failure);};
+          const cleanup=()=>{
+            response.removeListener('finish',finish);
+            response.removeListener('close',close);
+            response.removeListener('error',failure);
+            if(socket)socket.removeListener('error',failure);
+          };
           response.on('finish',finish);response.on('close',close);response.on('error',failure);
+          if(socket)socket.on('error',failure);
         });
         response.writeHead(200,{'content-type':verified.contentType,'content-length':verified.size,'cache-control':'no-store','x-content-type-options':'nosniff'});
         response.end(bytes);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import {once} from 'node:events';
+import {once,EventEmitter} from 'node:events';
 import {createFencedHttpDocumentResponder} from '../src/fencedHttpDocumentResponder.js';
 
 const tenantId='11700000-0000-4000-8000-000000000001';
@@ -202,4 +202,31 @@ test('V187 socket error during held authorization prevents response and commit',
   assert.equal(committed,false);
   assert.equal(serverResponse.headersSent,false);
   request.destroy();
+});
+
+test('V188 late socket error while response finish is pending rejects without transfer commit',async()=>{
+  const socket=new EventEmitter();
+  socket.destroyed=false;
+  const response=new EventEmitter();
+  response.socket=socket;
+  response.headersSent=false;
+  response.writableEnded=false;
+  response.writableFinished=false;
+  response.destroyed=false;
+  response.writeHead=()=>{response.headersSent=true;};
+  response.end=()=>{response.writableEnded=true;};
+  response.destroy=()=>{response.destroyed=true;};
+  let committed=false;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{await work();committed=true;}
+  });
+  const delivery=gate(ctx,document(),response);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(response.headersSent,true);
+  socket.emit('error',Error('late transport error'));
+  await assert.rejects(delivery,/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+  assert.equal(socket.listenerCount('error'),0);
+  assert.equal(response.listenerCount('error'),0);
 });
