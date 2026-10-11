@@ -57,7 +57,9 @@ export function createSupportDocumentConsumeGate({authorizeRelease,consume}={}){
       if(await authorizeRelease(Object.freeze({...value,phase:'RELEASE'}))!==true||value.signal?.aborted)throw deny();
       await consume(value);
       if(value.signal?.aborted)throw deny();
-      if(await authorizeRelease(Object.freeze({...value,phase:'COMPLETE'}))!==true||value.signal?.aborted)throw deny();
+      // The canonical document authorization adapter accepts RELEASE,
+      // not a distinct COMPLETE phase. Repeat the same live gate.
+      if(await authorizeRelease(Object.freeze({...value,phase:'RELEASE'}))!==true||value.signal?.aborted)throw deny();
     }catch{throw deny();}
   };
 }

@@ -7,7 +7,7 @@ test('V172 consumption checks authority before and after consumer',async()=>{
   const phases=[];
   const consume=createSupportDocumentConsumeGate({authorizeRelease:async x=>{phases.push(x.phase);return true;},consume:async()=>{phases.push('CONSUMED');}});
   await consume(value());
-  assert.deepEqual(phases,['RELEASE','CONSUMED','COMPLETE']);
+  assert.deepEqual(phases,['RELEASE','CONSUMED','RELEASE']);
 });
 test('V172 pre-transfer denied grant never calls consumer',async()=>{
   let sends=0;
@@ -28,4 +28,26 @@ test('V172 malicious accessors are never executed or transferred',async()=>{
   const consume=createSupportDocumentConsumeGate({authorizeRelease:async()=>true,consume:async()=>{sent=true;}});
   await assert.rejects(consume(payload),/SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE/);
   assert.equal(sent,false);
+});
+
+test('V173 both transfer checks must use a supported RELEASE phase',async()=>{
+  let sends=0,checks=0;
+  const consume=createSupportDocumentConsumeGate({
+    authorizeRelease:async x=>{checks++;if(x.phase!=='RELEASE')throw Error('UNSUPPORTED_PHASE');return true;},
+    consume:async()=>{sends++;}
+  });
+  await consume(value());
+  assert.equal(checks,2);
+  assert.equal(sends,1);
+});
+test('V173 aborted transfer cannot report success after consumer completion',async()=>{
+  const controller=new AbortController();
+  const payload={...value(),signal:controller.signal};
+  let checks=0;
+  const consume=createSupportDocumentConsumeGate({
+    authorizeRelease:async()=>{checks++;return true;},
+    consume:async()=>{controller.abort();}
+  });
+  await assert.rejects(consume(payload),/SUPPORT_DOCUMENT_AUTHORIZATION_UNAVAILABLE/);
+  assert.equal(checks,1);
 });
