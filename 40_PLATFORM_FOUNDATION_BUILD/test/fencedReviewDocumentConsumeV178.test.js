@@ -72,3 +72,37 @@ test('V179 consumer failure does not escape fail-closed transfer contract',async
   });
   await assert.rejects(adapter(context(),document(),async()=>{throw Error('downstream transport failed');}),/SUPPORT_DOCUMENT_TRANSFER_UNAVAILABLE/);
 });
+
+test('V181 revoked live session refuses document transfer before any bytes',async()=>{
+  let checks=0,sent=0,locked=0;
+  const adapter=createFencedReviewDocumentConsume({
+    resolveBinding:async()=>mapping(),
+    transferFence:async(_,work)=>{locked++;return work();},
+    liveSession:{assertCurrent:async()=>{checks++;return false;}}
+  });
+  await assert.rejects(adapter(context(),document(),async()=>{sent++;}),/SUPPORT_DOCUMENT_TRANSFER_UNAVAILABLE/);
+  assert.equal(checks,1);
+  assert.equal(locked,0);
+  assert.equal(sent,0);
+});
+test('V181 session revoked inside held PostgreSQL transaction denies before byte consumer',async()=>{
+  let current=true,sent=0,checks=0;
+  const adapter=createFencedReviewDocumentConsume({
+    resolveBinding:async()=>mapping(),
+    transferFence:async(_,work)=>{current=false;return work();},
+    liveSession:{assertCurrent:async()=>{checks++;return current;}}
+  });
+  await assert.rejects(adapter(context(),document(),async()=>{sent++;}),/SUPPORT_DOCUMENT_TRANSFER_UNAVAILABLE/);
+  assert.equal(checks,2);
+  assert.equal(sent,0);
+});
+test('V181 live session invalidated during consumer cannot yield successful result',async()=>{
+  let current=true,checks=0;
+  const adapter=createFencedReviewDocumentConsume({
+    resolveBinding:async()=>mapping(),
+    transferFence:async(_,work)=>work(),
+    liveSession:{assertCurrent:async()=>{checks++;return current;}}
+  });
+  await assert.rejects(adapter(context(),document(),async()=>{current=false;return 'sent';}),/SUPPORT_DOCUMENT_TRANSFER_UNAVAILABLE/);
+  assert.equal(checks,3);
+});
