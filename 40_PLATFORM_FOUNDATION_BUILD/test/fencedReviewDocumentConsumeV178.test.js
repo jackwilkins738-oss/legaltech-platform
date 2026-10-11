@@ -34,3 +34,41 @@ test('V178 invalid callback fails before binding or transfer',async()=>{
   await assert.rejects(adapter(context(),document(),null),/SUPPORT_REVIEW_DOCUMENT_FENCE_UNAVAILABLE/);
   assert.equal(seen,0);
 });
+
+test('V179 revocation during held transfer rejects and never reports delivery success',async()=>{
+  const events=[];let authorized=true;
+  const adapter=createFencedReviewDocumentConsume({
+    resolveBinding:async()=>mapping(),
+    transferFence:async(_,work)=>{
+      events.push('locked');
+      const result=await work();
+      events.push('consumer returned');
+      if(!authorized)throw Error('revoked during transfer');
+      events.push('committed');return result;
+    }
+  });
+  await assert.rejects(adapter(context(),document(),async()=>{
+    events.push('consume');
+    authorized=false;
+    return 'sent';
+  }),/SUPPORT_DOCUMENT_TRANSFER_UNAVAILABLE/);
+  assert.deepEqual(events,['locked','consume','consumer returned']);
+});
+test('V179 resolver error during held fence never invokes actual document consumer',async()=>{
+  let resolved=0,sent=0,locked=false;
+  const adapter=createFencedReviewDocumentConsume({
+    resolveBinding:async()=>{resolved++;if(resolved===2)throw Error('binding lost');return mapping();},
+    transferFence:async(_,work)=>{locked=true;return work();}
+  });
+  await assert.rejects(adapter(context(),document(),async()=>{sent++;}),/SUPPORT_DOCUMENT_TRANSFER_UNAVAILABLE/);
+  assert.equal(resolved,2);
+  assert.equal(locked,true);
+  assert.equal(sent,0);
+});
+test('V179 consumer failure does not escape fail-closed transfer contract',async()=>{
+  const adapter=createFencedReviewDocumentConsume({
+    resolveBinding:async()=>mapping(),
+    transferFence:async(_,work)=>work()
+  });
+  await assert.rejects(adapter(context(),document(),async()=>{throw Error('downstream transport failed');}),/SUPPORT_DOCUMENT_TRANSFER_UNAVAILABLE/);
+});
