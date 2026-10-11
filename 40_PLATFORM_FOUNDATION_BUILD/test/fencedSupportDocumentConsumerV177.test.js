@@ -18,7 +18,8 @@ test('V177 invokes trusted delivery strictly within held transaction fence',asyn
     },
     consume:async()=>{events.push('bytes');return 'complete';}
   });
-  assert.equal(await delivery(context(),payload()),'complete');
+  const result=await delivery(context(),payload()).catch(error=>({error:error.message,events:[...events]}));
+  assert.deepEqual(result,'complete');
   assert.deepEqual(events,['binding','begin fence','binding','bytes','end fence']);
 });
 test('V177 document rebind under the held fence rejects before consuming bytes',async()=>{
