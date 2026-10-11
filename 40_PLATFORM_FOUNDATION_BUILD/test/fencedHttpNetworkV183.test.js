@@ -93,3 +93,58 @@ test('V184 real TCP client abort before fenced release prevents document respons
   assert.equal(opened,1);
   assert.equal(committed,false);
 });
+
+test('V185 peer disconnect while binding resolution is pending cannot commit document delivery',async t=>{
+  let unlockBinding,bindingEntered,peerDisconnected,complete;
+  const bindingStarted=new Promise(resolve=>bindingEntered=resolve);
+  const bindingHeld=new Promise(resolve=>unlockBinding=resolve);
+  const peerClosed=new Promise(resolve=>peerDisconnected=resolve);
+  const completed=new Promise(resolve=>complete=resolve);
+  let committed=false,transfers=0;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>{bindingEntered();await bindingHeld;return binding();},
+    transferFence:async(_,work)=>{transfers++;await work();committed=true;}
+  });
+  const {instance,port}=await server((_,res)=>{
+    res.socket.once('close',peerDisconnected);
+    gate(ctx,document(),res).then(()=>complete(null),complete);
+  });
+  t.after(()=>instance.close());
+  const req=http.get({hostname:'127.0.0.1',port,path:'/'},res=>res.resume());
+  req.on('error',()=>{});
+  await bindingStarted;
+  req.destroy();
+  await peerClosed;
+  unlockBinding();
+  const error=await completed;
+  assert.match(error?.message??'',/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+  assert.ok(transfers<=1);
+});
+
+test('V185 server-side socket failure during held transfer cannot commit document delivery',async t=>{
+  let entered,release,complete,peerDisconnected;
+  const started=new Promise(resolve=>entered=resolve);
+  const held=new Promise(resolve=>release=resolve);
+  const completed=new Promise(resolve=>complete=resolve);
+  const peerClosed=new Promise(resolve=>peerDisconnected=resolve);
+  let committed=false;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{entered();await held;await work();committed=true;}
+  });
+  const {instance,port}=await server((_,res)=>{
+    res.socket.once('close',peerDisconnected);
+    gate(ctx,document(),res).then(()=>complete(null),complete);
+  });
+  t.after(()=>instance.close());
+  const req=http.get({hostname:'127.0.0.1',port,path:'/'},res=>res.resume());
+  req.on('error',()=>{});
+  await started;
+  instance.closeAllConnections();
+  await peerClosed;
+  release();
+  const error=await completed;
+  assert.match(error?.message??'',/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+});
