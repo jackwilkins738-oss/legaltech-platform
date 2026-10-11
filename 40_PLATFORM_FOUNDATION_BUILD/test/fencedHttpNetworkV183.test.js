@@ -295,3 +295,20 @@ test('V191 teardown exceptions cannot override fail-closed delivery rejection',a
   assert.equal(socket.listenerCount('error'),0);
   assert.equal(socket.listenerCount('close'),0);
 });
+
+test('V192 rejects a finished or disconnected HTTP response before binding lookup',async()=>{
+  for(const state of [{writableFinished:true},{socket:{destroyed:true}}]){
+    let bindings=0,transfers=0;
+    const response=new EventEmitter();
+    Object.assign(response,{headersSent:false,writableEnded:false,writableFinished:false,destroyed:false,socket:new EventEmitter()},state);
+    response.writeHead=()=>{throw Error('must not write');};
+    response.end=()=>{throw Error('must not end');};
+    const gate=createFencedHttpDocumentResponder({
+      resolveBinding:async()=>{bindings++;return binding();},
+      transferFence:async()=>{transfers++;}
+    });
+    await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+    assert.equal(bindings,0);
+    assert.equal(transfers,0);
+  }
+});
