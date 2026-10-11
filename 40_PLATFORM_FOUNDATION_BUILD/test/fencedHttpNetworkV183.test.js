@@ -411,3 +411,22 @@ test('V196 finish emitted without completed headers or end fails closed immediat
     assert.equal(socket.listenerCount('error'),0);
   }
 });
+
+test('V197 unexpected HTTP status at finish cannot commit delivery',async()=>{
+  const socket=new EventEmitter();
+  socket.destroyed=false;
+  const response=new EventEmitter();
+  Object.assign(response,{socket,statusCode:200,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+  response.writeHead=()=>{response.headersSent=true;response.statusCode=403;};
+  response.end=()=>{response.writableEnded=true;response.writableFinished=true;response.emit('finish');};
+  response.destroy=()=>{response.destroyed=true;};
+  let committed=false;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{await work();committed=true;}
+  });
+  await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+  assert.equal(response.listenerCount('finish'),0);
+  assert.equal(socket.listenerCount('error'),0);
+});
