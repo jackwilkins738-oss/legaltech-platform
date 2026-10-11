@@ -1,3 +1,4 @@
+import {createTenantScopedPostgresSupportTransferFence} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportTransferFence.js';
 import {fork} from 'node:child_process';
 import {createTenantScopedPostgresSupportGrantMutations} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportGrantMutations.js';
 import {createTenantScopedPostgresSupportGrantLookup} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportGrantLookup.js';
@@ -529,6 +530,34 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     await writer.revoke({session:approver,requestId:created.requestId,reasonHash:'e'.repeat(64),traceId:'v169'});
     await assert.rejects(reader(bound),/DURABLE_SUPPORT_GRANT_UNAVAILABLE/);
     assert.equal((await admin.query('SELECT count(*)::integer AS n FROM public.support_access_revocations WHERE tenant_id=$1 AND request_id=$2',[tenantA,created.requestId])).rows[0].n,1);
+  });
+  await t.test('V175 grant transfer and revoke serialize across separate PostgreSQL operator and reader pools',async()=>{
+    const readerLogin='legaltech_support_reader_v175',operatorLogin='legaltech_support_operator_v175';
+    for(const [login,group] of [[readerLogin,'legaltech_support_reader'],[operatorLogin,'legaltech_support_operator']]){
+      await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+      await admin.query(`GRANT ${group} TO ${login}`);
+    }
+    const readerPool=makePool(readerLogin,2),operatorPool=makePool(operatorLogin,2);
+    const fence=createTenantScopedPostgresSupportTransferFence({pool:readerPool,expectedRole:readerLogin,timeoutMs:5000});
+    const writer=createTenantScopedPostgresSupportGrantMutations({pool:operatorPool,expectedRole:operatorLogin,liveSession:{assertCurrent:async()=>true},timeoutMs:5000});
+    const requester={tenantId:tenantA,actorId:actorA,sessionId:uuid()},approver={tenantId:tenantA,actorId:'11700000-0000-4000-8000-000000000013',sessionId:uuid()};
+    const matterId='11700000-0000-4000-8000-000000000031',documentRefHash='a'.repeat(64);
+    const created=await writer.request({session:requester,matterId,scope:'DOCUMENT_READ',documentRefHash,ticketRefHash:'b'.repeat(64),purposeHash:'c'.repeat(64),traceId:'v175'});
+    await writer.approve({session:approver,requestId:created.requestId,traceId:'v175'});
+    let entered,release,revoked=false;
+    const started=new Promise(resolve=>{entered=resolve});
+    const hold=new Promise(resolve=>{release=resolve});
+    const binding={tenantId:tenantA,actorId:actorA,requestId:created.requestId,matterId,scope:'DOCUMENT_READ',documentRefHash};
+    const transferring=fence(binding,async()=>{entered();await hold;return 'delivered';});
+    await started;
+    const revoking=writer.revoke({session:approver,requestId:created.requestId,reasonHash:'d'.repeat(64),traceId:'v175'}).then(x=>{revoked=true;return x});
+    await new Promise(resolve=>setTimeout(resolve,40));
+    assert.equal(revoked,false,'revocation must not commit while the active transfer holds its transaction lock');
+    release();
+    assert.equal(await transferring,'delivered');
+    assert.equal((await revoking).status,'REVOKED');
+    await assert.rejects(fence(binding,async()=>{throw Error('must never transfer after revocation');}),/SUPPORT_TRANSFER_FENCE_UNAVAILABLE/);
+    assert.equal((await admin.query('SELECT count(*)::integer AS n FROM public.support_access_revocations WHERE request_id=$1',[created.requestId])).rows[0].n,1);
   });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
