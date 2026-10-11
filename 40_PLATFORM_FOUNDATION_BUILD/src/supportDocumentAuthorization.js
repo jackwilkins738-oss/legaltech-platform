@@ -40,3 +40,24 @@ export function createSupportDocumentAuthorization({authorizeDocument,resolveBin
     }catch{throw deny();}
   };
 }
+
+/**
+ * Optional final transfer wrapper. Revalidates immediately before entering
+ * the consumer and after it completes. Does not make bytes already sent
+ * retractable: production deployment still requires a transactional transfer
+ * fence and transport cancellation on revocation.
+ */
+export function createSupportDocumentConsumeGate({authorizeRelease,consume}={}){
+  if(typeof authorizeRelease!=='function'||typeof consume!=='function')throw new Error('SUPPORT_DOCUMENT_CONSUME_CONFIGURATION_INVALID');
+  return async function gatedConsume(payload){
+    try{
+      const keys=['eventId','resultJobId','resultHash','artifactHash','contentType','size','bytes','signal'];
+      const value=snapshot(payload,keys);
+      if(value.signal?.aborted)throw deny();
+      if(await authorizeRelease(Object.freeze({...value,phase:'RELEASE'}))!==true||value.signal?.aborted)throw deny();
+      await consume(value);
+      if(value.signal?.aborted)throw deny();
+      if(await authorizeRelease(Object.freeze({...value,phase:'COMPLETE'}))!==true||value.signal?.aborted)throw deny();
+    }catch{throw deny();}
+  };
+}
