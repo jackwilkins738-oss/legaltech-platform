@@ -20,11 +20,13 @@ async function server(handler){
 }
 test('V183 real TCP response finishes under the transfer fence before commit',async t=>{
   const order=[];
+  let finishedDelivery;
+  const deliveryCompleted=new Promise(resolve=>{finishedDelivery=resolve;});
   const deliver=createFencedHttpDocumentResponder({
     resolveBinding:async()=>binding(),
     transferFence:async(_,work)=>{order.push('locked');await work();order.push('commit');}
   });
-  const {instance,port}=await server((_,res)=>{deliver(ctx,document(),res).catch(()=>{});});
+  const {instance,port}=await server((_,res)=>{deliver(ctx,document(),res).then(()=>finishedDelivery(null),finishedDelivery);});
   t.after(()=>instance.close());
   const received=await new Promise((resolve,reject)=>{
     http.get({hostname:'127.0.0.1',port,path:'/'},res=>{
@@ -32,6 +34,8 @@ test('V183 real TCP response finishes under the transfer fence before commit',as
     }).on('error',reject);
   });
   assert.equal(received.status,200);assert.equal(received.body,'%PDF-');assert.equal(received.cache,'no-store');
+  const completion=await deliveryCompleted;
+  if(completion)throw completion;
   assert.deepEqual(order,['locked','commit']);
 });
 test('V183 actual HTTP denied grant returns no document response body',async t=>{
