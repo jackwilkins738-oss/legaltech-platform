@@ -32,7 +32,9 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
           response.writableEnded||response.writableFinished)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
         const bytes=verified.bytes;
         if(!Buffer.isBuffer(bytes)||bytes.length!==verified.size)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
-        const validHeaders=()=>typeof response.getHeader==='function' ?
+        // Node may bypass its outgoing header map when writeHead receives
+        // a header object. Inspect only when the adapter exposes that map.
+        const validHeaders=()=>typeof response.getHeader==='function' && response.getHeader('content-length')!==undefined ?
           String(response.getHeader('content-length'))===String(verified.size) &&
           response.getHeader('cache-control')==='no-store' &&
           response.getHeader('x-content-type-options')==='nosniff' : true;
