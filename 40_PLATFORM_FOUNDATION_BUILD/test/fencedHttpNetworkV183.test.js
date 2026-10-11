@@ -430,3 +430,24 @@ test('V197 unexpected HTTP status at finish cannot commit delivery',async()=>{
   assert.equal(response.listenerCount('finish'),0);
   assert.equal(socket.listenerCount('error'),0);
 });
+
+test('V198 modified security headers during document delivery prevent commit',async()=>{
+  const socket=new EventEmitter();
+  socket.destroyed=false;
+  const response=new EventEmitter();
+  const headers=new Map();
+  Object.assign(response,{socket,statusCode:200,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+  response.writeHead=(status,values)=>{response.statusCode=status;response.headersSent=true;for(const [key,value] of Object.entries(values))headers.set(key,value);headers.set('cache-control','public');};
+  response.getHeader=name=>headers.get(name);
+  response.end=()=>{response.writableEnded=true;response.writableFinished=true;response.emit('finish');};
+  response.destroy=()=>{response.destroyed=true;};
+  let committed=false;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{await work();committed=true;}
+  });
+  await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+  assert.equal(response.listenerCount('finish'),0);
+  assert.equal(socket.listenerCount('error'),0);
+});
