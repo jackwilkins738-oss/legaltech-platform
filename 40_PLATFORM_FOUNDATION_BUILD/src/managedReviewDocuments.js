@@ -20,10 +20,10 @@ function sameResult(item,r){if(item.eventId!==r.eventId||item.resultJobId!==r.ex
 // Own the source, callback, stream cleanup, buffer and shared lease until actual
 // transfer completion. A deadline requests cancellation and proves no release.
 export class ManagedReviewDocuments {
-  #reader;#drain;#ready;#manifest;#storage;#authorize;#verify;#audit;#provider;#timeout;#capacity;#max;#pending=new Set();#probe=null;#closed=false;#uncertain=false;
-  constructor({reader,drain,readiness,manifest:manifestProvider,storage,authorizeDocument,verifyEvidence,audit,probeDocuments,timeoutMs=10000,maxPending=4,maxBytes=15*1024*1024}={}){
-    if(!isPostgresReviewReader(reader)||!isManagedDeploymentDrain(drain)||!isProductionReadiness(readiness)||['resolveVersion','probe'].some(k=>typeof manifestProvider?.[k]!=='function')||['readVersion','probe'].some(k=>typeof storage?.[k]!=='function')||[authorizeDocument,verifyEvidence,audit,probeDocuments].some(f=>typeof f!=='function')||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>60000||!Number.isInteger(maxPending)||maxPending<1||maxPending>16||!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>15*1024*1024)throw fail('CONFIGURATION_INVALID');
-    this.#reader=Object.freeze({get:reader.get.bind(reader),probe:reader.probe.bind(reader)});this.#drain=drain;this.#ready=readiness;this.#manifest=Object.freeze({resolveVersion:manifestProvider.resolveVersion.bind(manifestProvider),probe:manifestProvider.probe.bind(manifestProvider)});this.#storage=Object.freeze({readVersion:storage.readVersion.bind(storage),probe:storage.probe.bind(storage)});this.#authorize=authorizeDocument;this.#verify=verifyEvidence;this.#audit=audit;this.#provider=probeDocuments;this.#timeout=timeoutMs;this.#capacity=maxPending;this.#max=maxBytes;registered.add(this);Object.freeze(this);
+  #reader;#drain;#ready;#manifest;#storage;#authorize;#verify;#audit;#provider;#supportFence;#timeout;#capacity;#max;#pending=new Set();#probe=null;#closed=false;#uncertain=false;
+  constructor({reader,drain,readiness,manifest:manifestProvider,storage,authorizeDocument,verifyEvidence,audit,probeDocuments,fencedSupportConsume,timeoutMs=10000,maxPending=4,maxBytes=15*1024*1024}={}){
+    if(!isPostgresReviewReader(reader)||!isManagedDeploymentDrain(drain)||!isProductionReadiness(readiness)||['resolveVersion','probe'].some(k=>typeof manifestProvider?.[k]!=='function')||['readVersion','probe'].some(k=>typeof storage?.[k]!=='function')||[authorizeDocument,verifyEvidence,audit,probeDocuments].some(f=>typeof f!=='function')||(fencedSupportConsume!==undefined&&typeof fencedSupportConsume!=='function')||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>60000||!Number.isInteger(maxPending)||maxPending<1||maxPending>16||!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>15*1024*1024)throw fail('CONFIGURATION_INVALID');
+    this.#reader=Object.freeze({get:reader.get.bind(reader),probe:reader.probe.bind(reader)});this.#drain=drain;this.#ready=readiness;this.#manifest=Object.freeze({resolveVersion:manifestProvider.resolveVersion.bind(manifestProvider),probe:manifestProvider.probe.bind(manifestProvider)});this.#storage=Object.freeze({readVersion:storage.readVersion.bind(storage),probe:storage.probe.bind(storage)});this.#authorize=authorizeDocument;this.#verify=verifyEvidence;this.#audit=audit;this.#provider=probeDocuments;this.#supportFence=fencedSupportConsume;this.#timeout=timeoutMs;this.#capacity=maxPending;this.#max=maxBytes;registered.add(this);Object.freeze(this);
   }
   status(){return Object.freeze({inFlight:this.#pending.size,uncertain:this.#uncertain,acceptingNew:!this.#closed&&!this.#uncertain&&this.#pending.size<this.#capacity});}
   #check(signal){if(signal?.aborted||this.#closed||this.#uncertain)throw fail('UNAVAILABLE');}
@@ -53,7 +53,12 @@ export class ManagedReviewDocuments {
         // Audit first, then re-observe the adopted result/current human identity
         // and both object/document authorities immediately before transfer.
         const final=await this.#reader.get(scope,{signal:internal,beforeRelease:async()=>{try{await this.#gate(r,current,'RELEASE',internal);}catch(e){if(e.message==='REVIEW_DOCUMENT_FORBIDDEN')throw Error('REVIEW_READ_FORBIDDEN');throw e;}}});this.#check(internal);sameResult(final,r);if(final.artifactHash!==m.artifactHash)throw fail('FORBIDDEN');
-        await consume(Object.freeze({eventId:r.eventId,resultJobId:r.expectedResultJobId,resultHash:r.expectedResultHash,artifactHash:m.artifactHash,contentType:m.contentType,size:m.size,bytes,signal:internal}));this.#check(internal);
+        const delivery=Object.freeze({eventId:r.eventId,resultJobId:r.expectedResultJobId,resultHash:r.expectedResultHash,artifactHash:m.artifactHash,contentType:m.contentType,size:m.size,bytes,signal:internal});
+        // Explicit opt-in support deliveries hold the durable PostgreSQL
+        // revocation fence until the document consumer has completed.
+        if(this.#supportFence)await this.#supportFence(Object.freeze({tenantId:r.tenantId,actorId:r.actorId,eventId:r.eventId,signal:internal}),delivery,consume);
+        else await consume(delivery);
+        this.#check(internal);
       }catch(e){error=e;}finally{
         try{if(iterator)await iterator.return();}catch{error=fail('UNAVAILABLE');}finally{bytes?.fill(0);for(const b of chunks)b.fill(0);if(lease)try{await this.#drain.release(lease);}catch{this.#uncertain=true;error=fail('UNAVAILABLE');}}
       }
