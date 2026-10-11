@@ -55,3 +55,41 @@ test('V183 actual HTTP denied grant returns no document response body',async t=>
   });
   assert.equal(delivered,false);
 });
+
+test('V184 real TCP client abort before fenced release prevents document response and commit',async t=>{
+  let entered,unlock,complete,peerDisconnected;
+  const peerClosed=new Promise(resolve=>peerDisconnected=resolve);
+  const started=new Promise(resolve=>entered=resolve);
+  const held=new Promise(resolve=>unlock=resolve);
+  const completed=new Promise(resolve=>complete=resolve);
+  let committed=false,opened=0;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{
+      opened++;entered();
+      await held;
+      const result=await work();
+      committed=true;
+      return result;
+    }
+  });
+  const {instance,port}=await server((_,res)=>{
+    // Client-side close alone does not establish that the server has observed
+    // the disconnect. Release the fence only after the server socket closes.
+    res.socket.once('close',peerDisconnected);
+    gate(ctx,document(),res).then(()=>complete(null),complete);
+  });
+  t.after(()=>instance.close());
+  const req=http.get({hostname:'127.0.0.1',port,path:'/'},res=>res.resume());
+  req.on('error',()=>{});
+  await started;
+  const closed=new Promise(resolve=>req.once('close',resolve));
+  req.destroy();
+  await closed;
+  await peerClosed;
+  unlock();
+  const error=await completed;
+  assert.match(error?.message??'',/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(opened,1);
+  assert.equal(committed,false);
+});
