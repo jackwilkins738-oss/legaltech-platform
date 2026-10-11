@@ -17,7 +17,7 @@ function cleanup(dir){ fs.rmSync(dir,{recursive:true,force:true}); }
 test('V77 committed migration manifest exactly verifies the canonical migration directory',()=>{
   const manifest=loadMigrationManifest(manifestPath);
   const result=verifyMigrationDirectory({directory:migrationDir,manifest});
-  assert.deepEqual(result,{status:'VERIFIED',count:62,latest:'062_support_actor_restrictive_rls.sql'});
+  assert.deepEqual(result,{status:'VERIFIED',count:63,latest:'063_support_revocation_serialization.sql'});
 });
 
 test('V77 changed migration bytes are detected as checksum drift',()=>{
@@ -90,7 +90,7 @@ test('V77 current applied migration set verifies without exposing SQL',()=>{
   const manifest=loadMigrationManifest(manifestPath);
   const applied=manifest.migrations.map(({file,sha256})=>({file,sha256}));
   const state=verifyAppliedMigrations({manifest,applied});
-  assert.deepEqual(state,{status:'CURRENT',appliedCount:62,pending:[],latestRequired:'062_support_actor_restrictive_rls.sql'});
+  assert.deepEqual(state,{status:'CURRENT',appliedCount:63,pending:[],latestRequired:'063_support_revocation_serialization.sql'});
   assert.equal(JSON.stringify(state).includes('CREATE TABLE'),false);
 });
 
