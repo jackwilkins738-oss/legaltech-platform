@@ -273,3 +273,22 @@ test('V190 synchronous end failure never emits a synthetic error or commits',asy
   assert.equal(response.listenerCount('error'),1);
   response.removeAllListeners('error');
 });
+
+test('V191 destroyed transport after response finish cannot commit document delivery',async()=>{
+  const socket=new EventEmitter();
+  socket.destroyed=false;
+  const response=new EventEmitter();
+  Object.assign(response,{socket,headersSent:false,writableEnded:false,writableFinished:false,destroyed:false});
+  response.writeHead=()=>{response.headersSent=true;};
+  response.end=()=>{response.writableEnded=true;response.writableFinished=true;socket.destroyed=true;response.emit('finish');};
+  response.destroy=()=>{response.destroyed=true;};
+  let committed=false;
+  const gate=createFencedHttpDocumentResponder({
+    resolveBinding:async()=>binding(),
+    transferFence:async(_,work)=>{await work();committed=true;}
+  });
+  await assert.rejects(gate(ctx,document(),response),/SUPPORT_HTTP_DOCUMENT_UNAVAILABLE/);
+  assert.equal(committed,false);
+  assert.equal(socket.listenerCount('error'),0);
+  assert.equal(socket.listenerCount('close'),0);
+});
