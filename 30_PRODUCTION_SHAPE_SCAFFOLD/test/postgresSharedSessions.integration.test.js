@@ -559,6 +559,32 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     await assert.rejects(fence(binding,async()=>{throw Error('must never transfer after revocation');}),/SUPPORT_TRANSFER_FENCE_UNAVAILABLE/);
     assert.equal((await admin.query('SELECT count(*)::integer AS n FROM public.support_access_revocations WHERE request_id=$1',[created.requestId])).rows[0].n,1);
   });
+  await t.test('V176 database trigger serializes direct SQL revocation against held document transfer',async()=>{
+    const readerLogin='legaltech_support_reader_v176';
+    await admin.query(`CREATE ROLE ${readerLogin} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
+    await admin.query(`GRANT legaltech_support_reader TO ${readerLogin}`);
+    const fence=createTenantScopedPostgresSupportTransferFence({pool:makePool(readerLogin,2),expectedRole:readerLogin,timeoutMs:5000});
+    const requestId=uuid(),matterId='11700000-0000-4000-8000-000000000031',documentRefHash='a'.repeat(64);
+    await admin.query(`INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,document_ref_hash,ticket_ref_hash,purpose_hash,trace_id,expires_at)
+      VALUES($1,$2,$3,$4,'DOCUMENT_READ',$5,$6,$7,'v176',statement_timestamp()+interval '10 minutes')`,
+      [requestId,tenantA,actorA,matterId,documentRefHash,'b'.repeat(64),'c'.repeat(64)]);
+    await admin.query(`INSERT INTO public.support_access_approvals(tenant_id,request_id,approver_id,trace_id) VALUES($1,$2,$3,'v176')`,
+      [tenantA,requestId,'11700000-0000-4000-8000-000000000013']);
+    let entered,release,completed=false;
+    const started=new Promise(resolve=>entered=resolve),hold=new Promise(resolve=>release=resolve);
+    const input={tenantId:tenantA,actorId:actorA,requestId,matterId,scope:'DOCUMENT_READ',documentRefHash};
+    const transferring=fence(input,async()=>{entered();await hold;return true;});
+    await started;
+    const rawRevocation=admin.query(`INSERT INTO public.support_access_revocations(tenant_id,request_id,revoked_by,reason_hash,trace_id)
+      VALUES($1,$2,$3,$4,'v176-direct')`,[tenantA,requestId,actorA,'d'.repeat(64)]).then(()=>{completed=true;});
+    await new Promise(resolve=>setTimeout(resolve,40));
+    assert.equal(completed,false,'a direct table insert must not evade the transfer advisory lock');
+    release();
+    assert.equal(await transferring,true);
+    await rawRevocation;
+    assert.equal(completed,true);
+    await assert.rejects(fence(input,async()=>true),/SUPPORT_TRANSFER_FENCE_UNAVAILABLE/);
+  });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
     const results=await Promise.all(Array.from({length:12},(_,i)=>transactions.run(scopes[i%2],async tx=>{
