@@ -41,7 +41,7 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
           const finish=()=>{
             // Finish alone is insufficient when an error/close was observed
             // during the same response lifecycle.
-            if(closed||transportFailed||!response.writableFinished||!response.headersSent||!response.writableEnded||response.statusCode!==200||!validHeaders()){failure();return;}
+            if(closed||transportFailed||!response.writableFinished||!response.headersSent||!response.writableEnded||response.statusCode!==200){failure();return;}
             cleanup();resolve();
           };
           const close=()=>{cleanup();reject(Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE'));};
@@ -58,6 +58,7 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
         });
         try{
           response.writeHead(200,{'content-type':verified.contentType,'content-length':verified.size,'cache-control':'no-store','x-content-type-options':'nosniff'});
+          if(!validHeaders())throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
           response.end(bytes);
         }catch{
           // Settle the completion promise directly: emitting a synthetic error
@@ -65,7 +66,7 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
           failCompletion();
         }
         await done;
-        if(closed||transportFailed||!response.writableFinished||!response.headersSent||!response.writableEnded||response.statusCode!==200||!validHeaders())throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
+        if(closed||transportFailed||!response.writableFinished||!response.headersSent||!response.writableEnded||response.statusCode!==200)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
       });
     }catch{
       if(!response.writableEnded&&!response.destroyed&&typeof response.destroy==='function'){
