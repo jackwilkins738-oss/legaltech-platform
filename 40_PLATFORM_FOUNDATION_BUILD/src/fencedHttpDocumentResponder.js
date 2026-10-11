@@ -43,8 +43,15 @@ export function createFencedHttpDocumentResponder({resolveBinding,transferFence,
           response.on('finish',finish);response.on('close',close);response.on('error',failure);
           if(socket)socket.on('error',failure);
         });
-        response.writeHead(200,{'content-type':verified.contentType,'content-length':verified.size,'cache-control':'no-store','x-content-type-options':'nosniff'});
-        response.end(bytes);
+        try{
+          response.writeHead(200,{'content-type':verified.contentType,'content-length':verified.size,'cache-control':'no-store','x-content-type-options':'nosniff'});
+          response.end(bytes);
+        }catch(error){
+          // Release completion listeners when synchronous response APIs throw.
+          response.emit('error',error);
+          await done;
+          throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
+        }
         await done;
         if(closed||transportFailed||!response.writableFinished)throw Error('SUPPORT_HTTP_DOCUMENT_UNAVAILABLE');
       });
