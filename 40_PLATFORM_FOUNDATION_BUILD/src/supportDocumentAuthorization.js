@@ -53,6 +53,7 @@ export function createSupportDocumentConsumeGate({authorizeRelease,consume}={}){
     try{
       const keys=['eventId','resultJobId','resultHash','artifactHash','contentType','size','bytes','signal'];
       const value=snapshot(payload,keys);
+      if(!Buffer.isBuffer(value.bytes)||value.bytes.length!==value.size||!Number.isSafeInteger(value.size)||value.size<1)throw deny();
       if(value.signal?.aborted)throw deny();
       if(await authorizeRelease(Object.freeze({...value,phase:'RELEASE'}))!==true||value.signal?.aborted)throw deny();
       await consume(value);
