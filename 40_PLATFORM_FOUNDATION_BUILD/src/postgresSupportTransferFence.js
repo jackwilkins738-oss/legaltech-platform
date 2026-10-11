@@ -31,6 +31,9 @@ export function createPostgresSupportTransferFence({transact}={}){
           row.requester_id!==pinned.actorId||row.matter_id!==pinned.matterId||
           row.scope!==pinned.scope||String(row.document_ref_hash??'').trim()!==pinned.documentRefHash)throw deny();
         if(pinned.signal?.aborted)throw deny();
+        // A transaction fence protects the grant, not arbitrary external
+        // document bytes: require the caller's trusted delivery validator to
+        // execute *inside* the held transaction before transfer.
         const result=await consume(Object.freeze({...pinned,signal:pinned.signal}));
         if(pinned.signal?.aborted)throw deny();
         return result;
