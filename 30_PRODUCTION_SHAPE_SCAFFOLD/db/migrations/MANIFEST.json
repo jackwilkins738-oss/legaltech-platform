@@ -321,6 +321,11 @@
       "file": "064_matter_conversations_default_deny.sql",
       "sha256": "d7783eaa0c35c18429dccf20b7c1755af49f0f89864db93b49cc4e33171c9cc3",
       "destructive": false
+    },
+    {
+      "file": "065_conversation_tenant_constraints.sql",
+      "sha256": "48fa9c1263fe6d54956b3795449f1237956c89725311101a161f3eea4d852312",
+      "destructive": false
     }
   ]
 }
