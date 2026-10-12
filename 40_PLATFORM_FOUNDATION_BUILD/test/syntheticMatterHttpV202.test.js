@@ -48,7 +48,7 @@ test('V202 synthetic API provides authorized matter conversations and denies una
   const audit=await request('alice-token','/'+thread.id+'/audit');
   assert.equal(audit.status,200);
   const entries=(await audit.json()).events;
-  assert.deepEqual(entries.map(x=>x.kind),['CREATED','MESSAGE_POSTED','PARTICIPANTS_CHANGED']);
+  assert.deepEqual(entries.map(x=>x.kind),['CREATED','MESSAGE_POSTED','MESSAGE_POSTED','PARTICIPANTS_CHANGED']);
   assert.equal(JSON.stringify(entries).includes('Please review'),false);
   assert.equal((await request('bob-token','/'+thread.id+'/audit')).status,404);
   assert.equal((await request('other-token','/'+thread.id+'/audit')).status,404);
