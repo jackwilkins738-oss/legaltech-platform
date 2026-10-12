@@ -71,6 +71,7 @@ export class SyntheticMatterCommunications {
     const ids=Object.freeze([...new Set([...participantIds,t.createdBy])]);
     if(ids.length>25)throw invalid();
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
+    if(this.#audit.get(t.id).length>=this.#maxAudit)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const replacement=Object.freeze({...t,participantIds:ids});
     this.#threads.set(t.id,replacement);
     const revision=this.#revision.get(t.id)+1;
