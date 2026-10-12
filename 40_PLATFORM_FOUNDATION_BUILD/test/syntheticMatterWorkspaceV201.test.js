@@ -32,7 +32,7 @@ test('V201 workspace denies missing read capability and unsafe input',()=>{
 test('V201 workspace returns disconnected objects and never reveals work or event counts',()=>{
   const w=new SyntheticMatterWorkspace({store});
   const m=w.get({session:session(),matterId:'public'});
-  m.clientLabel='altered';
+  assert.throws(()=>{m.clientLabel='altered';},TypeError);
   assert.equal(data[0].clientLabel,'Public case');
   const overview=w.summary({session:session(),matterId:'public'});
   assert.equal(overview.syntheticReferenceOnly,true);
