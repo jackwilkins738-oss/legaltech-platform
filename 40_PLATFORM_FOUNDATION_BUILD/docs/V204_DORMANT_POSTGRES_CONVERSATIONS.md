@@ -23,3 +23,9 @@ Migration 065 adds composite tenant/record unique indexes to the pre-existing ac
 Messages and audit events now have database triggers that reject UPDATE or DELETE even if a future application role is mistakenly granted either operation. The trigger function does not receive PUBLIC EXECUTE privileges. The existing always-false row-level policies and absent application-role grants remain in force, so these tables are still **not usable by production APIs**.
 
 The migrations do not prove live actor membership, revoke in-flight writes, authorize recipients, transactionally bind business logic to durable audit or establish legal retention and key management. Those remain separate acceptance gates. New indexes on the established actors/matters tables require operational review before application to any existing deployed database.
+
+## V206 — Restrictive dormant guard
+
+Migration 066 converts all four always-false row-level policies into **RESTRICTIVE** policies. In PostgreSQL, permissive policies combine by OR; a later permissive policy could otherwise override an ordinary false policy. A restrictive false policy instead blocks rows regardless of any later permissive policies, until deliberately changed through an independently reviewed migration. Existing absence of application grants and FORCE RLS remain unchanged. PostgreSQL CI checks all four catalog policy modes directly.
+
+This is a protective, non-operational schema increment. Never remove the restrictive gate simply to satisfy a feature test or enable production messaging.
