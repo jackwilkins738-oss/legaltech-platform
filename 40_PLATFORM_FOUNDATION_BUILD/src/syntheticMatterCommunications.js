@@ -55,9 +55,9 @@ export class SyntheticMatterCommunications {
     if(!text(body))throw invalid();
     if(this.#messages.get(t.id).length>=this.#maxMessages)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
+    if(this.#audit.get(t.id).length>=this.#maxAudit)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const message=Object.freeze({id:randomUUID(),threadId:t.id,actorId:s.actorId,body,at});
     this.#messages.get(t.id).push(message);
-    if(this.#audit.get(t.id).length>=this.#maxAudit)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const revision=this.#revision.get(t.id)+1;
     this.#revision.set(t.id,revision);
     this.#audit.get(t.id).push(Object.freeze({revision,kind:'MESSAGE_POSTED',actorId:s.actorId,at}));
