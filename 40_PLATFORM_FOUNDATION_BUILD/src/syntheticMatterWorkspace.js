@@ -29,20 +29,9 @@ export class SyntheticMatterWorkspace {
     const all=this.#store.listMatters(s.tenantId,500);
     return Object.freeze(all.filter(m=>this.#allowed(s,m)).slice(0,n).map(m=>Object.freeze(copy(m))));
   }
-  summary({session,matterId,workLimit=100,eventLimit=100}={}){
-    const s=this.#session(session),matter=this.get({session:s,matterId});
-    const w=bounded(workLimit,100,200),e=bounded(eventLimit,100,200);
-    const work=this.#store.listWork({tenantId:s.tenantId,matterId,limit:w,offset:0});
-    // This view intentionally emits counts only: work items require work-specific permissions.
-    // Event details are not exposed because each requires its own inbound access checks.
-    const events=this.#store.listEvents(s.tenantId,e);
-    return Object.freeze({
-      matter,
-      workCount:work.length,
-      workCountTruncated:work.length===w,
-      // Never correlate or disclose event details without event-level authorisation.
-      eventCountNotAvailable:true,
-      syntheticReferenceOnly:true
-    });
+  // Work and event data deliberately remain in their separately authorised services.
+  summary({session,matterId}={}){
+    const matter=this.get({session,matterId});
+    return Object.freeze({matter,syntheticReferenceOnly:true,workAndEventsRequireSeparateAuthorization:true});
   }
 }
