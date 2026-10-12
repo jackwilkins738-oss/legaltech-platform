@@ -1,6 +1,6 @@
 // Trusted server-side input contract for the eventual durable conversation writer.
 // This module never authorizes a user or writes to a database.
-const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const invalid=()=>new Error('CONVERSATION_COMMAND_INVALID');
 const uuid=value=>typeof value==='string'&&UUID.test(value);
 const plain=value=>value!==null&&typeof value==='object'&&Object.getPrototypeOf(value)===Object.prototype;
