@@ -37,6 +37,14 @@ test('V202 synthetic API provides authorized matter conversations and denies una
   assert.equal((await request('alice-token','/'+thread.id+'/participants','PUT',{participantIds:[]})).status,200);
   assert.equal((await request('bob-token','/'+thread.id+'/snapshot')).status,404);
   assert.equal((await request('alice-token','/'+thread.id+'/snapshot')).status,200);
+  const audit=await request('alice-token','/'+thread.id+'/audit');
+  assert.equal(audit.status,200);
+  const entries=(await audit.json()).events;
+  assert.deepEqual(entries.map(x=>x.kind),['CREATED','MESSAGE_POSTED','PARTICIPANTS_CHANGED']);
+  assert.equal(JSON.stringify(entries).includes('Please review'),false);
+  assert.equal((await request('bob-token','/'+thread.id+'/audit')).status,404);
+  assert.equal((await request('other-token','/'+thread.id+'/audit')).status,404);
+  assert.equal((await request('alice-token','/'+thread.id+'/audit?limit=0')).status,400);
  }finally{await new Promise(resolve=>server.close(resolve));store.close();fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('V202 synthetic communication adapter is forbidden in production before accepting requests',()=>{
