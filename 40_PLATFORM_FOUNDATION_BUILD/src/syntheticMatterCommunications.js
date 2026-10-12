@@ -66,11 +66,12 @@ export class SyntheticMatterCommunications {
     if(!Array.isArray(participantIds)||Object.getPrototypeOf(participantIds)!==Array.prototype||participantIds.length>25||participantIds.some(x=>!id(x)))throw invalid();
     const ids=Object.freeze([...new Set([...participantIds,t.createdBy])]);
     if(ids.length>25)throw invalid();
+    const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
     const replacement=Object.freeze({...t,participantIds:ids});
     this.#threads.set(t.id,replacement);
     const revision=this.#revision.get(t.id)+1;
     this.#revision.set(t.id,revision);
-    this.#audit.get(t.id).push(Object.freeze({revision,kind:'PARTICIPANTS_CHANGED',actorId:s.actorId,at:this.#now()}));
+    this.#audit.get(t.id).push(Object.freeze({revision,kind:'PARTICIPANTS_CHANGED',actorId:s.actorId,at}));
     return Object.freeze(clone(replacement));
   }
   audit({session,threadId,limit=100}={}){
