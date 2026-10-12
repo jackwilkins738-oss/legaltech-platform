@@ -74,3 +74,16 @@ test('V202 snapshot observes coherent messages and revocation revision',()=>{
  assert.deepEqual(remaining.thread.participantIds,['alice']);
  assert.throws(()=>c.snapshot({session:session(),threadId:t.id,limit:0}),{code:'INVALID_REQUEST'});
 });
+
+test('V202 audit emits bounded metadata without message bodies and is creator-only',()=>{
+ const c=new SyntheticMatterCommunications({matterStore:store});
+ const t=c.createThread({session:session(),input:{matterId:'m1',subject:'Test',participantIds:['bob']}});
+ c.post({session:session('bob'),threadId:t.id,body:'Sensitive information not for audit'});
+ c.replaceParticipants({session:session(),threadId:t.id,participantIds:[]});
+ const entries=c.audit({session:session(),threadId:t.id});
+ assert.deepEqual(entries.map(e=>e.kind),['CREATED','MESSAGE_POSTED','PARTICIPANTS_CHANGED']);
+ assert.deepEqual(entries.map(e=>e.revision),[1,2,3]);
+ assert.equal(JSON.stringify(entries).includes('Sensitive information'),false);
+ assert.throws(()=>c.audit({session:session('bob'),threadId:t.id}),{code:'NOT_FOUND'});
+ assert.equal(c.audit({session:session(),threadId:t.id,limit:1}).length,1);
+});
