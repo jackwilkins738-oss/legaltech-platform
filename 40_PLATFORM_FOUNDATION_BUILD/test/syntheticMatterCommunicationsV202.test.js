@@ -122,3 +122,13 @@ test('V202 sparse and decorated participant arrays are refused before mutation',
  assert.throws(()=>c.replaceParticipants({session:session(),threadId:t.id,participantIds:decorated}),{code:'INVALID_REQUEST'});
  assert.equal(c.snapshot({session:session(),threadId:t.id}).revision,1);
 });
+
+test('V202 audit saturation never partially commits a message or participant update',()=>{
+ const c=new SyntheticMatterCommunications({matterStore:store,maxAudit:1});
+ const t=c.createThread({session:session(),input:{matterId:'m1',subject:'Audit limit',participantIds:['bob']}});
+ assert.throws(()=>c.post({session:session(),threadId:t.id,body:'unsaved'}),{code:'COMMUNICATION_CAPACITY'});
+ assert.equal(c.snapshot({session:session(),threadId:t.id}).messages.length,0);
+ assert.throws(()=>c.replaceParticipants({session:session(),threadId:t.id,participantIds:[]}),{code:'COMMUNICATION_CAPACITY'});
+ assert.equal(c.snapshot({session:session('bob'),threadId:t.id}).revision,1);
+ assert.equal(c.audit({session:session(),threadId:t.id}).length,1);
+});
