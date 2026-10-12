@@ -13,7 +13,7 @@ const clone=x=>structuredClone(x);
 
 /** Explicitly synthetic, process-local communications reference. No network or production persistence. */
 export class SyntheticMatterCommunications {
-  #matters;#now;#threads=new Map();#messages=new Map();#maxThreads;#maxMessages;#revision=new Map();#audit=new Map();#maxAudit;
+  #matters;#now;#threads=new Map();#messages=new Map();#maxThreads;#maxMessages;#revision=new Map();#audit=new Map();#maxAudit;#receipts=new Map();
   constructor({matterStore,now=()=>new Date().toISOString(),maxThreads=1000,maxMessages=2000,maxAudit=5000}={}){
     if(!matterStore||typeof matterStore.getMatter!=='function'||typeof now!=='function')throw Error('COMMUNICATION_CONFIGURATION_INVALID');
     if(!Number.isInteger(maxThreads)||maxThreads<1||maxThreads>10000||!Number.isInteger(maxMessages)||maxMessages<1||maxMessages>10000)throw Error('COMMUNICATION_CONFIGURATION_INVALID');
@@ -39,7 +39,7 @@ export class SyntheticMatterCommunications {
     if(this.#threads.size>=this.#maxThreads)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
     const thread=Object.freeze({id:randomUUID(),tenantId:s.tenantId,matterId,subject,participantIds:Object.freeze(ids),createdBy:s.actorId,createdAt:at});
-    this.#threads.set(thread.id,thread);this.#messages.set(thread.id,[]);this.#revision.set(thread.id,1);this.#audit.set(thread.id,[Object.freeze({revision:1,kind:'CREATED',actorId:s.actorId,at})]);
+    this.#threads.set(thread.id,thread);this.#messages.set(thread.id,[]);this.#receipts.set(thread.id,new Map());this.#revision.set(thread.id,1);this.#audit.set(thread.id,[Object.freeze({revision:1,kind:'CREATED',actorId:s.actorId,at})]);
     return Object.freeze(clone(thread));
   }
   #thread(session,threadId,cap){
@@ -50,9 +50,18 @@ export class SyntheticMatterCommunications {
     this.#matter(s,t.matterId);
     return {s,t};
   }
-  post({session,threadId,body}={}){
+  post({session,threadId,body,requestId}={}){
     const {s,t}=this.#thread(session,threadId,'matter:communicate');
     if(!text(body))throw invalid();
+    if(requestId!==undefined && !id(requestId))throw invalid();
+    const receipts=this.#receipts.get(t.id);
+    if(requestId!==undefined){
+      const previous=receipts.get(s.actorId+'\u0000'+requestId);
+      if(previous){
+        if(previous.body!==body)throw appError('request conflicts with prior message',{status:409,code:'COMMUNICATION_CONFLICT'});
+        return Object.freeze(clone(previous.message));
+      }
+    }
     if(this.#messages.get(t.id).length>=this.#maxMessages)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
     if(this.#audit.get(t.id).length>=this.#maxAudit)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
@@ -61,11 +70,14 @@ export class SyntheticMatterCommunications {
     const revision=this.#revision.get(t.id)+1;
     this.#revision.set(t.id,revision);
     this.#audit.get(t.id).push(Object.freeze({revision,kind:'MESSAGE_POSTED',actorId:s.actorId,at}));
+    if(requestId!==undefined)receipts.set(s.actorId+'\u0000'+requestId,Object.freeze({body,message}));
     return Object.freeze(clone(message));
   }
-  replaceParticipants({session,threadId,participantIds}={}){
+  replaceParticipants({session,threadId,participantIds,expectedRevision}={}){
     const {s,t}=this.#thread(session,threadId,'matter:communicate');
     if(t.createdBy!==s.actorId)throw hidden();
+    if(expectedRevision!==undefined && (!Number.isSafeInteger(expectedRevision)||expectedRevision<1))throw invalid();
+    if(expectedRevision!==undefined && this.#revision.get(t.id)!==expectedRevision)throw appError('conversation revision conflict',{status:409,code:'COMMUNICATION_CONFLICT'});
     if(!Array.isArray(participantIds)||Object.getPrototypeOf(participantIds)!==Array.prototype||participantIds.length>25||participantIds.some(x=>!id(x)))throw invalid();
     if(Object.keys(participantIds).length!==participantIds.length)throw invalid();
     const ids=Object.freeze([...new Set([...participantIds,t.createdBy])]);
