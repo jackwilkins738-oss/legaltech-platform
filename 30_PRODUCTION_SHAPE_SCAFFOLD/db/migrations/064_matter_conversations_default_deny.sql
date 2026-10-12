@@ -56,5 +56,9 @@ ALTER TABLE public.matter_conversation_threads FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.matter_conversation_participants FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.matter_conversation_messages FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.matter_conversation_audit FORCE ROW LEVEL SECURITY;
--- Intentionally no policies: RLS default-deny, even when a later operator has privileges.
+-- Explicit impossible policies preserve runtime catalog verification while denying all DML.
+CREATE POLICY matter_conversation_threads_deny ON public.matter_conversation_threads FOR ALL TO PUBLIC USING (false) WITH CHECK (false);
+CREATE POLICY matter_conversation_participants_deny ON public.matter_conversation_participants FOR ALL TO PUBLIC USING (false) WITH CHECK (false);
+CREATE POLICY matter_conversation_messages_deny ON public.matter_conversation_messages FOR ALL TO PUBLIC USING (false) WITH CHECK (false);
+CREATE POLICY matter_conversation_audit_deny ON public.matter_conversation_audit FOR ALL TO PUBLIC USING (false) WITH CHECK (false);
 COMMIT;
