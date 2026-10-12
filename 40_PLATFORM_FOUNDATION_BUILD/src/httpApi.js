@@ -243,16 +243,16 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
           if(action==='messages' && req.method==='GET')
             return send(res,200,{messages:syntheticCommunications.messages({session,threadId,limit:boundedLimit(url,{fallback:100,max:200})})},traceId);
           if(action==='messages' && req.method==='POST'){
-            const body=await readJson(req);assertBodyKeys(body,new Set(['body']));
-            return send(res,201,{message:syntheticCommunications.post({session,threadId,body:body.body})},traceId);
+            const body=await readJson(req);assertBodyKeys(body,new Set(['body','requestId']));
+            return send(res,201,{message:syntheticCommunications.post({session,threadId,body:body.body,requestId:body.requestId})},traceId);
           }
           if(action==='audit' && req.method==='GET')
             return send(res,200,{events:syntheticCommunications.audit({session,threadId,limit:boundedLimit(url,{fallback:100,max:200})})},traceId);
           if(action==='snapshot' && req.method==='GET')
             return send(res,200,syntheticCommunications.snapshot({session,threadId,limit:boundedLimit(url,{fallback:100,max:200})}),traceId);
           if(action==='participants' && req.method==='PUT'){
-            const body=await readJson(req);assertBodyKeys(body,new Set(['participantIds']));
-            return send(res,200,{thread:syntheticCommunications.replaceParticipants({session,threadId,participantIds:body.participantIds})},traceId);
+            const body=await readJson(req);assertBodyKeys(body,new Set(['participantIds','expectedRevision']));
+            return send(res,200,{thread:syntheticCommunications.replaceParticipants({session,threadId,participantIds:body.participantIds,expectedRevision:body.expectedRevision})},traceId);
           }
         }
       }
