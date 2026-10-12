@@ -97,3 +97,16 @@ test('V202 participant ceiling includes automatically-added creator',()=>{
  assert.throws(()=>c.replaceParticipants({session:session(),threadId:t.id,participantIds:twentyFive}),{code:'INVALID_REQUEST'});
  assert.equal(c.snapshot({session:session(),threadId:t.id}).thread.participantIds.length,25);
 });
+
+test('V202 invalid clock leaves participant membership and revision unchanged',()=>{
+ let broken=false;
+ const c=new SyntheticMatterCommunications({matterStore:store,now:()=>broken?'not-a-date':'2026-10-12T00:00:00.000Z'});
+ const t=c.createThread({session:session(),input:{matterId:'m1',subject:'Review',participantIds:['bob']}});
+ broken=true;
+ assert.throws(()=>c.replaceParticipants({session:session(),threadId:t.id,participantIds:[]}),/COMMUNICATION_CLOCK_INVALID/);
+ broken=false;
+ const snapshot=c.snapshot({session:session('bob'),threadId:t.id});
+ assert.equal(snapshot.revision,1);
+ assert.deepEqual(snapshot.thread.participantIds,['bob','alice']);
+ assert.equal(c.audit({session:session(),threadId:t.id}).length,1);
+});
