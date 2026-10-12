@@ -17,7 +17,7 @@ function cleanup(dir){ fs.rmSync(dir,{recursive:true,force:true}); }
 test('V77 committed migration manifest exactly verifies the canonical migration directory',()=>{
   const manifest=loadMigrationManifest(manifestPath);
   const result=verifyMigrationDirectory({directory:migrationDir,manifest});
-  assert.deepEqual(result,{status:'VERIFIED',count:64,latest:'064_matter_conversations_default_deny.sql'});
+  assert.deepEqual(result,{status:'VERIFIED',count:65,latest:'065_conversation_tenant_constraints.sql'});
 });
 
 test('V77 changed migration bytes are detected as checksum drift',()=>{
@@ -90,7 +90,7 @@ test('V77 current applied migration set verifies without exposing SQL',()=>{
   const manifest=loadMigrationManifest(manifestPath);
   const applied=manifest.migrations.map(({file,sha256})=>({file,sha256}));
   const state=verifyAppliedMigrations({manifest,applied});
-  assert.deepEqual(state,{status:'CURRENT',appliedCount:64,pending:[],latestRequired:'064_matter_conversations_default_deny.sql'});
+  assert.deepEqual(state,{status:'CURRENT',appliedCount:65,pending:[],latestRequired:'065_conversation_tenant_constraints.sql'});
   assert.equal(JSON.stringify(state).includes('CREATE TABLE'),false);
 });
 
