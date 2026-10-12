@@ -35,3 +35,24 @@ test('V202 membership withdrawal denies previously accessible conversation',()=>
  assert.throws(()=>c.messages({session:session(),threadId:thread.id}),{code:'NOT_FOUND'});
  assert.equal(c.messages({session:granted,threadId:thread.id}).length,0);
 });
+
+test('V202 creator can revoke a participant immediately but cannot be removed',()=>{
+ const c=new SyntheticMatterCommunications({matterStore:store});
+ const t=c.createThread({session:session(),input:{matterId:'m1',subject:'Handover',participantIds:['bob','eve']}});
+ c.post({session:session('bob'),threadId:t.id,body:'Before revocation'});
+ assert.throws(()=>c.replaceParticipants({session:session('bob'),threadId:t.id,participantIds:['bob']}),{code:'NOT_FOUND'});
+ const updated=c.replaceParticipants({session:session(),threadId:t.id,participantIds:['eve']});
+ assert.deepEqual(updated.participantIds,['eve','alice']);
+ assert.throws(()=>c.messages({session:session('bob'),threadId:t.id}),{code:'NOT_FOUND'});
+ assert.throws(()=>c.post({session:session('bob'),threadId:t.id,body:'After revocation'}),{code:'NOT_FOUND'});
+ assert.equal(c.listThreads({session:session('bob'),matterId:'m1'}).length,0);
+ assert.equal(c.messages({session:session('eve'),threadId:t.id}).length,1);
+});
+test('V202 bounded storage fails closed without dropping existing messages',()=>{
+ const c=new SyntheticMatterCommunications({matterStore:store,maxThreads:1,maxMessages:1});
+ const t=c.createThread({session:session(),input:{matterId:'m1',subject:'Bounded',participantIds:[]}});
+ assert.throws(()=>c.createThread({session:session(),input:{matterId:'m1',subject:'Extra',participantIds:[]}}),{code:'COMMUNICATION_CAPACITY'});
+ c.post({session:session(),threadId:t.id,body:'First'});
+ assert.throws(()=>c.post({session:session(),threadId:t.id,body:'Second'}),{code:'COMMUNICATION_CAPACITY'});
+ assert.equal(c.messages({session:session(),threadId:t.id}).length,1);
+});
