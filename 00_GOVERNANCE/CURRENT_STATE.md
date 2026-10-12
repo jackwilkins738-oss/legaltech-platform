@@ -1,5 +1,9 @@
 # CURRENT STATE — AUTHORITATIVE
 
+## V200 — Security evidence consolidation (IN PROGRESS)
+
+Latest migration manifest includes 062 restrictive support actor INSERT policies and 063 revocation serialization; issue #80 and draft PR #82 describe historical vulnerable policies prior to this remediation. Their presence is **not** proof of effective grants or successful cross-server fencing. V200 is collecting current PostgreSQL negative AND positive policy evidence, role isolation, transaction/audit integrity and release gates in `40_PLATFORM_FOUNDATION_BUILD/docs/V200_SECURITY_ACCEPTANCE_GATES.md`. Do not close issue #80 or enable support consumers without current-migration integration evidence and review. D-018, V131 and pre-TO/client-data restrictions are unchanged.
+
 ## V160 — Shared PostgreSQL transaction identity pinning
 
 The shared transaction driver now copies and validates tenant/actor UUIDs before any connection checkout or SQL await. Both entry points reject accessor, inherited, hidden and coercible identity fields without executing caller code. Runtime-role configuration requires a primitive string. Existing connection destruction, transaction-local context, abort and ambiguous-commit behavior are preserved. This is an independent D-018 authorization defect fix; no migrations or privileges change.
