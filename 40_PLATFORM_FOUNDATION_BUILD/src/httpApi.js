@@ -152,10 +152,12 @@ function assertBodyTenant(body, session) {
   }
 }
 
-export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter(), identitySessionService = null, workApi = null, readiness = null, productionMode = false, readinessTimeoutMs = 1500, processingIngress = null}) {
+export function createApiServer({platform, authProvider, devWorkers = false, uiRoot = null, integrations = null, abuseLimiter = new InMemoryAbuseLimiter(), identitySessionService = null, workApi = null, readiness = null, productionMode = false, readinessTimeoutMs = 1500, processingIngress = null, syntheticCommunications = null}) {
   if(typeof productionMode!=='boolean'||!Number.isInteger(readinessTimeoutMs)||readinessTimeoutMs<100||readinessTimeoutMs>6000) throw new Error('API_ADMISSION_CONFIGURATION_INVALID');
   const production=productionMode||process.env.NODE_ENV==='production';
   if(processingIngress!==null&&!isManagedProcessingIngress(processingIngress))throw new Error('PRODUCTION_INGRESS_REQUIRED');
+  if(production && syntheticCommunications!==null) throw new Error('PRODUCTION_REFERENCE_ADAPTER_FORBIDDEN');
+  if(syntheticCommunications!==null && ['createThread','listThreads','post','messages','replaceParticipants','snapshot'].some(k=>typeof syntheticCommunications[k]!=='function')) throw new Error('COMMUNICATION_ADAPTER_INVALID');
   if(production) {
     if(!isProductionReadiness(readiness)) throw new Error('PRODUCTION_READINESS_REQUIRED');
     if(devWorkers||platform instanceof Platform||platform?.store instanceof PlatformStore||platform?.objectStorage instanceof LocalObjectStorage||authProvider instanceof StaticAuthProvider||abuseLimiter instanceof InMemoryAbuseLimiter||usesReferenceSessionStore(authProvider)||usesReferenceSessionStore(identitySessionService)) throw new Error('PRODUCTION_REFERENCE_ADAPTER_FORBIDDEN');
@@ -223,6 +225,35 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
         if (connector?.tenantId !== session.tenantId || !integrations.registry.get(session.tenantId, kind)) {
           throw appError('resource unavailable', {status: 404, code: 'NOT_FOUND'});
         }
+      }
+
+      // Explicit synthetic-only messaging routes; production rejects the adapter at boot.
+      if (syntheticCommunications && url.pathname==='/api/v1/dev/conversations' && req.method==='POST') {
+        const body=await readJson(req);
+        assertBodyKeys(body,new Set(['matterId','subject','participantIds']));
+        return send(res,201,{thread:syntheticCommunications.createThread({session,input:body})},traceId);
+      }
+      if (syntheticCommunications && url.pathname==='/api/v1/dev/conversations' && req.method==='GET') {
+        const matterId=url.searchParams.get('matter_id');
+        return send(res,200,{threads:syntheticCommunications.listThreads({session,matterId,limit:boundedLimit(url,{fallback:50,max:100})})},traceId);
+      }
+      const threadMessages=syntheticCommunications&&url.pathname.match(/^\\/api\\/v1\\/dev\\/conversations\\/([^/]+)\\/messages$/);
+      if (threadMessages && req.method==='GET') {
+        return send(res,200,{messages:syntheticCommunications.messages({session,threadId:routeId(threadMessages[1]),limit:boundedLimit(url,{fallback:100,max:200})})},traceId);
+      }
+      if (threadMessages && req.method==='POST') {
+        const body=await readJson(req);
+        assertBodyKeys(body,new Set(['body']));
+        return send(res,201,{message:syntheticCommunications.post({session,threadId:routeId(threadMessages[1]),body:body.body})},traceId);
+      }
+      const threadSnapshot=syntheticCommunications&&url.pathname.match(/^\\/api\\/v1\\/dev\\/conversations\\/([^/]+)\\/snapshot$/);
+      if(threadSnapshot && req.method==='GET'){
+        return send(res,200,syntheticCommunications.snapshot({session,threadId:routeId(threadSnapshot[1]),limit:boundedLimit(url,{fallback:100,max:200})}),traceId);
+      }
+      const threadParticipants=syntheticCommunications&&url.pathname.match(/^\\/api\\/v1\\/dev\\/conversations\\/([^/]+)\\/participants$/);
+      if(threadParticipants && req.method==='PUT'){
+        const body=await readJson(req);assertBodyKeys(body,new Set(['participantIds']));
+        return send(res,200,{thread:syntheticCommunications.replaceParticipants({session,threadId:routeId(threadParticipants[1]),participantIds:body.participantIds})},traceId);
       }
 
       if (req.method === 'GET' && url.pathname === '/api/v1/matters') {
