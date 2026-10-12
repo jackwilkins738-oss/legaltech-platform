@@ -2,7 +2,7 @@
 
 This migration lays out the first **durable storage foundation**, not a live messaging feature. It creates four PostgreSQL tables: threads, participants, messages, and append-oriented audit evidence. Tables carry explicit tenant identifiers, tenant/thread foreign keys, bounded text fields, revision uniqueness, actor-scoped retry uniqueness, and indexes for matter and thread queries.
 
-All four tables have `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY`. **No RLS policies and no application role grants** are introduced. The migration revokes PUBLIC access to these tables and the generated audit sequence. This intentionally blocks application access until a later implementation proves correct authorization and transaction fencing.
+All four tables have `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY`. **Explicit always-false RLS policies and no application role grants** are introduced. The policies satisfy the runtime catalog requirement that every tenant table has an RLS policy, while still denying all row access. The migration revokes PUBLIC access to these tables and the generated audit sequence. This intentionally blocks application access until a later implementation proves correct authorization and transaction fencing.
 
 ## Security gates before any operational use
 
