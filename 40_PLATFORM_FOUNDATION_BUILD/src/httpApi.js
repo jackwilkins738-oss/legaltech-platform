@@ -157,7 +157,7 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
   const production=productionMode||process.env.NODE_ENV==='production';
   if(processingIngress!==null&&!isManagedProcessingIngress(processingIngress))throw new Error('PRODUCTION_INGRESS_REQUIRED');
   if(production && syntheticCommunications!==null)throw new Error('PRODUCTION_REFERENCE_ADAPTER_FORBIDDEN');
-  if(syntheticCommunications!==null&&['createThread','listThreads','post','messages','replaceParticipants','snapshot'].some(k=>typeof syntheticCommunications[k]!=='function'))throw new Error('COMMUNICATION_ADAPTER_INVALID');
+  if(syntheticCommunications!==null&&['createThread','listThreads','post','messages','replaceParticipants','snapshot','audit'].some(k=>typeof syntheticCommunications[k]!=='function'))throw new Error('COMMUNICATION_ADAPTER_INVALID');
   if(production) {
     if(!isProductionReadiness(readiness)) throw new Error('PRODUCTION_READINESS_REQUIRED');
     if(devWorkers||platform instanceof Platform||platform?.store instanceof PlatformStore||platform?.objectStorage instanceof LocalObjectStorage||authProvider instanceof StaticAuthProvider||abuseLimiter instanceof InMemoryAbuseLimiter||usesReferenceSessionStore(authProvider)||usesReferenceSessionStore(identitySessionService)) throw new Error('PRODUCTION_REFERENCE_ADAPTER_FORBIDDEN');
@@ -246,6 +246,8 @@ export function createApiServer({platform, authProvider, devWorkers = false, uiR
             const body=await readJson(req);assertBodyKeys(body,new Set(['body']));
             return send(res,201,{message:syntheticCommunications.post({session,threadId,body:body.body})},traceId);
           }
+          if(action==='audit' && req.method==='GET')
+            return send(res,200,{events:syntheticCommunications.audit({session,threadId,limit:boundedLimit(url,{fallback:100,max:200})})},traceId);
           if(action==='snapshot' && req.method==='GET')
             return send(res,200,syntheticCommunications.snapshot({session,threadId,limit:boundedLimit(url,{fallback:100,max:200})}),traceId);
           if(action==='participants' && req.method==='PUT'){
