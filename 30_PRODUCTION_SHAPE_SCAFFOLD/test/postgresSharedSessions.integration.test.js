@@ -116,6 +116,14 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       WHERE relname=ANY($1::text[])`,[['matter_conversation_threads','matter_conversation_participants','matter_conversation_messages','matter_conversation_audit']]);
     assert.equal(isolated.rows.length,4);
     assert.ok(isolated.rows.every(row=>row.relrowsecurity===true && row.relforcerowsecurity===true));
+    const deny=await admin.query(`SELECT polname,polpermissive,polcmd FROM pg_catalog.pg_policy
+      WHERE polname=ANY($1::text[])`,[[
+      'matter_conversation_threads_deny','matter_conversation_participants_deny',
+      'matter_conversation_messages_deny','matter_conversation_audit_deny'
+    ]]);
+    assert.equal(deny.rows.length,4);
+    assert.ok(deny.rows.every(row=>row.polpermissive===false && row.polcmd==='*'));
+
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
     assert.equal(await brokerOne.query('SELECT * FROM public.matters').then(()=>false,error=>error.code==='42501'),true);
   });
