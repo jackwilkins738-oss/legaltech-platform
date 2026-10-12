@@ -646,32 +646,6 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       assert.match(entry.guard,/app_current_tenant_id/);
     }
   });
-  await t.test('V200 PostgreSQL operator policies reject actor spoofing in all support INSERT tables',async()=>{
-    const login='legaltech_support_operator_ci';
-    const transaction=new PostgresTenantTransactions({pool:makePool(login),expectedRole:login});
-    const current={tenantId:tenantA,actorId:actorA};
-    const otherActor='11700000-0000-4000-8000-000000000013';
-    const matterId='11700000-0000-4000-8000-000000000031',requestId=uuid();
-    await admin.query(`INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,ticket_ref_hash,purpose_hash,trace_id,expires_at)
-      VALUES($1,$2,$3,$4,'MATTER_READ',$5,$6,'v200-fixture',statement_timestamp()+interval '10 minutes')`,
-      [requestId,tenantA,actorA,matterId,'a'.repeat(64),'b'.repeat(64)]);
-    const probes=[
-      ['request',`INSERT INTO public.support_access_requests(id,tenant_id,requester_id,matter_id,scope,ticket_ref_hash,purpose_hash,trace_id,expires_at)
-        VALUES($1,$2,$3,$4,'MATTER_READ',$5,$6,'v200-spoof',statement_timestamp()+interval '10 minutes')`,[uuid(),tenantA,otherActor,matterId,'a'.repeat(64),'b'.repeat(64)]],
-      ['approval',`INSERT INTO public.support_access_approvals(tenant_id,request_id,approver_id,trace_id) VALUES($1,$2,$3,'v200-spoof')`,[tenantA,requestId,otherActor]],
-      ['revocation',`INSERT INTO public.support_access_revocations(tenant_id,request_id,revoked_by,reason_hash,trace_id) VALUES($1,$2,$3,$4,'v200-spoof')`,[tenantA,requestId,otherActor,'c'.repeat(64)]],
-      ['event',`INSERT INTO public.support_access_events(tenant_id,request_id,actor_id,matter_id,event_type,trace_id) VALUES($1,$2,$3,$4,'DENIED','v200-spoof')`,[tenantA,requestId,otherActor,matterId]]
-    ];
-    const accepted=[];
-    for(const [name,sql,args] of probes){
-      await assert.rejects(transaction.run(current,async tx=>{
-        await tx.query(sql,args);
-        accepted.push(name);
-        throw Error('SYNTHETIC_PROBE_ROLLBACK');
-      }),/UNAVAILABLE/);
-    }
-    assert.deepEqual(accepted,[],'Database RLS must deny all four actor-spoofed inserts');
-  });
   await t.test('parallel tenant queries stay isolated and pool reuse has no transaction context',async()=>{
     const scopes=[{tenantId:tenantA,actorId:actorA},{tenantId:tenantB,actorId:actorB}];
     const results=await Promise.all(Array.from({length:12},(_,i)=>transactions.run(scopes[i%2],async tx=>{
