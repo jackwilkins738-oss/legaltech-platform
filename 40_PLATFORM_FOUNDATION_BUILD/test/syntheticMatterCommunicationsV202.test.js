@@ -110,3 +110,15 @@ test('V202 invalid clock leaves participant membership and revision unchanged',(
  assert.deepEqual(snapshot.thread.participantIds,['bob','alice']);
  assert.equal(c.audit({session:session(),threadId:t.id}).length,1);
 });
+
+test('V202 sparse and decorated participant arrays are refused before mutation',()=>{
+ const c=new SyntheticMatterCommunications({matterStore:store});
+ const sparse=new Array(2);sparse[0]='bob';
+ assert.throws(()=>c.createThread({session:session(),input:{matterId:'m1',subject:'Sparse',participantIds:sparse}}),{code:'INVALID_REQUEST'});
+ const decorated=['bob'];decorated.extra='eve';
+ assert.throws(()=>c.createThread({session:session(),input:{matterId:'m1',subject:'Decorated',participantIds:decorated}}),{code:'INVALID_REQUEST'});
+ const t=c.createThread({session:session(),input:{matterId:'m1',subject:'Valid',participantIds:['bob']}});
+ assert.throws(()=>c.replaceParticipants({session:session(),threadId:t.id,participantIds:sparse}),{code:'INVALID_REQUEST'});
+ assert.throws(()=>c.replaceParticipants({session:session(),threadId:t.id,participantIds:decorated}),{code:'INVALID_REQUEST'});
+ assert.equal(c.snapshot({session:session(),threadId:t.id}).revision,1);
+});
