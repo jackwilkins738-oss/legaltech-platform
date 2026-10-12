@@ -319,7 +319,7 @@
     },
     {
       "file": "064_matter_conversations_default_deny.sql",
-      "sha256": "fa8a096665d306f97855a94da43ee611914d607e4335181811856e1efe1d039f",
+      "sha256": "d7783eaa0c35c18429dccf20b7c1755af49f0f89864db93b49cc4e33171c9cc3",
       "destructive": false
     }
   ]
