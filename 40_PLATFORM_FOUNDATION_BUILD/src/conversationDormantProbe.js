@@ -1,3 +1,4 @@
+import {PostgresTenantTransactions} from '../../30_PRODUCTION_SHAPE_SCAFFOLD/src/postgresTransactions.js';
 import {assertConversationStorageDormant,conversationStorageProofSql} from './conversationStorageProof.js';
 
 const tables=Object.freeze([
@@ -24,4 +25,14 @@ export class ConversationDormantProbe {
       return Object.freeze({status:'DORMANT',tables:4});
     }catch{throw unavailable();}
   }
+}
+
+/** Only a restricted database login can execute this trusted read-only probe. */
+export function createTenantScopedConversationDormantProbe({pool,expectedRole,tenantId,actorId,timeoutMs=3000}={}){
+  if(typeof expectedRole!=='string'||!/^legaltech_[a-z0-9_]{1,48}$/.test(expectedRole)||
+    typeof tenantId!=='string'||!/^[0-9a-f-]{36}$/i.test(tenantId)||
+    typeof actorId!=='string'||!/^[0-9a-f-]{36}$/i.test(actorId))
+    throw new Error('CONVERSATION_PROBE_CONFIGURATION_INVALID');
+  const transaction=new PostgresTenantTransactions({pool,expectedRole,timeoutMs});
+  return new ConversationDormantProbe({read:work=>transaction.run({tenantId,actorId,readOnly:true},work)});
 }
