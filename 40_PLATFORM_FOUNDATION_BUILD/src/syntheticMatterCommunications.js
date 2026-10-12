@@ -33,6 +33,7 @@ export class SyntheticMatterCommunications {
     this.#matter(s,matterId);
     if(!text(subject)||subject.length>200||!Array.isArray(participants)||Object.getPrototypeOf(participants)!==Array.prototype||participants.length>25||participants.some(x=>!id(x)))throw invalid();
     const ids=[...new Set([...participants,s.actorId])];
+    if(ids.length>25)throw invalid();
     if(this.#threads.size>=this.#maxThreads)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
     const thread=Object.freeze({id:randomUUID(),tenantId:s.tenantId,matterId,subject,participantIds:Object.freeze(ids),createdBy:s.actorId,createdAt:at});
@@ -64,6 +65,7 @@ export class SyntheticMatterCommunications {
     if(t.createdBy!==s.actorId)throw hidden();
     if(!Array.isArray(participantIds)||Object.getPrototypeOf(participantIds)!==Array.prototype||participantIds.length>25||participantIds.some(x=>!id(x)))throw invalid();
     const ids=Object.freeze([...new Set([...participantIds,t.createdBy])]);
+    if(ids.length>25)throw invalid();
     const replacement=Object.freeze({...t,participantIds:ids});
     this.#threads.set(t.id,replacement);
     const revision=this.#revision.get(t.id)+1;
