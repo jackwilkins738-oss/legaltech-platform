@@ -13,10 +13,11 @@ const clone=x=>structuredClone(x);
 
 /** Explicitly synthetic, process-local communications reference. No network or production persistence. */
 export class SyntheticMatterCommunications {
-  #matters;#now;#threads=new Map();#messages=new Map();
-  constructor({matterStore,now=()=>new Date().toISOString()}={}){
+  #matters;#now;#threads=new Map();#messages=new Map();#maxThreads;#maxMessages;
+  constructor({matterStore,now=()=>new Date().toISOString(),maxThreads=1000,maxMessages=2000}={}){
     if(!matterStore||typeof matterStore.getMatter!=='function'||typeof now!=='function')throw Error('COMMUNICATION_CONFIGURATION_INVALID');
-    this.#matters=matterStore;this.#now=now;
+    if(!Number.isInteger(maxThreads)||maxThreads<1||maxThreads>10000||!Number.isInteger(maxMessages)||maxMessages<1||maxMessages>10000)throw Error('COMMUNICATION_CONFIGURATION_INVALID');
+    this.#matters=matterStore;this.#now=now;this.#maxThreads=maxThreads;this.#maxMessages=maxMessages;
   }
   #session(raw,cap){const s=normalizeSession(raw);requireCapability(s,cap);return s;}
   #matter(s,matterId){
@@ -32,6 +33,7 @@ export class SyntheticMatterCommunications {
     this.#matter(s,matterId);
     if(!text(subject)||subject.length>200||!Array.isArray(participants)||Object.getPrototypeOf(participants)!==Array.prototype||participants.length>25||participants.some(x=>!id(x)))throw invalid();
     const ids=[...new Set([...participants,s.actorId])];
+    if(this.#threads.size>=this.#maxThreads)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
     const thread=Object.freeze({id:randomUUID(),tenantId:s.tenantId,matterId,subject,participantIds:Object.freeze(ids),createdBy:s.actorId,createdAt:at});
     this.#threads.set(thread.id,thread);this.#messages.set(thread.id,[]);
@@ -48,10 +50,20 @@ export class SyntheticMatterCommunications {
   post({session,threadId,body}={}){
     const {s,t}=this.#thread(session,threadId,'matter:communicate');
     if(!text(body))throw invalid();
+    if(this.#messages.get(t.id).length>=this.#maxMessages)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
     const message=Object.freeze({id:randomUUID(),threadId:t.id,actorId:s.actorId,body,at});
     this.#messages.get(t.id).push(message);
     return Object.freeze(clone(message));
+  }
+  replaceParticipants({session,threadId,participantIds}={}){
+    const {s,t}=this.#thread(session,threadId,'matter:communicate');
+    if(t.createdBy!==s.actorId)throw hidden();
+    if(!Array.isArray(participantIds)||Object.getPrototypeOf(participantIds)!==Array.prototype||participantIds.length>25||participantIds.some(x=>!id(x)))throw invalid();
+    const ids=Object.freeze([...new Set([...participantIds,t.createdBy])]);
+    const replacement=Object.freeze({...t,participantIds:ids});
+    this.#threads.set(t.id,replacement);
+    return Object.freeze(clone(replacement));
   }
   listThreads({session,matterId,limit=50}={}){
     const s=this.#session(session,'matter:communicate:read');
