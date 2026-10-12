@@ -123,6 +123,25 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     ]]);
     assert.equal(deny.rows.length,4);
     assert.ok(deny.rows.every(row=>row.polpermissive===false && row.polcmd==='*'));
+    // V207: verify the dormant schema is inaccessible through the actual
+    // restricted runtime login, not just a catalog-level policy declaration.
+    for(const table of ['matter_conversation_threads','matter_conversation_participants','matter_conversation_messages','matter_conversation_audit']){
+      const privileges=await admin.query(
+        `SELECT has_table_privilege('legaltech_runtime_ci',$1,'SELECT') AS read,
+                has_table_privilege('legaltech_runtime_ci',$1,'INSERT') AS create,
+                has_table_privilege('legaltech_runtime_ci',$1,'UPDATE') AS update,
+                has_table_privilege('legaltech_runtime_ci',$1,'DELETE') AS remove,
+                has_table_privilege('legaltech_runtime_ci',$1,'TRUNCATE') AS truncate`,
+        ['public.'+table]);
+      assert.deepEqual(privileges.rows,[{read:false,create:false,update:false,remove:false,truncate:false}]);
+      const deniedRead=await runtime.query('SELECT * FROM public.'+table+' LIMIT 1')
+        .then(()=>false,error=>error.code==='42501');
+      assert.equal(deniedRead,true);
+    }
+    const auditSequencePrivilege=await admin.query(
+      "SELECT has_sequence_privilege('legaltech_runtime_ci','public.matter_conversation_audit_id_seq','USAGE') AS usage");
+    assert.equal(auditSequencePrivilege.rows[0].usage,false);
+
 
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
     assert.equal(await brokerOne.query('SELECT * FROM public.matters').then(()=>false,error=>error.code==='42501'),true);
