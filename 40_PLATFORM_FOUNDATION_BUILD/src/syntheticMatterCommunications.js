@@ -13,7 +13,7 @@ const clone=x=>structuredClone(x);
 
 /** Explicitly synthetic, process-local communications reference. No network or production persistence. */
 export class SyntheticMatterCommunications {
-  #matters;#now;#threads=new Map();#messages=new Map();#maxThreads;#maxMessages;
+  #matters;#now;#threads=new Map();#messages=new Map();#maxThreads;#maxMessages;#revision=new Map();
   constructor({matterStore,now=()=>new Date().toISOString(),maxThreads=1000,maxMessages=2000}={}){
     if(!matterStore||typeof matterStore.getMatter!=='function'||typeof now!=='function')throw Error('COMMUNICATION_CONFIGURATION_INVALID');
     if(!Number.isInteger(maxThreads)||maxThreads<1||maxThreads>10000||!Number.isInteger(maxMessages)||maxMessages<1||maxMessages>10000)throw Error('COMMUNICATION_CONFIGURATION_INVALID');
@@ -36,7 +36,7 @@ export class SyntheticMatterCommunications {
     if(this.#threads.size>=this.#maxThreads)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
     const thread=Object.freeze({id:randomUUID(),tenantId:s.tenantId,matterId,subject,participantIds:Object.freeze(ids),createdBy:s.actorId,createdAt:at});
-    this.#threads.set(thread.id,thread);this.#messages.set(thread.id,[]);
+    this.#threads.set(thread.id,thread);this.#messages.set(thread.id,[]);this.#revision.set(thread.id,1);
     return Object.freeze(clone(thread));
   }
   #thread(session,threadId,cap){
@@ -54,6 +54,7 @@ export class SyntheticMatterCommunications {
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
     const message=Object.freeze({id:randomUUID(),threadId:t.id,actorId:s.actorId,body,at});
     this.#messages.get(t.id).push(message);
+    this.#revision.set(t.id,this.#revision.get(t.id)+1);
     return Object.freeze(clone(message));
   }
   replaceParticipants({session,threadId,participantIds}={}){
@@ -63,7 +64,17 @@ export class SyntheticMatterCommunications {
     const ids=Object.freeze([...new Set([...participantIds,t.createdBy])]);
     const replacement=Object.freeze({...t,participantIds:ids});
     this.#threads.set(t.id,replacement);
+    this.#revision.set(t.id,this.#revision.get(t.id)+1);
     return Object.freeze(clone(replacement));
+  }
+  snapshot({session,threadId,limit=100}={}){
+    const {t}=this.#thread(session,threadId,'matter:communicate:read');
+    if(!Number.isInteger(limit)||limit<1||limit>200)throw invalid();
+    return Object.freeze({
+      thread:Object.freeze(clone(t)),
+      revision:this.#revision.get(t.id),
+      messages:Object.freeze(this.#messages.get(t.id).slice(-limit).map(m=>Object.freeze(clone(m))))
+    });
   }
   listThreads({session,matterId,limit=50}={}){
     const s=this.#session(session,'matter:communicate:read');
