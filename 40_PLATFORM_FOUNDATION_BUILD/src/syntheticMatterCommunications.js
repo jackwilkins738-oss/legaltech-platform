@@ -32,6 +32,7 @@ export class SyntheticMatterCommunications {
     const matterId=own(v,'matterId'),subject=own(v,'subject'),participants=own(v,'participantIds');
     this.#matter(s,matterId);
     if(!text(subject)||subject.length>200||!Array.isArray(participants)||Object.getPrototypeOf(participants)!==Array.prototype||participants.length>25||participants.some(x=>!id(x)))throw invalid();
+    if(Object.keys(participants).length!==participants.length)throw invalid();
     const ids=[...new Set([...participants,s.actorId])];
     if(ids.length>25)throw invalid();
     if(this.#threads.size>=this.#maxThreads)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
@@ -64,6 +65,7 @@ export class SyntheticMatterCommunications {
     const {s,t}=this.#thread(session,threadId,'matter:communicate');
     if(t.createdBy!==s.actorId)throw hidden();
     if(!Array.isArray(participantIds)||Object.getPrototypeOf(participantIds)!==Array.prototype||participantIds.length>25||participantIds.some(x=>!id(x)))throw invalid();
+    if(Object.keys(participantIds).length!==participantIds.length)throw invalid();
     const ids=Object.freeze([...new Set([...participantIds,t.createdBy])]);
     if(ids.length>25)throw invalid();
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
