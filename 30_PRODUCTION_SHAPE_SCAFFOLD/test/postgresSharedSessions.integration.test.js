@@ -620,6 +620,32 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
     await assert.rejects(adapter(context,document,async()=>{sent++;}),/SUPPORT_DOCUMENT_TRANSFER_UNAVAILABLE/);
     assert.equal(sent,0);
   });
+  await t.test('V200 PostgreSQL catalog proves effective restrictive actor guards on all support tables',async()=>{
+    const expected=new Map([
+      ['support_access_requests',['support_actor_request_guard','requester_id']],
+      ['support_access_approvals',['support_actor_approval_guard','approver_id']],
+      ['support_access_revocations',['support_actor_revocation_guard','revoked_by']],
+      ['support_access_events',['support_actor_event_guard','actor_id']]
+    ]);
+    const rows=await admin.query(`SELECT c.relname AS table_name,p.polname AS policy_name,
+      p.polpermissive AS permissive,p.polcmd AS command,
+      pg_get_expr(p.polwithcheck,p.polrelid) AS guard,
+      c.relrowsecurity AS row_security,c.relforcerowsecurity AS forced
+      FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid
+      JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relname=ANY($1::text[])`,
+      [[...expected.keys()]]);
+    for(const [table,[policy,actorColumn]] of expected){
+      const entry=rows.rows.find(row=>row.table_name===table&&row.policy_name===policy);
+      assert.ok(entry,`Missing restrictive actor guard for ${table}`);
+      assert.equal(entry.permissive,false,`Guard must be RESTRICTIVE: ${table}`);
+      assert.equal(entry.command,'a',`Guard must target INSERT: ${table}`);
+      assert.equal(entry.row_security,true,`RLS must be active: ${table}`);
+      assert.match(entry.guard,new RegExp(actorColumn));
+      assert.match(entry.guard,/app_current_actor_id/);
+      assert.match(entry.guard,/app_current_tenant_id/);
+    }
+  });
   await t.test('V200 PostgreSQL operator policies reject actor spoofing in all support INSERT tables',async()=>{
     const login='legaltech_support_operator_ci';
     const transaction=new PostgresTenantTransactions({pool:makePool(login),expectedRole:login});
