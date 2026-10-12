@@ -56,3 +56,21 @@ test('V202 bounded storage fails closed without dropping existing messages',()=>
  assert.throws(()=>c.post({session:session(),threadId:t.id,body:'Second'}),{code:'COMMUNICATION_CAPACITY'});
  assert.equal(c.messages({session:session(),threadId:t.id}).length,1);
 });
+
+test('V202 snapshot observes coherent messages and revocation revision',()=>{
+ const c=new SyntheticMatterCommunications({matterStore:store});
+ const t=c.createThread({session:session(),input:{matterId:'m1',subject:'Updates',participantIds:['bob']}});
+ const initial=c.snapshot({session:session('bob'),threadId:t.id});
+ assert.equal(initial.revision,1);
+ assert.equal(initial.messages.length,0);
+ c.post({session:session(),threadId:t.id,body:'First'});
+ const updated=c.snapshot({session:session('bob'),threadId:t.id});
+ assert.equal(updated.revision,2);
+ assert.equal(updated.messages.length,1);
+ c.replaceParticipants({session:session(),threadId:t.id,participantIds:[]});
+ assert.throws(()=>c.snapshot({session:session('bob'),threadId:t.id}),{code:'NOT_FOUND'});
+ const remaining=c.snapshot({session:session(),threadId:t.id});
+ assert.equal(remaining.revision,3);
+ assert.deepEqual(remaining.thread.participantIds,['alice']);
+ assert.throws(()=>c.snapshot({session:session(),threadId:t.id,limit:0}),{code:'INVALID_REQUEST'});
+});
