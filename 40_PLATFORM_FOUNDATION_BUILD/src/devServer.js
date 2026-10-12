@@ -14,6 +14,7 @@ import {ProclaimValidationHarness} from './proclaimValidation.js';
 import {WorkOrchestrator} from './workOrchestration.js';
 import {WorkAuthorizer} from './workAuthorization.js';
 import {WorkApiService} from './workApi.js';
+import {SyntheticMatterCommunications} from './syntheticMatterCommunications.js';
 
 if (process.env.NODE_ENV === 'production') throw new Error('Synthetic development server is forbidden in production');
 if (process.env.LEGALTECH_ENABLE_SYNTHETIC_DEV_SERVER !== 'true') throw new Error('Set LEGALTECH_ENABLE_SYNTHETIC_DEV_SERVER=true to run the local synthetic server');
@@ -38,7 +39,7 @@ const proclaimHarness=new ProclaimValidationHarness({registry,adapter:proclaimAd
 const integrations={registry,graph:graphHarness,proclaim:proclaimHarness,summary:(tenantId)=>({items:integrationSummary(registry,tenantId),graph:graphHarness.healthCheck()})};
 const workOrchestrator=new WorkOrchestrator({store});
 const workApi=new WorkApiService({orchestrator:workOrchestrator,authorizer:new WorkAuthorizer({store})});
-const authProvider=new StaticAuthProvider([{token:'local-dev-only-token',actorId:'local-developer',tenantId:'tenant-demo',roles:['developer'],capabilities:['matter:read','inbound:read','inbound:create','exception:read','exception:resolve','audit:read','integration:read','integration:manage','dev:workers','work:read:any','work:create','work:update:any','work:respond:any','work:assign']}]);
+const authProvider=new StaticAuthProvider([{token:'local-dev-only-token',actorId:'local-developer',tenantId:'tenant-demo',roles:['developer'],capabilities:['matter:read','inbound:read','inbound:create','exception:read','exception:resolve','audit:read','integration:read','integration:manage','dev:workers','work:read:any','work:create','work:update:any','work:respond:any','work:assign','matter:communicate','matter:communicate:read']}]);
 
 // Seed one review item only on a brand-new local database so the UI is useful immediately.
 if (store.countEvents('tenant-demo')===0) {
@@ -46,7 +47,7 @@ if (store.countEvents('tenant-demo')===0) {
   await platform.processNext();
 }
 
-const server=createApiServer({platform,authProvider,devWorkers:true,uiRoot,integrations,workApi});
+const server=createApiServer({syntheticCommunications:new SyntheticMatterCommunications({matterStore:store}),platform,authProvider,devWorkers:true,uiRoot,integrations,workApi});
 const port=Number(process.env.PORT||3210);
 server.listen(port,'127.0.0.1',()=>{
   console.log(`LegalTech synthetic app listening on http://127.0.0.1:${port}`);
