@@ -316,6 +316,11 @@
       "file": "063_support_revocation_serialization.sql",
       "sha256": "37a67410fd3439b9ca59170ac771fcffde03c88afe62f6e1aa18fcb71df901ca",
       "destructive": false
+    },
+    {
+      "file": "064_matter_conversations_default_deny.sql",
+      "sha256": "d7783eaa0c35c18429dccf20b7c1755af49f0f89864db93b49cc4e33171c9cc3",
+      "destructive": false
     }
   ]
 }
