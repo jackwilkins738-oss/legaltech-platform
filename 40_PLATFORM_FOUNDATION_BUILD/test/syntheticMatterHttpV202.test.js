@@ -32,11 +32,27 @@ test('V202 synthetic API provides authorized matter conversations and denies una
   assert.equal((await fetch(url+'/'+thread.id+'/messages')).status,401);
   const sent=await request('bob-token','/'+thread.id+'/messages','POST',{body:'Please review'});
   assert.equal(sent.status,201);
+  const idempotent=await request('bob-token','/'+thread.id+'/messages','POST',{body:'Idempotent message',requestId:'message-1'});
+  assert.equal(idempotent.status,201);
+  const repeated=await request('bob-token','/'+thread.id+'/messages','POST',{body:'Idempotent message',requestId:'message-1'});
+  assert.equal(repeated.status,201);
+  assert.equal((await idempotent.json()).message.id,(await repeated.json()).message.id);
+  assert.equal((await request('bob-token','/'+thread.id+'/messages','POST',{body:'Changed',requestId:'message-1'})).status,409);
+  assert.equal((await request('alice-token','/'+thread.id+'/participants','PUT',{participantIds:['bob'],expectedRevision:1})).status,409);
+
   const messages=await request('alice-token','/'+thread.id+'/messages');
   assert.equal((await messages.json()).messages[0].body,'Please review');
   assert.equal((await request('alice-token','/'+thread.id+'/participants','PUT',{participantIds:[]})).status,200);
   assert.equal((await request('bob-token','/'+thread.id+'/snapshot')).status,404);
   assert.equal((await request('alice-token','/'+thread.id+'/snapshot')).status,200);
+  const audit=await request('alice-token','/'+thread.id+'/audit');
+  assert.equal(audit.status,200);
+  const entries=(await audit.json()).events;
+  assert.deepEqual(entries.map(x=>x.kind),['CREATED','MESSAGE_POSTED','MESSAGE_POSTED','PARTICIPANTS_CHANGED']);
+  assert.equal(JSON.stringify(entries).includes('Please review'),false);
+  assert.equal((await request('bob-token','/'+thread.id+'/audit')).status,404);
+  assert.equal((await request('other-token','/'+thread.id+'/audit')).status,404);
+  assert.equal((await request('alice-token','/'+thread.id+'/audit?limit=0')).status,400);
  }finally{await new Promise(resolve=>server.close(resolve));store.close();fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('V202 synthetic communication adapter is forbidden in production before accepting requests',()=>{

@@ -132,3 +132,31 @@ test('V202 audit saturation never partially commits a message or participant upd
  assert.equal(c.snapshot({session:session('bob'),threadId:t.id}).revision,1);
  assert.equal(c.audit({session:session(),threadId:t.id}).length,1);
 });
+
+test('V203 idempotent messages replay exactly once, actor-bound and payload-bound',()=>{
+ const c=new SyntheticMatterCommunications({matterStore:store,maxMessages:2,maxAudit:3});
+ const t=c.createThread({session:session(),input:{matterId:'m1',subject:'Duplicated request',participantIds:['bob']}});
+ const first=c.post({session:session(),threadId:t.id,body:'Reviewed',requestId:'request-01'});
+ const replay=c.post({session:session(),threadId:t.id,body:'Reviewed',requestId:'request-01'});
+ assert.deepEqual(replay,first);
+ assert.equal(c.snapshot({session:session(),threadId:t.id}).revision,2);
+ assert.equal(c.messages({session:session(),threadId:t.id}).length,1);
+ assert.throws(()=>c.post({session:session(),threadId:t.id,body:'Different',requestId:'request-01'}),{code:'COMMUNICATION_CONFLICT'});
+ const other=c.post({session:session('bob'),threadId:t.id,body:'Own request',requestId:'request-01'});
+ assert.notEqual(first.id,other.id);
+ assert.equal(c.audit({session:session(),threadId:t.id}).length,3);
+ assert.deepEqual(c.post({session:session(),threadId:t.id,body:'Reviewed',requestId:'request-01'}),first);
+});
+test('V203 optimistic participant revision rejects stale write without audit or membership changes',()=>{
+ const c=new SyntheticMatterCommunications({matterStore:store});
+ const t=c.createThread({session:session(),input:{matterId:'m1',subject:'Concurrency',participantIds:['bob']}});
+ const updated=c.replaceParticipants({session:session(),threadId:t.id,participantIds:['eve'],expectedRevision:1});
+ assert.deepEqual(updated.participantIds,['eve','alice']);
+ assert.throws(()=>c.replaceParticipants({session:session(),threadId:t.id,participantIds:['bob'],expectedRevision:1}),{code:'COMMUNICATION_CONFLICT'});
+ assert.throws(()=>c.replaceParticipants({session:session(),threadId:t.id,participantIds:['bob'],expectedRevision:0}),{code:'INVALID_REQUEST'});
+ const current=c.snapshot({session:session(),threadId:t.id});
+ assert.equal(current.revision,2);
+ assert.deepEqual(current.thread.participantIds,['eve','alice']);
+ assert.equal(c.audit({session:session(),threadId:t.id}).length,2);
+ assert.throws(()=>c.messages({session:session('bob'),threadId:t.id}),{code:'NOT_FOUND'});
+});
