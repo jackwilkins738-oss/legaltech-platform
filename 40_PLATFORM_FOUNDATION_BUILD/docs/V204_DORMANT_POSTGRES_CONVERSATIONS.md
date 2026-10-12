@@ -15,3 +15,11 @@ All four tables have `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY`.
 7. Validate the permissions and revocation race under real PostgreSQL CI with two independent authenticated servers. Preserve production admission denial until all gates pass and governance explicitly permits activation.
 
 This migration does **not** add PostgreSQL application adapters or routes, does not introduce client data, and leaves D-018, V131 and partner TO research restrictions unchanged. The synthetic messaging demonstration merged in V202/V203 remains limited to local development.
+
+## V205 — Database-level tenant referential integrity and audit immutability
+
+Migration 065 adds composite tenant/record unique indexes to the pre-existing actors and matters tables, then binds every conversation matter and actor reference to the row's **same tenant** through composite foreign keys. This closes the V204 cross-tenant reference gap for threads, participants, message authors and audit actors.
+
+Messages and audit events now have database triggers that reject UPDATE or DELETE even if a future application role is mistakenly granted either operation. The trigger function does not receive PUBLIC EXECUTE privileges. The existing always-false row-level policies and absent application-role grants remain in force, so these tables are still **not usable by production APIs**.
+
+The migrations do not prove live actor membership, revoke in-flight writes, authorize recipients, transactionally bind business logic to durable audit or establish legal retention and key management. Those remain separate acceptance gates. New indexes on the established actors/matters tables require operational review before application to any existing deployed database.
