@@ -13,11 +13,12 @@ const clone=x=>structuredClone(x);
 
 /** Explicitly synthetic, process-local communications reference. No network or production persistence. */
 export class SyntheticMatterCommunications {
-  #matters;#now;#threads=new Map();#messages=new Map();#maxThreads;#maxMessages;#revision=new Map();#audit=new Map();
-  constructor({matterStore,now=()=>new Date().toISOString(),maxThreads=1000,maxMessages=2000}={}){
+  #matters;#now;#threads=new Map();#messages=new Map();#maxThreads;#maxMessages;#revision=new Map();#audit=new Map();#maxAudit;
+  constructor({matterStore,now=()=>new Date().toISOString(),maxThreads=1000,maxMessages=2000,maxAudit=5000}={}){
     if(!matterStore||typeof matterStore.getMatter!=='function'||typeof now!=='function')throw Error('COMMUNICATION_CONFIGURATION_INVALID');
     if(!Number.isInteger(maxThreads)||maxThreads<1||maxThreads>10000||!Number.isInteger(maxMessages)||maxMessages<1||maxMessages>10000)throw Error('COMMUNICATION_CONFIGURATION_INVALID');
-    this.#matters=matterStore;this.#now=now;this.#maxThreads=maxThreads;this.#maxMessages=maxMessages;
+    if(!Number.isInteger(maxAudit)||maxAudit<1||maxAudit>10000)throw Error('COMMUNICATION_CONFIGURATION_INVALID');
+    this.#matters=matterStore;this.#now=now;this.#maxThreads=maxThreads;this.#maxMessages=maxMessages;this.#maxAudit=maxAudit;
   }
   #session(raw,cap){const s=normalizeSession(raw);requireCapability(s,cap);return s;}
   #matter(s,matterId){
@@ -56,6 +57,7 @@ export class SyntheticMatterCommunications {
     const at=this.#now();if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))throw Error('COMMUNICATION_CLOCK_INVALID');
     const message=Object.freeze({id:randomUUID(),threadId:t.id,actorId:s.actorId,body,at});
     this.#messages.get(t.id).push(message);
+    if(this.#audit.get(t.id).length>=this.#maxAudit)throw appError('communication capacity reached',{status:429,code:'COMMUNICATION_CAPACITY'});
     const revision=this.#revision.get(t.id)+1;
     this.#revision.set(t.id,revision);
     this.#audit.get(t.id).push(Object.freeze({revision,kind:'MESSAGE_POSTED',actorId:s.actorId,at}));
