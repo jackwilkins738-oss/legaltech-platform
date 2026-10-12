@@ -87,3 +87,13 @@ test('V202 audit emits bounded metadata without message bodies and is creator-on
  assert.throws(()=>c.audit({session:session('bob'),threadId:t.id}),{code:'NOT_FOUND'});
  assert.equal(c.audit({session:session(),threadId:t.id,limit:1}).length,1);
 });
+
+test('V202 participant ceiling includes automatically-added creator',()=>{
+ const c=new SyntheticMatterCommunications({matterStore:store});
+ const twentyFive=Array.from({length:25},(_,i)=>'participant-'+i);
+ assert.throws(()=>c.createThread({session:session(),input:{matterId:'m1',subject:'Too many',participantIds:twentyFive}}),{code:'INVALID_REQUEST'});
+ const t=c.createThread({session:session(),input:{matterId:'m1',subject:'Acceptable',participantIds:twentyFive.slice(0,24)}});
+ assert.equal(t.participantIds.length,25);
+ assert.throws(()=>c.replaceParticipants({session:session(),threadId:t.id,participantIds:twentyFive}),{code:'INVALID_REQUEST'});
+ assert.equal(c.snapshot({session:session(),threadId:t.id}).thread.participantIds.length,25);
+});
