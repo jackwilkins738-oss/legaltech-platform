@@ -31,3 +31,6 @@ Only reusable interfaces backed by proven tenant and actor enforcement may be us
 - Do separate-role positive-path tests demonstrate necessary functionality without privilege escalation?
 - Are V159 / issue #80 now obsolete and ready for a *documented* resolution, or does a different policy path remain vulnerable?
 - Does cross-server revocation serialize with the actual document-transfer fence in a real PostgreSQL multi-session test?
+
+## Existing checked coverage, verified in repository
+The integrated PostgreSQL suite already includes V163 four-table spoof denials, V164 positive legitimate operator inserts plus concurrent impersonation denial, V165 cross-tenant denial, V166 independent-reader revocation, V176 direct-SQL revocation lock serialization and V180 fenced document consumption. V200 adds **catalog-level policy assertions**, not duplicate cases. Current CI passing is integration evidence for the exercised synthetic paths, but does not establish operating deployment evidence or authorize live consumer adoption.
