@@ -17,7 +17,7 @@ test('V204 SQL manifest pins a verified dormant conversation schema',()=>{
   assert.match(sql,new RegExp('ALTER TABLE public\\.'+name+' ENABLE ROW LEVEL SECURITY;'));
   assert.match(sql,new RegExp('ALTER TABLE public\\.'+name+' FORCE ROW LEVEL SECURITY;'));
   assert.doesNotMatch(sql,new RegExp('GRANT .*'+name,'i'));
-  assert.doesNotMatch(sql,new RegExp('CREATE POLICY .*'+name,'i'));
+  assert.match(sql,new RegExp('CREATE POLICY '+name+'_deny ON public\\\\.'+name+' FOR ALL TO PUBLIC USING \\(false\\) WITH CHECK \\(false\\);'));
  }
  assert.match(sql,/UNIQUE\(tenant_id,thread_id,author_actor_id,request_id\)/);
  assert.match(sql,/UNIQUE\(tenant_id,thread_id,revision\)/);
