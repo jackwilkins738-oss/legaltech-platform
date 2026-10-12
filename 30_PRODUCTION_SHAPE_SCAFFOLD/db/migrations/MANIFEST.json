@@ -326,6 +326,11 @@
       "file": "065_conversation_tenant_constraints.sql",
       "sha256": "48fa9c1263fe6d54956b3795449f1237956c89725311101a161f3eea4d852312",
       "destructive": false
+    },
+    {
+      "file": "066_conversation_restrictive_deny.sql",
+      "sha256": "e69213cf8ecf455c2c166205eea98ef212d2d296af67de294804c8b83b612aea",
+      "destructive": false
     }
   ]
 }
