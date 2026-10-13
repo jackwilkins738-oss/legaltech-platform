@@ -17,7 +17,7 @@ export class ConversationTransactionBoundary {
     const denied=()=>new Error('CONVERSATION_TRANSACTION_DENIED');
     const pinnedSession=pinSupportSession(session,denied);
     try{
-      return await this.#transaction(async tx=>{
+      return await this.#transaction(Object.freeze({tenantId:pinnedSession.tenantId,actorId:pinnedSession.actorId,readOnly:false}),async tx=>{
         if(!tx||typeof tx.query!=='function')throw new Error('CONVERSATION_TRANSACTION_DENIED');
         const permission=await this.#authorize({tx,session:pinnedSession,command:pinned});
         if(permission!==true)throw new Error('CONVERSATION_TRANSACTION_DENIED');
