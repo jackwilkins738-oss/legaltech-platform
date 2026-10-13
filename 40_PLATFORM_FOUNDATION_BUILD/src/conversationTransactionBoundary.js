@@ -1,4 +1,5 @@
 import {pinConversationCommand} from './durableConversationCommand.js';
+import {pinSupportSession} from './supportAuthorityInput.js';
 
 /**
  * Trusted transaction orchestration contract for a future durable writer.
@@ -13,13 +14,14 @@ export class ConversationTransactionBoundary {
   }
   async execute({command,session}={}){
     const pinned=pinConversationCommand(command);
-    if(!session||typeof session!=='object')throw new Error('CONVERSATION_TRANSACTION_DENIED');
+    const denied=()=>new Error('CONVERSATION_TRANSACTION_DENIED');
+    const pinnedSession=pinSupportSession(session,denied);
     try{
       return await this.#transaction(async tx=>{
         if(!tx||typeof tx.query!=='function')throw new Error('CONVERSATION_TRANSACTION_DENIED');
-        const permission=await this.#authorize({tx,session,command:pinned});
+        const permission=await this.#authorize({tx,session:pinnedSession,command:pinned});
         if(permission!==true)throw new Error('CONVERSATION_TRANSACTION_DENIED');
-        const result=await this.#commit({tx,session,command:pinned});
+        const result=await this.#commit({tx,session:pinnedSession,command:pinned});
         if(!result||result.committed!==true||result.audited!==true)
           throw new Error('CONVERSATION_TRANSACTION_DENIED');
         return Object.freeze({committed:true,audited:true});
