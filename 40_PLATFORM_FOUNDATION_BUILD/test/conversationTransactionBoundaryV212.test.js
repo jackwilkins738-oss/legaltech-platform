@@ -10,7 +10,7 @@ test('V212 authorization and audit occur inside exactly one transaction',async()
   authorize:async({command})=>{sequence.push('authorize');assert.equal(command.kind,'POST');return true;},
   commit:async()=>{sequence.push('write-and-audit');return {committed:true,audited:true};}
  });
- assert.deepEqual(await boundary.execute({command,session:{actorId:id}}),{committed:true,audited:true});
+ assert.deepEqual(await boundary.execute({command,session:{actorId:id,tenantId:id,sessionId:id}}),{committed:true,audited:true});
  assert.deepEqual(sequence,['begin','authorize','write-and-audit','commit']);
 });
 test('V212 cannot report a successful write without audit or permission',async()=>{
@@ -19,6 +19,19 @@ test('V212 cannot report a successful write without audit or permission',async()
    transaction:async work=>work({query:async()=>({rows:[]})}),
    authorize:async()=>authorized,commit:async()=>result
   });
-  await assert.rejects(()=>boundary.execute({command,session:{actorId:id}}),/CONVERSATION_TRANSACTION_DENIED/);
+  await assert.rejects(()=>boundary.execute({command,session:{actorId:id,tenantId:id,sessionId:id}}),/CONVERSATION_TRANSACTION_DENIED/);
  }
+});
+
+test('V213 pins caller identity before the first async boundary',async()=>{
+ const source={tenantId:id,actorId:id,sessionId:id};
+ let seen;
+ const boundary=new ConversationTransactionBoundary({
+  transaction:async work=>{source.actorId='11700000-0000-4000-8000-000000000002';return work({query:async()=>({rows:[]})});},
+  authorize:async({session})=>{seen=session;assert.equal(session.actorId,id);assert.ok(Object.isFrozen(session));return true;},
+  commit:async({session})=>{assert.strictEqual(session,seen);return {committed:true,audited:true};}
+ });
+ await boundary.execute({command,session:source});
+ const accessor=Object.defineProperty({tenantId:id,sessionId:id},'actorId',{enumerable:true,get(){throw Error('accessor invoked')}});
+ await assert.rejects(()=>boundary.execute({command,session:accessor}),/CONVERSATION_TRANSACTION_DENIED/);
 });
