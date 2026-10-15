@@ -197,7 +197,7 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       await client.query("CREATE OR REPLACE FUNCTION pg_temp.v216_reject_audit() RETURNS trigger LANGUAGE plpgsql AS $v216$ BEGIN RAISE EXCEPTION 'V216_TEST_AUDIT_FAILURE'; END $v216$");
       await client.query('CREATE TRIGGER v216_reject_audit BEFORE INSERT ON public.matter_conversation_audit FOR EACH ROW EXECUTE FUNCTION pg_temp.v216_reject_audit()');
       await assert.rejects(()=>auditDenied.execute({session,command:{...command,requestId:'v216-rollback-request'}}),/DURABLE_CONVERSATION_DENIED/);
-      assert.equal((await client.query('SELECT revision FROM public.matter_conversation_threads WHERE id=$1',[created.threadId])).rows[0].revision,3);
+      assert.equal((await client.query('SELECT revision FROM public.matter_conversation_threads WHERE id=$1',[created.threadId])).rows[0].revision,'3');
       assert.equal((await client.query('SELECT count(*)::int AS count FROM public.matter_conversation_messages WHERE thread_id=$1',[created.threadId])).rows[0].count,1);
     }finally{
       try{await client.query('ROLLBACK');}finally{client.release();}
