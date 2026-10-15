@@ -1,3 +1,4 @@
+import {DormantPostgresConversationWriter} from '../../40_PLATFORM_FOUNDATION_BUILD/src/dormantPostgresConversationWriter.js';
 import {createFencedReviewDocumentConsume} from '../../40_PLATFORM_FOUNDATION_BUILD/src/fencedReviewDocumentConsume.js';
 import {createTenantScopedPostgresSupportTransferFence} from '../../40_PLATFORM_FOUNDATION_BUILD/src/postgresSupportTransferFence.js';
 import {fork} from 'node:child_process';
@@ -145,6 +146,62 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
 
     const hidden=await runtime.query('SELECT * FROM identity_security.server_sessions').then(()=>false,error=>error.code==='42501');assert.equal(hidden,true);
     assert.equal(await brokerOne.query('SELECT * FROM public.matters').then(()=>false,error=>error.code==='42501'),true);
+  });
+
+  await t.test('V216 real PostgreSQL conversation writer atomically persists messages, audit and revocation',{timeout:20000},async()=>{
+    // Isolated disposable CI fixture, admin connection only. No application role grants.
+    const client=await admin.connect();
+    const tenant=uuid(),creator=uuid(),recipient=uuid(),matter=uuid(),sessionId=uuid();
+    try{
+      await client.query('BEGIN');
+      await client.query("INSERT INTO public.tenants(id,name) VALUES($1,'V216 fixture')",[tenant]);
+      await client.query("INSERT INTO public.actors(id,tenant_id,actor_type) VALUES($1,$3,'USER'),($2,$3,'USER')",[creator,recipient,tenant]);
+      await client.query("INSERT INTO public.matters(id,tenant_id,display_reference) VALUES($1,$2,$3)",[matter,tenant,'V216-'+matter]);
+      const session={tenantId:tenant,actorId:creator,sessionId};
+      const transact=async(context,work)=>{
+        assert.equal(context.tenantId,tenant);
+        assert.equal(context.actorId,creator);
+        assert.equal(context.readOnly,false);
+        await client.query('SAVEPOINT conversation_operation');
+        try{
+          const result=await work({query:(sql,args)=>client.query(sql,args)});
+          await client.query('RELEASE SAVEPOINT conversation_operation');
+          return result;
+        }catch(error){
+          await client.query('ROLLBACK TO SAVEPOINT conversation_operation');
+          await client.query('RELEASE SAVEPOINT conversation_operation');
+          throw error;
+        }
+      };
+      const writer=new DormantPostgresConversationWriter({transact,authorize:async()=>true});
+      const created=await writer.execute({session,command:{kind:'CREATE',matterId:matter,subject:'Synthetic review',participantIds:[recipient]}});
+      assert.equal(created.revision,1);
+      const command={kind:'POST',threadId:created.threadId,body:'synthetic evidence request',requestId:'v216-unique-request'};
+      const posted=await writer.execute({session,command});
+      assert.equal(posted.revision,2);
+      assert.equal(posted.replayed,false);
+      const replay=await writer.execute({session,command});
+      assert.equal(replay.messageId,posted.messageId);
+      assert.equal(replay.replayed,true);
+      await assert.rejects(()=>writer.execute({session,command:{...command,body:'conflicting retry'}}),/DURABLE_CONVERSATION_DENIED/);
+      const changed=await writer.execute({session,command:{kind:'PARTICIPANTS',threadId:created.threadId,participantIds:[],expectedRevision:2}});
+      assert.equal(changed.revision,3);
+      const active=await client.query('SELECT actor_id FROM public.matter_conversation_participants WHERE thread_id=$1 AND revoked_at IS NULL',[created.threadId]);
+      assert.deepEqual(active.rows.map(row=>row.actor_id),[creator]);
+      const evidence=await client.query('SELECT revision,kind FROM public.matter_conversation_audit WHERE thread_id=$1 ORDER BY revision',[created.threadId]);
+      assert.deepEqual(evidence.rows.map(row=>row.kind),['CREATED','MESSAGE_POSTED','PARTICIPANTS_CHANGED']);
+      assert.equal((await client.query('SELECT count(*)::int AS count FROM public.matter_conversation_messages WHERE thread_id=$1',[created.threadId])).rows[0].count,1);
+      await assert.rejects(()=>writer.execute({session,command:{kind:'PARTICIPANTS',threadId:created.threadId,participantIds:[recipient],expectedRevision:2}}),/DURABLE_CONVERSATION_DENIED/);
+      // A failed audit insertion must roll back all mutation effects, not just return an error.
+      const auditDenied=new DormantPostgresConversationWriter({transact,authorize:async()=>true});
+      await client.query("CREATE OR REPLACE FUNCTION pg_temp.v216_reject_audit() RETURNS trigger LANGUAGE plpgsql AS $v216$ BEGIN RAISE EXCEPTION 'V216_TEST_AUDIT_FAILURE'; END $v216$");
+      await client.query('CREATE TRIGGER v216_reject_audit BEFORE INSERT ON public.matter_conversation_audit FOR EACH ROW EXECUTE FUNCTION pg_temp.v216_reject_audit()');
+      await assert.rejects(()=>auditDenied.execute({session,command:{...command,requestId:'v216-rollback-request'}}),/DURABLE_CONVERSATION_DENIED/);
+      assert.equal((await client.query('SELECT revision FROM public.matter_conversation_threads WHERE id=$1',[created.threadId])).rows[0].revision,'3');
+      assert.equal((await client.query('SELECT count(*)::int AS count FROM public.matter_conversation_messages WHERE thread_id=$1',[created.threadId])).rows[0].count,1);
+    }finally{
+      try{await client.query('ROLLBACK');}finally{client.release();}
+    }
   });
   await t.test('V152 support reader is SELECT-only and tenant RLS isolated',async()=>{
     const role=await admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname='legaltech_support_reader'");
