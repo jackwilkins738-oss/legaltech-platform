@@ -35,7 +35,7 @@ export class DormantPostgresConversationWriter {
           'SELECT actor_id FROM public.matter_conversation_participants WHERE tenant_id=$1 AND thread_id=$2 AND actor_id=$3 AND revoked_at IS NULL',
           [identity.tenantId,input.threadId,identity.actorId]));
         if(!member)throw denied();
-        if(await this.#authorize(Object.freeze({tx,identity,kind:input.kind,matterId:thread.matter_id,threadId:input.threadId}))!==true)throw denied();
+        if(await this.#authorize(Object.freeze({tx,identity,kind:input.kind,matterId:thread.matter_id,threadId:input.threadId,participantIds:input.kind==='PARTICIPANTS'?input.participantIds:undefined}))!==true)throw denied();
         if(input.kind==='POST')return this.#post(tx,identity,input,thread);
         if(input.kind==='PARTICIPANTS')return this.#participants(tx,identity,input,thread);
         throw denied();
@@ -43,7 +43,7 @@ export class DormantPostgresConversationWriter {
     }catch{throw denied();}
   }
   async #create(tx,identity,input){
-    if(await this.#authorize(Object.freeze({tx,identity,kind:'CREATE',matterId:input.matterId}))!==true)throw denied();
+    if(await this.#authorize(Object.freeze({tx,identity,kind:'CREATE',matterId:input.matterId,participantIds:input.participantIds}))!==true)throw denied();
     const participants=[...new Set([...input.participantIds,identity.actorId])];
     if(participants.length>25)throw denied();
     const threadId=randomUUID();
