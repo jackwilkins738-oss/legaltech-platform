@@ -203,6 +203,50 @@ test('V118/V119/V120/V121/V122/V123/V124/V125/V126/V127/V128/V129/V130/V132/V133
       try{await client.query('ROLLBACK');}finally{client.release();}
     }
   });
+
+  await t.test('V217 two PostgreSQL clients serialize participant withdrawal against message posting',{timeout:25000},async()=>{
+    const first=await admin.connect(),second=await admin.connect();
+    const tenant=uuid(),author=uuid(),target=uuid(),matter=uuid(),thread=uuid(),idempotency='v217-retry';
+    try{
+      await first.query('BEGIN');
+      await first.query("INSERT INTO public.tenants(id,name) VALUES($1,'V217 synthetic')",[tenant]);
+      await first.query("INSERT INTO public.actors(id,tenant_id,actor_type) VALUES($1,$3,'USER'),($2,$3,'USER')",[author,target,tenant]);
+      await first.query("INSERT INTO public.matters(id,tenant_id,display_reference) VALUES($1,$2,$3)",[matter,tenant,'V217-'+matter]);
+      await first.query("INSERT INTO public.matter_conversation_threads(id,tenant_id,matter_id,creator_actor_id,subject) VALUES($1,$2,$3,$4,'Synthetic handoff')",[thread,tenant,matter,author]);
+      await first.query("INSERT INTO public.matter_conversation_participants(tenant_id,thread_id,actor_id) VALUES($1,$2,$3),($1,$2,$4)",[tenant,thread,author,target]);
+      await first.query("INSERT INTO public.matter_conversation_audit(tenant_id,thread_id,actor_id,revision,kind) VALUES($1,$2,$3,1,'CREATED')",[tenant,thread,author]);
+      await first.query('COMMIT');
+
+      // Two independently checked-out database clients, not two callbacks on one connection.
+      await first.query('BEGIN');
+      await first.query('SELECT id FROM public.matter_conversation_threads WHERE id=$1 FOR UPDATE',[thread]);
+      const seen=await first.query('SELECT actor_id FROM public.matter_conversation_participants WHERE tenant_id=$1 AND thread_id=$2 AND actor_id=$3 AND revoked_at IS NULL',[tenant,thread,target]);
+      assert.equal(seen.rows.length,1);
+      await second.query('BEGIN');
+      await second.query("SET LOCAL lock_timeout='3s'");
+      let started=false;
+      const queued=(async()=>{
+        started=true;
+        await second.query('SELECT id FROM public.matter_conversation_threads WHERE id=$1 FOR UPDATE',[thread]);
+        const active=await second.query('SELECT actor_id FROM public.matter_conversation_participants WHERE tenant_id=$1 AND thread_id=$2 AND actor_id=$3 AND revoked_at IS NULL',[tenant,thread,target]);
+        if(active.rows.length)throw Error('REVOKED_ACTOR_RETAINED_ACCESS');
+        return 'DENIED';
+      })();
+      assert.equal(started,true);
+      await first.query('UPDATE public.matter_conversation_participants SET revoked_at=statement_timestamp() WHERE tenant_id=$1 AND thread_id=$2 AND actor_id=$3',[tenant,thread,target]);
+      await first.query('UPDATE public.matter_conversation_threads SET revision=2 WHERE id=$1',[thread]);
+      await first.query("INSERT INTO public.matter_conversation_audit(tenant_id,thread_id,actor_id,revision,kind) VALUES($1,$2,$3,2,'PARTICIPANTS_CHANGED')",[tenant,thread,author]);
+      await first.query('COMMIT');
+      assert.equal(await queued,'DENIED');
+      await second.query('ROLLBACK');
+      const history=await first.query('SELECT kind FROM public.matter_conversation_audit WHERE thread_id=$1 ORDER BY revision',[thread]);
+      assert.deepEqual(history.rows.map(row=>row.kind),['CREATED','PARTICIPANTS_CHANGED']);
+      assert.equal((await first.query('SELECT count(*)::int AS n FROM public.matter_conversation_messages WHERE thread_id=$1',[thread])).rows[0].n,0);
+    }finally{
+      await Promise.allSettled([first.query('ROLLBACK'),second.query('ROLLBACK')]);
+      first.release();second.release();
+    }
+  });
   await t.test('V152 support reader is SELECT-only and tenant RLS isolated',async()=>{
     const role=await admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname='legaltech_support_reader'");
     assert.equal(role.rows.length,1);
